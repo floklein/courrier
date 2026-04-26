@@ -1,10 +1,19 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import DOMPurify from 'dompurify';
+import {
   Archive,
   ArrowLeft,
   Clock,
   FileText,
   Inbox,
+  Loader2,
+  LogOut,
   Mail,
   Monitor,
   MoreHorizontal,
@@ -37,13 +46,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/ui/tooltip';
-import {
-  type FolderIcon,
-  getFolder,
-  getMessage,
-  getMessagesForFolder,
-  mailFolders,
-} from '../data/mail';
+import { api } from '../lib/api-client';
+import type {
+  AuthSession,
+  FolderIcon,
+  MailFolder,
+  MailMessageDetail,
+  MailMessageSummary,
+  PagedMessages,
+} from '../lib/mail-types';
 import { cn } from '../lib/utils';
 import { type ThemePreference, useTheme } from '../theme/ThemeProvider';
 
@@ -76,46 +87,117 @@ function initials(name: string) {
 }
 
 export function MailClient() {
+  const sessionQuery = useQuery({
+    queryKey: ['auth', 'session'],
+    queryFn: api.auth.getSession,
+  });
+
+  if (sessionQuery.isPending) {
+    return <FullScreenStatus label="Checking Microsoft session..." />;
+  }
+
+  if (sessionQuery.isError) {
+    return (
+      <Onboarding
+        session={{
+          status: 'configuration-error',
+          message: sessionQuery.error.message,
+        }}
+      />
+    );
+  }
+
+  if (sessionQuery.data.status !== 'authenticated') {
+    return <Onboarding session={sessionQuery.data} />;
+  }
+
+  return <AuthenticatedMailClient session={sessionQuery.data} />;
+}
+
+function AuthenticatedMailClient({
+  session,
+}: {
+  session: Extract<AuthSession, { status: 'authenticated' }>;
+}) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
   const { folderId, messageId } = parseMailPath(pathname);
-  const currentFolder = getFolder(folderId) ?? mailFolders[0];
-  const messages = getMessagesForFolder(currentFolder.id);
-  const selectedMessage = getMessage(currentFolder.id, messageId);
-  const isReadingMessage = Boolean(selectedMessage);
+  const foldersQuery = useQuery({
+    queryKey: ['mail', 'folders'],
+    queryFn: api.mail.listFolders,
+  });
+  const folders = (foldersQuery.data ?? []) as MailFolder[];
+  const currentFolder =
+    folders.find((folder) => folder.id === folderId) ??
+    folders.find((folder) => folder.wellKnownName === folderId) ??
+    folders[0];
+  const resolvedFolderId = currentFolder?.id ?? folderId;
+  const messagesQuery = useInfiniteQuery({
+    queryKey: ['mail', 'messages', resolvedFolderId],
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      api.mail.listMessages(resolvedFolderId, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage: PagedMessages) => lastPage.nextPageUrl,
+    enabled: Boolean(currentFolder),
+  });
+  const messages =
+    messagesQuery.data?.pages.flatMap((page: PagedMessages) => page.messages) ??
+    [];
+  const messageQuery = useQuery({
+    queryKey: ['mail', 'message', resolvedFolderId, messageId],
+    queryFn: () => api.mail.getMessage(resolvedFolderId, messageId ?? ''),
+    enabled: Boolean(currentFolder && messageId),
+  });
+  const selectedMessage = messageQuery.data as MailMessageDetail | undefined;
+  const isReadingMessage = Boolean(messageId);
 
   useEffect(() => {
-    if (!messageId && messages[0]) {
-      navigate({
-        to: '/mail/$folderId/$messageId',
-        params: {
-          folderId: currentFolder.id,
-          messageId: messages[0].id,
-        },
-        replace: true,
-      });
+    if (!currentFolder || messageId || !messages[0]) {
+      return;
     }
-  }, [currentFolder.id, messageId, messages, navigate]);
+
+    navigate({
+      to: '/mail/$folderId/$messageId',
+      params: {
+        folderId: resolvedFolderId,
+        messageId: messages[0].id,
+      },
+      replace: true,
+    });
+  }, [currentFolder, messageId, messages, navigate, resolvedFolderId]);
 
   return (
     <TooltipProvider delayDuration={200}>
-      <main className="grid h-full min-h-0 grid-cols-[220px_minmax(300px,380px)_minmax(0,1fr)] bg-background max-lg:grid-cols-[76px_minmax(280px,360px)_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)]">
+      <main className="grid h-full min-h-0 grid-cols-[240px_minmax(320px,420px)_minmax(0,1fr)] bg-background max-lg:grid-cols-[76px_minmax(300px,380px)_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)]">
         <FolderRail
-          currentFolderId={currentFolder.id}
+          accountLabel={session.account.name ?? session.account.username}
+          currentFolderId={resolvedFolderId}
+          folders={folders}
+          isLoading={foldersQuery.isPending}
+          error={foldersQuery.error as Error | null}
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
         <MessageList
-          folderId={currentFolder.id}
-          folderLabel={currentFolder.label}
+          folderId={resolvedFolderId}
+          folderLabel={currentFolder?.label ?? 'Inbox'}
           messages={messages}
-          selectedMessageId={selectedMessage?.id}
+          selectedMessageId={messageId}
+          isLoading={messagesQuery.isPending || foldersQuery.isPending}
+          error={messagesQuery.error as Error | null}
+          hasNextPage={Boolean(messagesQuery.hasNextPage)}
+          isFetchingNextPage={messagesQuery.isFetchingNextPage}
+          onLoadMore={() => {
+            void messagesQuery.fetchNextPage();
+          }}
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
         <ReadingPane
-          folderId={currentFolder.id}
+          folderId={resolvedFolderId}
           message={selectedMessage}
+          isLoading={messageQuery.isPending && Boolean(messageId)}
+          error={messageQuery.error as Error | null}
           className={cn(isReadingMessage && 'max-md:col-span-2')}
         />
       </main>
@@ -123,13 +205,80 @@ export function MailClient() {
   );
 }
 
+function Onboarding({ session }: { session: Exclude<AuthSession, { status: 'authenticated' }> }) {
+  const queryClient = useQueryClient();
+  const signInMutation = useMutation({
+    mutationFn: api.auth.signIn,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+      await queryClient.invalidateQueries({ queryKey: ['mail'] });
+    },
+  });
+  const isConfigError = session.status === 'configuration-error';
+
+  return (
+    <main className="flex h-full items-center justify-center bg-background p-6">
+      <section className="w-full max-w-md rounded-lg border bg-card p-8 shadow-sm">
+        <div className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Mail className="size-5" />
+        </div>
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight">
+          Connect Outlook
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          Courrier needs Microsoft access before it can show your folders and
+          messages. Sign in opens Microsoft in your system browser.
+        </p>
+        {isConfigError && (
+          <div className="mt-5 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm leading-6 text-destructive">
+            {session.message}
+          </div>
+        )}
+        {signInMutation.isError && (
+          <div className="mt-5 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm leading-6 text-destructive">
+            {signInMutation.error.message}
+          </div>
+        )}
+        <Button
+          className="mt-6 w-full"
+          disabled={signInMutation.isPending || isConfigError}
+          onClick={() => signInMutation.mutate()}
+        >
+          {signInMutation.isPending && <Loader2 className="size-4 animate-spin" />}
+          Sign in with Microsoft
+        </Button>
+        <p className="mt-4 text-xs leading-5 text-muted-foreground">
+          Setup instructions are in docs/oauth.md.
+        </p>
+      </section>
+    </main>
+  );
+}
+
 function FolderRail({
+  accountLabel,
   currentFolderId,
+  folders,
+  isLoading,
+  error,
   className,
 }: {
+  accountLabel: string;
   currentFolderId: string;
+  folders: MailFolder[];
+  isLoading: boolean;
+  error: Error | null;
   className?: string;
 }) {
+  const queryClient = useQueryClient();
+  const signOutMutation = useMutation({
+    mutationFn: api.auth.signOut,
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ['mail'] });
+      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+    },
+  });
+
   return (
     <aside
       className={cn('flex min-h-0 flex-col border-r bg-card/70', className)}
@@ -138,50 +287,71 @@ function FolderRail({
         <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Mail className="size-4" />
         </div>
-        <div className="flex flex-col max-lg:hidden">
-          <span className="text-sm font-semibold tracking-tight">Courrier</span>
-          <span className="text-xs text-muted-foreground">Local mailbox</span>
+        <div className="flex min-w-0 flex-col max-lg:hidden">
+          <span className="truncate text-sm font-semibold tracking-tight">
+            Courrier
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            {accountLabel}
+          </span>
         </div>
       </div>
       <Separator />
-      <nav className="flex flex-1 flex-col gap-1 p-3">
-        {mailFolders.map((folder) => {
-          const Icon = folderIcons[folder.icon];
-          const isActive = folder.id === currentFolderId;
+      <nav className="flex flex-1 flex-col gap-1 overflow-hidden p-3">
+        {isLoading && <RailStatus label="Loading folders" />}
+        {!isLoading && error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs leading-5 text-destructive max-lg:hidden">
+            {error.message}
+          </div>
+        )}
+        {!isLoading &&
+          !error &&
+          folders.map((folder) => {
+            const Icon = folderIcons[folder.icon];
+            const isActive = folder.id === currentFolderId;
 
-          return (
-            <Link
-              key={folder.id}
-              to="/mail/$folderId"
-              params={{ folderId: folder.id }}
-              className={cn(
-                'flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
-                isActive && 'bg-accent text-accent-foreground',
-              )}
-            >
-              <Icon className="size-4 shrink-0" />
-              <span className="truncate max-lg:hidden">{folder.label}</span>
-              {folder.unreadCount > 0 && (
-                <Badge
-                  variant={isActive ? 'default' : 'secondary'}
-                  className="ml-auto max-lg:hidden"
-                >
-                  {folder.unreadCount}
-                </Badge>
-              )}
-            </Link>
-          );
-        })}
+            return (
+              <Link
+                key={folder.id}
+                to="/mail/$folderId"
+                params={{ folderId: folder.id }}
+                className={cn(
+                  'flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
+                  isActive && 'bg-accent text-accent-foreground',
+                )}
+                style={{ paddingLeft: folder.depth ? 12 + folder.depth * 14 : undefined }}
+              >
+                <Icon className="size-4 shrink-0" />
+                <span className="truncate max-lg:hidden">{folder.label}</span>
+                {folder.unreadCount > 0 && (
+                  <Badge
+                    variant={isActive ? 'default' : 'secondary'}
+                    className="ml-auto max-lg:hidden"
+                  >
+                    {folder.unreadCount}
+                  </Badge>
+                )}
+              </Link>
+            );
+          })}
       </nav>
       <div className="border-t p-3">
         <div className="flex flex-col gap-3">
           <ThemeSelect />
-          <div className="rounded-md bg-muted px-3 py-2 max-lg:hidden">
-            <p className="text-xs font-medium">Fake data</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Folder and message state is local for this first version.
-            </p>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={signOutMutation.isPending}
+                onClick={() => signOutMutation.mutate()}
+              >
+                <LogOut data-icon="inline-start" />
+                <span className="max-lg:hidden">Sign out</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Sign out</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </aside>
@@ -233,12 +403,22 @@ function MessageList({
   folderLabel,
   messages,
   selectedMessageId,
+  isLoading,
+  error,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
   className,
 }: {
   folderId: string;
   folderLabel: string;
-  messages: ReturnType<typeof getMessagesForFolder>;
+  messages: MailMessageSummary[];
   selectedMessageId: string | undefined;
+  isLoading: boolean;
+  error: Error | null;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
   className?: string;
 }) {
   return (
@@ -254,7 +434,11 @@ function MessageList({
             {folderLabel}
           </h1>
           <p className="text-xs text-muted-foreground">
-            {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+            {isLoading
+              ? 'Loading messages'
+              : `${messages.length} ${
+                  messages.length === 1 ? 'message' : 'messages'
+                }`}
           </p>
         </div>
         <Tooltip>
@@ -267,7 +451,9 @@ function MessageList({
         </Tooltip>
       </header>
       <Separator />
-      {messages.length > 0 ? (
+      {isLoading && <PanelStatus label="Loading messages..." />}
+      {!isLoading && error && <PanelStatus label={error.message} />}
+      {!isLoading && !error && messages.length > 0 && (
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col p-2">
             {messages.map((message) => {
@@ -297,22 +483,22 @@ function MessageList({
                         <p
                           className={cn(
                             'truncate text-sm',
-                            !message.read && 'font-semibold',
+                            !message.isRead && 'font-semibold',
                           )}
                         >
                           {message.sender.name}
                         </p>
-                        {message.starred && (
-                          <Star className="size-3.5 shrink-0 fill-primary text-primary" />
+                        {message.hasAttachments && (
+                          <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
                         )}
                         <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                          {message.date.replace(', 2026', '')}
+                          {formatDate(message.receivedDateTime, 'short')}
                         </span>
                       </div>
                       <p
                         className={cn(
                           'mt-1 truncate text-sm text-foreground',
-                          !message.read && 'font-medium',
+                          !message.isRead && 'font-medium',
                         )}
                       >
                         {message.subject}
@@ -325,20 +511,24 @@ function MessageList({
                 </Link>
               );
             })}
+            {hasNextPage && (
+              <Button
+                variant="ghost"
+                className="mx-3 my-2"
+                disabled={isFetchingNextPage}
+                onClick={onLoadMore}
+              >
+                {isFetchingNextPage && (
+                  <Loader2 className="size-4 animate-spin" />
+                )}
+                Load more
+              </Button>
+            )}
           </div>
         </ScrollArea>
-      ) : (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <div className="max-w-64 text-center">
-            <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-muted">
-              <Inbox className="size-5 text-muted-foreground" />
-            </div>
-            <h2 className="mt-4 text-sm font-semibold">No messages here</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              This folder is empty in the fake mailbox data.
-            </p>
-          </div>
-        </div>
+      )}
+      {!isLoading && !error && messages.length === 0 && (
+        <EmptyFolder />
       )}
     </section>
   );
@@ -347,12 +537,32 @@ function MessageList({
 function ReadingPane({
   folderId,
   message,
+  isLoading,
+  error,
   className,
 }: {
   folderId: string;
-  message: ReturnType<typeof getMessage>;
+  message: MailMessageDetail | undefined;
+  isLoading: boolean;
+  error: Error | null;
   className?: string;
 }) {
+  if (isLoading) {
+    return (
+      <section className={cn('flex min-h-0 flex-col bg-background', className)}>
+        <PanelStatus label="Loading message..." />
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className={cn('flex min-h-0 flex-col bg-background', className)}>
+        <PanelStatus label={error.message} />
+      </section>
+    );
+  }
+
   if (!message) {
     return (
       <section
@@ -361,28 +571,17 @@ function ReadingPane({
           className,
         )}
       >
-        <div className="flex flex-1 items-center justify-center p-8">
-          <div className="max-w-72 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-              <Mail className="size-5 text-muted-foreground" />
-            </div>
-            <h2 className="mt-4 text-sm font-semibold">Select a message</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Choose a message from the list to preview the full conversation.
-            </p>
-          </div>
-        </div>
+        <PanelStatus label="Select a message" />
       </section>
     );
   }
 
+  const sanitizedBody = DOMPurify.sanitize(message.bodyContent, {
+    USE_PROFILES: { html: true },
+  });
+
   return (
-    <article
-      className={cn(
-        'flex min-h-0 flex-col bg-background',
-        className,
-      )}
-    >
+    <article className={cn('flex min-h-0 flex-col bg-background', className)}>
       <header className="flex min-h-16 items-center justify-between gap-4 border-b px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Tooltip>
@@ -403,7 +602,7 @@ function ReadingPane({
           </Tooltip>
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">
-              {message.date}
+              {formatDate(message.receivedDateTime, 'long')}
             </p>
             <h2 className="truncate text-lg font-semibold tracking-tight">
               {message.subject}
@@ -416,9 +615,6 @@ function ReadingPane({
           </ToolbarButton>
           <ToolbarButton label="Archive">
             <Archive data-icon="inline-start" />
-          </ToolbarButton>
-          <ToolbarButton label={message.starred ? 'Starred' : 'Star'}>
-            <Star data-icon="inline-start" />
           </ToolbarButton>
           <ToolbarButton label="More actions">
             <MoreHorizontal data-icon="inline-start" />
@@ -434,29 +630,32 @@ function ReadingPane({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold">{message.sender.name}</p>
-                <span className="text-sm text-muted-foreground">
-                  {message.sender.email}
-                </span>
+                {message.sender.email && (
+                  <span className="text-sm text-muted-foreground">
+                    {message.sender.email}
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                To {message.recipients.join(', ')}
+                To {message.recipients.join(', ') || 'undisclosed recipients'}
               </p>
             </div>
-            <Badge variant={message.read ? 'secondary' : 'default'}>
-              {message.read ? 'Read' : 'Unread'}
+            <Badge variant={message.isRead ? 'secondary' : 'default'}>
+              {message.isRead ? 'Read' : 'Unread'}
             </Badge>
           </div>
 
           <div className="rounded-lg border bg-card p-6 shadow-sm">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Paperclip className="size-3.5" />
-              Conversation preview
-            </div>
-            <div className="mt-5 flex flex-col gap-4 text-sm leading-7 text-card-foreground">
-              {message.body.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
-            </div>
+            {message.bodyContentType === 'text' ? (
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-card-foreground">
+                {message.bodyContent}
+              </pre>
+            ) : (
+              <div
+                className="prose prose-sm max-w-none text-card-foreground [&_*]:max-w-full"
+                dangerouslySetInnerHTML={{ __html: sanitizedBody }}
+              />
+            )}
           </div>
         </div>
       </ScrollArea>
@@ -481,4 +680,65 @@ function ToolbarButton({
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
+}
+
+function EmptyFolder() {
+  return (
+    <div className="flex flex-1 items-center justify-center p-8">
+      <div className="max-w-64 text-center">
+        <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-muted">
+          <Inbox className="size-5 text-muted-foreground" />
+        </div>
+        <h2 className="mt-4 text-sm font-semibold">No messages here</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          This Outlook folder does not have any messages to show.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FullScreenStatus({ label }: { label: string }) {
+  return (
+    <main className="flex h-full items-center justify-center bg-background p-8">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        {label}
+      </div>
+    </main>
+  );
+}
+
+function PanelStatus({ label }: { label: string }) {
+  return (
+    <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
+}
+
+function RailStatus({ label }: { label: string }) {
+  return (
+    <div className="flex h-10 items-center gap-2 rounded-md px-3 text-xs text-muted-foreground max-lg:justify-center max-lg:px-0">
+      <Loader2 className="size-3.5 animate-spin" />
+      <span className="max-lg:hidden">{label}</span>
+    </div>
+  );
+}
+
+function formatDate(value: string, style: 'short' | 'long') {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: style === 'short' ? 'medium' : 'full',
+    timeStyle: style === 'short' ? undefined : 'short',
+  }).format(date);
 }
