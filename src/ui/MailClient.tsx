@@ -1,6 +1,7 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   Archive,
+  ArrowLeft,
   Clock,
   FileText,
   Inbox,
@@ -83,6 +84,7 @@ export function MailClient() {
   const currentFolder = getFolder(folderId) ?? mailFolders[0];
   const messages = getMessagesForFolder(currentFolder.id);
   const selectedMessage = getMessage(currentFolder.id, messageId);
+  const isReadingMessage = Boolean(selectedMessage);
 
   useEffect(() => {
     if (!messageId && messages[0]) {
@@ -100,22 +102,38 @@ export function MailClient() {
   return (
     <TooltipProvider delayDuration={200}>
       <main className="grid h-full min-h-0 grid-cols-[220px_minmax(300px,380px)_minmax(0,1fr)] bg-background max-lg:grid-cols-[76px_minmax(280px,360px)_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)]">
-        <FolderRail currentFolderId={currentFolder.id} />
+        <FolderRail
+          currentFolderId={currentFolder.id}
+          className={cn(isReadingMessage && 'max-md:hidden')}
+        />
         <MessageList
           folderId={currentFolder.id}
           folderLabel={currentFolder.label}
           messages={messages}
           selectedMessageId={selectedMessage?.id}
+          className={cn(isReadingMessage && 'max-md:hidden')}
         />
-        <ReadingPane message={selectedMessage} />
+        <ReadingPane
+          folderId={currentFolder.id}
+          message={selectedMessage}
+          className={cn(isReadingMessage && 'max-md:col-span-2')}
+        />
       </main>
     </TooltipProvider>
   );
 }
 
-function FolderRail({ currentFolderId }: { currentFolderId: string }) {
+function FolderRail({
+  currentFolderId,
+  className,
+}: {
+  currentFolderId: string;
+  className?: string;
+}) {
   return (
-    <aside className="flex min-h-0 flex-col border-r bg-card/70">
+    <aside
+      className={cn('flex min-h-0 flex-col border-r bg-card/70', className)}
+    >
       <div className="flex h-16 items-center gap-3 px-5 max-lg:justify-center max-lg:px-3">
         <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Mail className="size-4" />
@@ -215,14 +233,21 @@ function MessageList({
   folderLabel,
   messages,
   selectedMessageId,
+  className,
 }: {
   folderId: string;
   folderLabel: string;
   messages: ReturnType<typeof getMessagesForFolder>;
   selectedMessageId: string | undefined;
+  className?: string;
 }) {
   return (
-    <section className="flex min-h-0 flex-col border-r bg-card max-md:border-r-0">
+    <section
+      className={cn(
+        'flex min-h-0 flex-col border-r bg-card max-md:border-r-0',
+        className,
+      )}
+    >
       <header className="flex h-16 items-center justify-between gap-3 px-5">
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold tracking-tight">
@@ -320,13 +345,22 @@ function MessageList({
 }
 
 function ReadingPane({
+  folderId,
   message,
+  className,
 }: {
+  folderId: string;
   message: ReturnType<typeof getMessage>;
+  className?: string;
 }) {
   if (!message) {
     return (
-      <section className="flex min-h-0 flex-col bg-background max-md:hidden">
+      <section
+        className={cn(
+          'flex min-h-0 flex-col bg-background max-md:hidden',
+          className,
+        )}
+      >
         <div className="flex flex-1 items-center justify-center p-8">
           <div className="max-w-72 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
@@ -343,15 +377,38 @@ function ReadingPane({
   }
 
   return (
-    <article className="flex min-h-0 flex-col bg-background max-md:hidden">
+    <article
+      className={cn(
+        'flex min-h-0 flex-col bg-background max-md:hidden',
+        className,
+      )}
+    >
       <header className="flex min-h-16 items-center justify-between gap-4 border-b px-6">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">
-            {message.date}
-          </p>
-          <h2 className="truncate text-lg font-semibold tracking-tight">
-            {message.subject}
-          </h2>
+        <div className="flex min-w-0 items-center gap-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Back to message list"
+                className="hidden shrink-0 max-md:inline-flex"
+                asChild
+              >
+                <Link to="/mail/$folderId" params={{ folderId }}>
+                  <ArrowLeft data-icon="inline-start" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Back to message list</TooltipContent>
+          </Tooltip>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">
+              {message.date}
+            </p>
+            <h2 className="truncate text-lg font-semibold tracking-tight">
+              {message.subject}
+            </h2>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <ToolbarButton label="Reply">
