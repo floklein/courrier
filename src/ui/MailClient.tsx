@@ -424,7 +424,7 @@ function MessageList({
   return (
     <section
       className={cn(
-        'flex min-h-0 flex-col border-r bg-card max-md:border-r-0',
+        'flex min-h-0 min-w-0 flex-col overflow-hidden border-r bg-card max-md:border-r-0',
         className,
       )}
     >
@@ -454,8 +454,8 @@ function MessageList({
       {isLoading && <PanelStatus label="Loading messages..." />}
       {!isLoading && error && <PanelStatus label={error.message} />}
       {!isLoading && !error && messages.length > 0 && (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col p-2">
+        <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div className="flex w-full min-w-0 max-w-full flex-col overflow-hidden p-2">
             {messages.map((message) => {
               const isSelected = message.id === selectedMessageId;
 
@@ -468,21 +468,21 @@ function MessageList({
                     messageId: message.id,
                   }}
                   className={cn(
-                    'group rounded-md border border-transparent px-3 py-3 transition-colors hover:bg-accent/70',
+                    'group block min-w-0 overflow-hidden rounded-md border border-transparent px-3 py-3 transition-colors hover:bg-accent/70',
                     isSelected && 'border-border bg-accent',
                   )}
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <Avatar className="size-9">
                       <AvatarFallback>
                         {initials(message.sender.name)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <p
                           className={cn(
-                            'truncate text-sm',
+                            'min-w-0 truncate text-sm',
                             !message.isRead && 'font-semibold',
                           )}
                         >
@@ -549,7 +549,12 @@ function ReadingPane({
 }) {
   if (isLoading) {
     return (
-      <section className={cn('flex min-h-0 flex-col bg-background', className)}>
+      <section
+        className={cn(
+          'flex min-h-0 min-w-0 flex-col bg-background',
+          className,
+        )}
+      >
         <PanelStatus label="Loading message..." />
       </section>
     );
@@ -557,7 +562,12 @@ function ReadingPane({
 
   if (error) {
     return (
-      <section className={cn('flex min-h-0 flex-col bg-background', className)}>
+      <section
+        className={cn(
+          'flex min-h-0 min-w-0 flex-col bg-background',
+          className,
+        )}
+      >
         <PanelStatus label={error.message} />
       </section>
     );
@@ -567,7 +577,7 @@ function ReadingPane({
     return (
       <section
         className={cn(
-          'flex min-h-0 flex-col bg-background max-md:hidden',
+          'flex min-h-0 min-w-0 flex-col bg-background max-md:hidden',
           className,
         )}
       >
@@ -581,7 +591,9 @@ function ReadingPane({
   });
 
   return (
-    <article className={cn('flex min-h-0 flex-col bg-background', className)}>
+    <article
+      className={cn('flex min-h-0 min-w-0 flex-col bg-background', className)}
+    >
       <header className="flex min-h-16 items-center justify-between gap-4 border-b px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Tooltip>
