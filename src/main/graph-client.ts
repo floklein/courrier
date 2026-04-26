@@ -48,7 +48,7 @@ export class GraphClient {
     nextPageUrl?: string,
   ): Promise<PagedMessages> {
     const url =
-      nextPageUrl ??
+      getValidatedMessagePageUrl(folderId, nextPageUrl) ??
       `${graphBaseUrl}/me/mailFolders/${encodeURIComponent(
         folderId,
       )}/messages?$top=25&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients`;
@@ -168,4 +168,44 @@ export class GraphClient {
 
     return response.json() as Promise<T>;
   }
+}
+
+export function getValidatedMessagePageUrl(
+  folderId: string,
+  nextPageUrl?: string,
+) {
+  if (!nextPageUrl) {
+    return undefined;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(nextPageUrl);
+  } catch {
+    throw new Error('Refusing to fetch an unexpected Microsoft Graph page URL.');
+  }
+
+  const graphBase = new URL(graphBaseUrl);
+  const pathSegments = url.pathname.split('/').map((segment) => {
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment;
+    }
+  });
+  const isExpectedMessagePage =
+    url.origin === graphBase.origin &&
+    pathSegments.length === 6 &&
+    pathSegments[1] === 'v1.0' &&
+    pathSegments[2] === 'me' &&
+    pathSegments[3] === 'mailFolders' &&
+    pathSegments[4] === folderId &&
+    pathSegments[5] === 'messages';
+
+  if (!isExpectedMessagePage) {
+    throw new Error('Refusing to fetch an unexpected Microsoft Graph page URL.');
+  }
+
+  return nextPageUrl;
 }

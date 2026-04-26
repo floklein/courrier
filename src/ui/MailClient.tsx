@@ -55,6 +55,7 @@ import type {
   MailMessageSummary,
   PagedMessages,
 } from '../lib/mail-types';
+import { decodeRouteId, encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
 import { type ThemePreference, useTheme } from '../theme/ThemeProvider';
 
@@ -72,8 +73,11 @@ function parseMailPath(pathname: string) {
   const parts = pathname.split('/').filter(Boolean);
 
   return {
-    folderId: parts[0] === 'mail' && parts[1] ? parts[1] : 'inbox',
-    messageId: parts[0] === 'mail' ? parts[2] : undefined,
+    folderId:
+      parts[0] === 'mail' && parts[1]
+        ? decodeRouteId(parts[1]) ?? 'inbox'
+        : 'inbox',
+    messageId: parts[0] === 'mail' ? decodeRouteId(parts[2]) : undefined,
   };
 }
 
@@ -161,8 +165,8 @@ function AuthenticatedMailClient({
     navigate({
       to: '/mail/$folderId/$messageId',
       params: {
-        folderId: resolvedFolderId,
-        messageId: messages[0].id,
+        folderId: encodeRouteId(resolvedFolderId),
+        messageId: encodeRouteId(messages[0].id),
       },
       replace: true,
     });
@@ -314,7 +318,7 @@ function FolderRail({
               <Link
                 key={folder.id}
                 to="/mail/$folderId"
-                params={{ folderId: folder.id }}
+                params={{ folderId: encodeRouteId(folder.id) }}
                 className={cn(
                   'flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
                   isActive && 'bg-accent text-accent-foreground',
@@ -464,8 +468,8 @@ function MessageList({
                   key={message.id}
                   to="/mail/$folderId/$messageId"
                   params={{
-                    folderId,
-                    messageId: message.id,
+                    folderId: encodeRouteId(folderId),
+                    messageId: encodeRouteId(message.id),
                   }}
                   className={cn(
                     'group block min-w-0 overflow-hidden rounded-md border border-transparent px-3 py-3 transition-colors hover:bg-accent/70',
@@ -605,7 +609,10 @@ function ReadingPane({
                 className="hidden shrink-0 max-md:inline-flex"
                 asChild
               >
-                <Link to="/mail/$folderId" params={{ folderId }}>
+                <Link
+                  to="/mail/$folderId"
+                  params={{ folderId: encodeRouteId(folderId) }}
+                >
                   <ArrowLeft data-icon="inline-start" />
                 </Link>
               </Button>

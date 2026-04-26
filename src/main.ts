@@ -1,10 +1,11 @@
 import 'dotenv/config';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { AuthService } from './main/auth-service';
 import { GraphClient } from './main/graph-client';
 import { registerIpcHandlers } from './main/ipc';
+import { registerWindowNavigationGuards } from './main/security';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -24,6 +25,7 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+  registerWindowNavigationGuards(mainWindow, shell.openExternal);
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
