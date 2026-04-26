@@ -379,7 +379,7 @@ function ReadingPane({
   return (
     <article
       className={cn(
-        'flex min-h-0 flex-col bg-background max-md:hidden',
+        'flex min-h-0 flex-col bg-background',
         className,
       )}
     >
