@@ -1,11 +1,14 @@
+import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Mail } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '../components/ui/badge';
 import { api } from '../lib/api-client';
-import type { MailFolder } from '../lib/mail-types';
+import type { MailFolder, MailMessageSummary } from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
+import { isMailMessageDragData } from './mail-drag';
 import { folderIcons } from './mail-icons';
 import { RailStatus } from './StatusViews';
 import { UserMenu } from './UserMenu';
@@ -17,6 +20,8 @@ export function FolderRail({
   folders,
   isLoading,
   error,
+  isActionPending,
+  onMoveMessage,
   className,
 }: {
   accountEmail: string;
@@ -25,6 +30,11 @@ export function FolderRail({
   folders: MailFolder[];
   isLoading: boolean;
   error: Error | null;
+  isActionPending: boolean;
+  onMoveMessage: (
+    message: MailMessageSummary,
+    destinationFolderId: string,
+  ) => void;
   className?: string;
 }) {
   const queryClient = useQueryClient();
@@ -59,38 +69,15 @@ export function FolderRail({
         )}
         {!isLoading &&
           !error &&
-          folders.map((folder) => {
-            const Icon = folderIcons[folder.icon];
-            const isActive = folder.id === currentFolderId;
-
-            return (
-              <Link
-                key={folder.id}
-                to="/mail/$folderId"
-                params={{ folderId: encodeRouteId(folder.id) }}
-                className={cn(
-                  'flex h-10 shrink-0 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
-                  isActive && 'bg-accent text-accent-foreground',
-                )}
-                style={{
-                  paddingLeft: folder.depth
-                    ? 8 + folder.depth * 14
-                    : undefined,
-                }}
-              >
-                <Icon className="size-4 shrink-0" />
-                <span className="truncate max-lg:hidden">{folder.label}</span>
-                {folder.unreadCount > 0 && (
-                  <Badge
-                    variant={isActive ? 'default' : 'secondary'}
-                    className="ml-auto max-lg:hidden"
-                  >
-                    {folder.unreadCount}
-                  </Badge>
-                )}
-              </Link>
-            );
-          })}
+          folders.map((folder) => (
+            <FolderRailItem
+              key={folder.id}
+              currentFolderId={currentFolderId}
+              folder={folder}
+              isActionPending={isActionPending}
+              onMoveMessage={onMoveMessage}
+            />
+          ))}
       </nav>
       <div className="shrink-0 border-t p-2">
         <UserMenu
@@ -101,5 +88,83 @@ export function FolderRail({
         />
       </div>
     </aside>
+  );
+}
+
+function FolderRailItem({
+  currentFolderId,
+  folder,
+  isActionPending,
+  onMoveMessage,
+}: {
+  currentFolderId: string;
+  folder: MailFolder;
+  isActionPending: boolean;
+  onMoveMessage: (
+    message: MailMessageSummary,
+    destinationFolderId: string,
+  ) => void;
+}) {
+  const dropRef = useRef<HTMLAnchorElement>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const Icon = folderIcons[folder.icon];
+  const isActive = folder.id === currentFolderId;
+
+  useEffect(() => {
+    const element = dropRef.current;
+
+    if (!element || isActionPending) {
+      return;
+    }
+
+    return dropTargetForElements({
+      element,
+      getData: () => ({ folderId: folder.id }),
+      canDrop: ({ source }) => {
+        const data = source.data;
+        return isMailMessageDragData(data) && data.sourceFolderId !== folder.id;
+      },
+      onDragEnter: () => setIsDraggingOver(true),
+      onDragLeave: () => setIsDraggingOver(false),
+      onDrop: ({ source }) => {
+        setIsDraggingOver(false);
+
+        const data = source.data;
+
+        if (!isMailMessageDragData(data) || data.sourceFolderId === folder.id) {
+          return;
+        }
+
+        onMoveMessage(data.message, folder.id);
+      },
+    });
+  }, [folder.id, isActionPending, onMoveMessage]);
+
+  return (
+    <Link
+      ref={dropRef}
+      to="/mail/$folderId"
+      params={{ folderId: encodeRouteId(folder.id) }}
+      className={cn(
+        'flex h-10 shrink-0 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
+        isActive && 'bg-accent text-accent-foreground',
+        isDraggingOver &&
+          'bg-primary/10 text-accent-foreground ring-2 ring-inset ring-primary/30',
+      )}
+      style={{
+        paddingLeft: folder.depth ? 8 + folder.depth * 14 : undefined,
+      }}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="truncate max-lg:hidden">{folder.label}</span>
+      {folder.unreadCount > 0 && (
+        <Badge
+          variant={isActive ? 'default' : 'secondary'}
+          className="ml-auto max-lg:hidden"
+        >
+          {folder.unreadCount}
+        </Badge>
+      )}
+    </Link>
   );
 }

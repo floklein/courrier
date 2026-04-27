@@ -36,6 +36,7 @@ export function ReadingPane({
   replyMessageId,
   isLoading,
   error,
+  isMailDragActive,
   onCloseReply,
   onDeleteMessage,
   onMarkMessageReadState,
@@ -50,6 +51,7 @@ export function ReadingPane({
   replyMessageId: string | undefined;
   isLoading: boolean;
   error: Error | null;
+  isMailDragActive: boolean;
   onCloseReply: () => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
   onMarkMessageReadState: (
@@ -243,23 +245,31 @@ export function ReadingPane({
               </pre>
             </div>
           ) : (
-            <iframe
-              title={message.subject || 'Message body'}
-              sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
-              className="w-full border-0 bg-white"
-              style={{ height: htmlFrameHeight }}
-              onLoad={(event) => {
-                const document = event.currentTarget.contentDocument;
-                const height = Math.max(
-                  document?.body.scrollHeight ?? 0,
-                  document?.documentElement.scrollHeight ?? 0,
-                  80,
-                );
+            <div className="relative">
+              {isMailDragActive && (
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 z-10"
+                />
+              )}
+              <iframe
+                title={message.subject || 'Message body'}
+                sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+                className="w-full border-0 bg-white"
+                style={{ height: htmlFrameHeight }}
+                onLoad={(event) => {
+                  const document = event.currentTarget.contentDocument;
+                  const height = Math.max(
+                    document?.body.scrollHeight ?? 0,
+                    document?.documentElement.scrollHeight ?? 0,
+                    80,
+                  );
 
-                setHtmlFrameHeight(Math.ceil(height));
-              }}
-              srcDoc={htmlDocument}
-            />
+                  setHtmlFrameHeight(Math.ceil(height));
+                }}
+                srcDoc={htmlDocument}
+              />
+            </div>
           )}
         </div>
       </ScrollArea>

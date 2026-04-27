@@ -27,6 +27,7 @@ export function MessageList({
   isActionPending,
   onLoadMore,
   onDeleteMessage,
+  onDragActiveChange,
   onMarkMessageReadState,
   onMoveMessage,
   onReplyToMessage,
@@ -46,6 +47,7 @@ export function MessageList({
   isActionPending: boolean;
   onLoadMore: () => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
+  onDragActiveChange: (isActive: boolean) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
     isRead: boolean,
@@ -167,6 +169,7 @@ export function MessageList({
                 isActionPending={isActionPending}
                 message={message}
                 onDelete={onDeleteMessage}
+                onDragActiveChange={onDragActiveChange}
                 onMarkReadState={onMarkMessageReadState}
                 onMove={onMoveMessage}
                 onReply={onReplyToMessage}

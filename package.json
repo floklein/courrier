@@ -52,6 +52,8 @@
     "vitest": "^4.0.0"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
+    "@atlaskit/pragmatic-drag-and-drop-live-region": "^1.3.4",
     "@azure/msal-node": "^3.8.8",
     "@azure/msal-node-extensions": "^1.5.30",
     "@radix-ui/react-avatar": "^1.1.11",
