@@ -26,7 +26,7 @@ export function Onboarding({
           <Mail className="size-5" />
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight">
-          Connect Outlook
+          Welcome to Courrier
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
           Courrier needs Microsoft access before it can show your folders and
@@ -52,9 +52,6 @@ export function Onboarding({
           )}
           Sign in with Microsoft
         </Button>
-        <p className="mt-4 text-xs leading-5 text-muted-foreground">
-          Setup instructions are in docs/oauth.md.
-        </p>
       </section>
     </main>
   );
