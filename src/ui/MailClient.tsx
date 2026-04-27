@@ -304,7 +304,7 @@ function FolderRail({
         </div>
       </div>
       <Separator />
-      <nav className="flex flex-1 flex-col gap-1 overflow-hidden p-3">
+      <nav className="flex flex-1 flex-col gap-1 overflow-hidden p-2">
         {isLoading && <RailStatus label="Loading folders" />}
         {!isLoading && error && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs leading-5 text-destructive max-lg:hidden">
@@ -326,7 +326,7 @@ function FolderRail({
                   'flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
                   isActive && 'bg-accent text-accent-foreground',
                 )}
-                style={{ paddingLeft: folder.depth ? 12 + folder.depth * 14 : undefined }}
+                style={{ paddingLeft: folder.depth ? 8 + folder.depth * 14 : undefined }}
               >
                 <Icon className="size-4 shrink-0" />
                 <span className="truncate max-lg:hidden">{folder.label}</span>
