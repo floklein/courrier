@@ -18,7 +18,14 @@
   "rules": {
     "import/no-unresolved": [
       "error",
-      { "ignore": ["^@tailwindcss/vite$", "^vitest/config$", "^@/"] }
+      {
+        "ignore": [
+          "^@tailwindcss/vite$",
+          "^vitest/config$",
+          "^@/",
+          "^virtual:darkreader-script$"
+        ]
+      }
     ]
   },
   "parser": "@typescript-eslint/parser"
