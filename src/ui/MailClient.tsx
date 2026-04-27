@@ -9,6 +9,8 @@ import DOMPurify from 'dompurify';
 import {
   Archive,
   ArrowLeft,
+  Check,
+  ChevronsUpDown,
   Clock,
   FileText,
   Inbox,
@@ -30,15 +32,16 @@ import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { ScrollArea } from '../components/ui/scroll-area';
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import {
   Tooltip,
@@ -57,7 +60,7 @@ import type {
 } from '../lib/mail-types';
 import { decodeRouteId, encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
-import { type ThemePreference, useTheme } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 
 const folderIcons: Record<FolderIcon, ComponentType<{ className?: string }>> = {
   inbox: Inbox,
@@ -176,7 +179,8 @@ function AuthenticatedMailClient({
     <TooltipProvider delayDuration={200}>
       <main className="grid h-full min-h-0 grid-cols-[240px_minmax(320px,420px)_minmax(0,1fr)] bg-background max-lg:grid-cols-[76px_minmax(300px,380px)_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)]">
         <FolderRail
-          accountLabel={session.account.name ?? session.account.username}
+          accountEmail={session.account.username}
+          accountName={session.account.name ?? session.account.username}
           currentFolderId={resolvedFolderId}
           folders={folders}
           isLoading={foldersQuery.isPending}
@@ -260,14 +264,16 @@ function Onboarding({ session }: { session: Exclude<AuthSession, { status: 'auth
 }
 
 function FolderRail({
-  accountLabel,
+  accountEmail,
+  accountName,
   currentFolderId,
   folders,
   isLoading,
   error,
   className,
 }: {
-  accountLabel: string;
+  accountEmail: string;
+  accountName: string;
   currentFolderId: string;
   folders: MailFolder[];
   isLoading: boolean;
@@ -291,12 +297,9 @@ function FolderRail({
         <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Mail className="size-4" />
         </div>
-        <div className="flex min-w-0 flex-col max-lg:hidden">
+        <div className="flex min-w-0 max-lg:hidden">
           <span className="truncate text-sm font-semibold tracking-tight">
             Courrier
-          </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {accountLabel}
           </span>
         </div>
       </div>
@@ -339,66 +342,126 @@ function FolderRail({
             );
           })}
       </nav>
-      <div className="border-t p-3">
-        <div className="flex flex-col gap-3">
-          <ThemeSelect />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={signOutMutation.isPending}
-                onClick={() => signOutMutation.mutate()}
-              >
-                <LogOut data-icon="inline-start" />
-                <span className="max-lg:hidden">Sign out</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Sign out</TooltipContent>
-          </Tooltip>
-        </div>
+      <div className="border-t p-2">
+        <UserMenu
+          accountEmail={accountEmail}
+          accountName={accountName}
+          isSigningOut={signOutMutation.isPending}
+          onSignOut={() => signOutMutation.mutate()}
+        />
       </div>
     </aside>
   );
 }
 
-function ThemeSelect() {
+function UserMenu({
+  accountEmail,
+  accountName,
+  isSigningOut,
+  onSignOut,
+}: {
+  accountEmail: string;
+  accountName: string;
+  isSigningOut: boolean;
+  onSignOut: () => void;
+}) {
   const { theme, setTheme } = useTheme();
 
   return (
-    <Select
-      value={theme}
-      onValueChange={(value) => setTheme(value as ThemePreference)}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <SelectTrigger
-            size="sm"
-            aria-label="Color theme"
-            className="w-full max-lg:size-10 max-lg:justify-center max-lg:px-0 max-lg:[&_[data-slot=select-value]]:hidden"
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className="h-12 w-full justify-start gap-2 px-2 max-lg:size-10 max-lg:justify-center max-lg:px-0"
+          aria-label="User menu"
+        >
+          <Avatar className="size-8 max-lg:size-6">
+            <AvatarFallback>{initials(accountName)}</AvatarFallback>
+          </Avatar>
+          <span className="flex min-w-0 flex-1 flex-col items-start max-lg:hidden">
+            <span className="truncate text-sm font-semibold leading-5">
+              {accountName}
+            </span>
+            <span className="truncate text-xs font-normal leading-4 text-muted-foreground">
+              {accountEmail}
+            </span>
+          </span>
+          <ChevronsUpDown data-icon="inline-end" className="ml-auto max-lg:hidden" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="end" className="w-72 p-0">
+        <DropdownMenuLabel className="flex items-center gap-3 p-3">
+          <Avatar className="size-9">
+            <AvatarFallback>{initials(accountName)}</AvatarFallback>
+          </Avatar>
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-semibold">{accountName}</span>
+            <span className="truncate text-xs font-normal text-muted-foreground">
+              {accountEmail}
+            </span>
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="m-0" />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-muted-foreground">
+            Theme
+          </DropdownMenuLabel>
+          <ThemeMenuItem
+            icon={Sun}
+            isSelected={theme === 'light'}
+            label="Light"
+            onSelect={() => setTheme('light')}
+          />
+          <ThemeMenuItem
+            icon={Moon}
+            isSelected={theme === 'dark'}
+            label="Dark"
+            onSelect={() => setTheme('dark')}
+          />
+          <ThemeMenuItem
+            icon={Monitor}
+            isSelected={theme === 'system'}
+            label="System"
+            onSelect={() => setTheme('system')}
+          />
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            disabled={isSigningOut}
+            onSelect={onSignOut}
+            className="m-1 px-3 py-2"
           >
-            <SelectValue />
-          </SelectTrigger>
-        </TooltipTrigger>
-        <TooltipContent>Color theme</TooltipContent>
-      </Tooltip>
-      <SelectContent>
-        <SelectGroup>
-          <SelectItem value="light">
-            <Sun />
-            Light
-          </SelectItem>
-          <SelectItem value="dark">
-            <Moon />
-            Dark
-          </SelectItem>
-          <SelectItem value="system">
-            <Monitor />
-            System
-          </SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+            {isSigningOut ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+            ) : (
+              <LogOut data-icon="inline-start" />
+            )}
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ThemeMenuItem({
+  icon: Icon,
+  isSelected,
+  label,
+  onSelect,
+}: {
+  icon: ComponentType<{ className?: string; 'data-icon'?: string }>;
+  isSelected: boolean;
+  label: string;
+  onSelect: () => void;
+}) {
+  return (
+    <DropdownMenuItem onSelect={onSelect} className="mx-1 px-3 py-2">
+      <Icon data-icon="inline-start" />
+      {label}
+      {isSelected && <Check data-icon="inline-end" className="ml-auto" />}
+    </DropdownMenuItem>
   );
 }
 
@@ -518,7 +581,7 @@ function MessageList({
             {hasNextPage && (
               <Button
                 variant="ghost"
-                className="mx-3 my-2"
+                className="m-2"
                 disabled={isFetchingNextPage}
                 onClick={onLoadMore}
               >
