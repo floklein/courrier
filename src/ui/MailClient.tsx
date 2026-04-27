@@ -459,7 +459,7 @@ function MessageList({
       {!isLoading && error && <PanelStatus label={error.message} />}
       {!isLoading && !error && messages.length > 0 && (
         <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <div className="flex w-full min-w-0 max-w-full flex-col overflow-hidden p-2">
+          <div className="flex w-full min-w-0 max-w-full flex-col overflow-hidden">
             {messages.map((message) => {
               const isSelected = message.id === selectedMessageId;
 
@@ -472,8 +472,8 @@ function MessageList({
                     messageId: encodeRouteId(message.id),
                   }}
                   className={cn(
-                    'group block min-w-0 overflow-hidden rounded-md border border-transparent px-3 py-3 transition-colors hover:bg-accent/70',
-                    isSelected && 'border-border bg-accent',
+                    'group block min-w-0 overflow-hidden border-b px-3 py-3 transition-colors hover:bg-accent/70',
+                    isSelected && 'bg-accent',
                   )}
                 >
                   <div className="flex min-w-0 items-start gap-3">
@@ -598,7 +598,7 @@ function ReadingPane({
     <article
       className={cn('flex min-h-0 min-w-0 flex-col bg-background', className)}
     >
-      <header className="flex min-h-16 items-center justify-between gap-4 border-b px-6">
+      <header className="flex min-h-16 items-center justify-between gap-4 border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -641,8 +641,8 @@ function ReadingPane({
         </div>
       </header>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-8 py-7">
-          <div className="flex items-start gap-4">
+        <div className="flex w-full flex-col">
+          <div className="flex items-start gap-4 border-b px-4 py-4">
             <Avatar className="size-11">
               <AvatarFallback>{initials(message.sender.name)}</AvatarFallback>
             </Avatar>
@@ -664,7 +664,7 @@ function ReadingPane({
             </Badge>
           </div>
 
-          <div className="rounded-lg border bg-card p-6 shadow-sm">
+          <div className="px-4 py-4">
             {message.bodyContentType === 'text' ? (
               <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-card-foreground">
                 {message.bodyContent}
