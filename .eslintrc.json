@@ -13,12 +13,12 @@
     "plugin:import/typescript"
   ],
   "settings": {
-    "import/ignore": ["^@tailwindcss/vite$"]
+    "import/ignore": ["^@tailwindcss/vite$", "^vitest/config$"]
   },
   "rules": {
     "import/no-unresolved": [
       "error",
-      { "ignore": ["^@tailwindcss/vite$", "^@/"] }
+      { "ignore": ["^@tailwindcss/vite$", "^vitest/config$", "^@/"] }
     ]
   },
   "parser": "@typescript-eslint/parser"
