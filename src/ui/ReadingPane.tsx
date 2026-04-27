@@ -1,7 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import DOMPurify from 'dompurify';
 import { ArrowLeft, MoreHorizontal, Reply, Send, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -23,6 +21,7 @@ import type {
 } from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
+import { HtmlMessageBody } from './HtmlMessageBody';
 import { MailActionDropdownContent } from './MailActionMenu';
 import { formatMailDate, getInitials } from './mail-utils';
 import { PanelStatus } from './StatusViews';
@@ -65,12 +64,6 @@ export function ReadingPane({
   onReplyToMessage: (message: MailMessageSummary) => void;
   className?: string;
 }) {
-  const [htmlFrameHeight, setHtmlFrameHeight] = useState(80);
-
-  useEffect(() => {
-    setHtmlFrameHeight(80);
-  }, [message?.id]);
-
   if (isLoading) {
     return (
       <section
@@ -109,31 +102,6 @@ export function ReadingPane({
       </section>
     );
   }
-
-  const sanitizedBody = DOMPurify.sanitize(message.bodyContent, {
-    USE_PROFILES: { html: true },
-  });
-  const htmlDocument = `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <base target="_blank" />
-    <style>
-      html,
-      body {
-        margin: 8px;
-      }
-
-      body {
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-    </style>
-  </head>
-  <body>
-    ${sanitizedBody}
-  </body>
-</html>`;
 
   return (
     <article
@@ -245,31 +213,11 @@ export function ReadingPane({
               </pre>
             </div>
           ) : (
-            <div className="relative">
-              {isMailDragActive && (
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-0 z-10"
-                />
-              )}
-              <iframe
-                title={message.subject || 'Message body'}
-                sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
-                className="w-full border-0 bg-white"
-                style={{ height: htmlFrameHeight }}
-                onLoad={(event) => {
-                  const document = event.currentTarget.contentDocument;
-                  const height = Math.max(
-                    document?.body.scrollHeight ?? 0,
-                    document?.documentElement.scrollHeight ?? 0,
-                    80,
-                  );
-
-                  setHtmlFrameHeight(Math.ceil(height));
-                }}
-                srcDoc={htmlDocument}
-              />
-            </div>
+            <HtmlMessageBody
+              bodyContent={message.bodyContent}
+              isMailDragActive={isMailDragActive}
+              title={message.subject || 'Message body'}
+            />
           )}
         </div>
       </ScrollArea>
