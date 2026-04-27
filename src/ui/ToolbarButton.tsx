@@ -9,14 +9,24 @@ import {
 export function ToolbarButton({
   icon: Icon,
   label,
+  disabled,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
+  disabled?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
           <Icon data-icon="inline-start" />
         </Button>
       </TooltipTrigger>
