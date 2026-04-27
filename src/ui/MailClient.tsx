@@ -293,8 +293,8 @@ function FolderRail({
     <aside
       className={cn('flex min-h-0 flex-col border-r bg-card/70', className)}
     >
-      <div className="flex h-16 items-center gap-3 px-5 max-lg:justify-center max-lg:px-3">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+      <div className="flex h-14 items-center gap-2 px-3 max-lg:justify-center max-lg:px-2">
+        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Mail className="size-4" />
         </div>
         <div className="flex min-w-0 max-lg:hidden">
