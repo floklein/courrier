@@ -7,6 +7,7 @@ import type {
 } from './lib/mail-types';
 
 const courrier = {
+  platform: process.platform,
   auth: {
     getSession: () => ipcRenderer.invoke('auth:get-session') as Promise<AuthSession>,
     signIn: () => ipcRenderer.invoke('auth:sign-in') as Promise<AuthSession>,

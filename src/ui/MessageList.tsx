@@ -94,7 +94,7 @@ export function MessageList({
         className,
       )}
     >
-      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b px-5">
+      <header className="app-window-header app-window-controls-end-mobile flex h-16 shrink-0 items-center justify-between gap-3 border-b px-5">
         {isSearching ? (
           <form
             className="flex min-w-0 flex-1 items-center gap-2"

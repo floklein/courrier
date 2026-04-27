@@ -27,6 +27,8 @@ const queryClient = new QueryClient({
   },
 });
 
+document.documentElement.dataset.platform = window.courrier.platform;
+
 createRoot(rootElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

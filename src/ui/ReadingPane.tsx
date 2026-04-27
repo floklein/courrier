@@ -140,7 +140,7 @@ export function ReadingPane({
         className,
       )}
     >
-      <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b px-4">
+      <header className="app-window-header app-window-controls-end app-window-controls-start-mobile flex h-16 shrink-0 items-center justify-between gap-4 border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
           <Tooltip>
             <TooltipTrigger asChild>
