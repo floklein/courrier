@@ -50,7 +50,7 @@ export function FolderRail({
           </span>
         </div>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 overflow-hidden p-2">
+      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
         {isLoading && <RailStatus label="Loading folders" />}
         {!isLoading && error && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs leading-5 text-destructive max-lg:hidden">
@@ -69,7 +69,7 @@ export function FolderRail({
                 to="/mail/$folderId"
                 params={{ folderId: encodeRouteId(folder.id) }}
                 className={cn(
-                  'flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
+                  'flex h-10 shrink-0 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
                   isActive && 'bg-accent text-accent-foreground',
                 )}
                 style={{
@@ -92,7 +92,7 @@ export function FolderRail({
             );
           })}
       </nav>
-      <div className="border-t p-2">
+      <div className="shrink-0 border-t p-2">
         <UserMenu
           accountEmail={accountEmail}
           accountName={accountName}
