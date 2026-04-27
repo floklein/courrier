@@ -179,7 +179,7 @@ export function ReadingPane({
           />
           <ToolbarButton
             icon={Trash2}
-            label="Delete"
+            label="Move to trash"
             disabled={isActionPending}
             onClick={() => onDeleteMessage(message)}
           />

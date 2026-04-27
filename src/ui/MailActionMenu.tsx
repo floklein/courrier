@@ -62,7 +62,7 @@ export function MailActionDropdownContent(props: MailActionMenuProps) {
         onSelect={() => props.onDelete(props.message)}
       >
         <Trash2 />
-        Delete
+        Move to trash
       </DropdownMenuItem>
     </DropdownMenuContent>
   );
@@ -96,7 +96,7 @@ export function MailActionContextContent(props: MailActionMenuProps) {
         onSelect={() => props.onDelete(props.message)}
       >
         <Trash2 />
-        Delete
+        Move to trash
       </ContextMenuItem>
     </ContextMenuContent>
   );

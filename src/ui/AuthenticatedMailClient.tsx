@@ -182,6 +182,19 @@ export function AuthenticatedMailClient({
 
   function handleReplyToMessage(message: MailMessageSummary) {
     setReplyMessageId(message.id);
+
+    if (message.id === messageId) {
+      return;
+    }
+
+    void navigate({
+      to: '/mail/$folderId/$messageId',
+      params: {
+        folderId: encodeRouteId(resolvedFolderId),
+        messageId: encodeRouteId(message.id),
+      },
+      replace: true,
+    });
   }
 
   function handleCloseReply() {
