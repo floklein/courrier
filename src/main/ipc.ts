@@ -24,12 +24,33 @@ export function registerIpcHandlers(
     assertTrustedSender(event);
     return graphClient.listFolders();
   });
-  ipcMain.handle('mail:list-messages', (event, folderId: string, pageUrl?: string) => {
-    assertTrustedSender(event);
-    return graphClient.listMessages(folderId, pageUrl);
-  });
+  ipcMain.handle(
+    'mail:list-messages',
+    (event, folderId: string, pageUrl?: string, searchQuery?: string) => {
+      assertTrustedSender(event);
+      return graphClient.listMessages(folderId, pageUrl, searchQuery);
+    },
+  );
   ipcMain.handle('mail:get-message', (event, folderId: string, messageId: string) => {
     assertTrustedSender(event);
     return graphClient.getMessage(folderId, messageId);
+  });
+  ipcMain.handle(
+    'mail:mark-message-read-state',
+    (event, messageId: string, isRead: boolean) => {
+      assertTrustedSender(event);
+      return graphClient.markMessageReadState(messageId, isRead);
+    },
+  );
+  ipcMain.handle(
+    'mail:move-message',
+    (event, messageId: string, destinationFolderId: string) => {
+      assertTrustedSender(event);
+      return graphClient.moveMessage(messageId, destinationFolderId);
+    },
+  );
+  ipcMain.handle('mail:delete-message', (event, messageId: string) => {
+    assertTrustedSender(event);
+    return graphClient.deleteMessage(messageId);
   });
 }

@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Mail } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
-import { Separator } from '../components/ui/separator';
 import { api } from '../lib/api-client';
 import type { MailFolder } from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
@@ -41,7 +40,7 @@ export function FolderRail({
     <aside
       className={cn('flex min-h-0 flex-col border-r bg-card/70', className)}
     >
-      <div className="flex h-16 items-center gap-2 px-3 max-lg:justify-center max-lg:px-2">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b px-3 max-lg:justify-center max-lg:px-2">
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Mail className="size-4" />
         </div>
@@ -51,7 +50,6 @@ export function FolderRail({
           </span>
         </div>
       </div>
-      <Separator />
       <nav className="flex flex-1 flex-col gap-1 overflow-hidden p-2">
         {isLoading && <RailStatus label="Loading folders" />}
         {!isLoading && error && (

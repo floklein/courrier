@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { AuthSession } from '../lib/mail-types';
 
 const authority = 'https://login.microsoftonline.com/common';
-const scopes = ['User.Read', 'Mail.Read', 'offline_access'];
+const scopes = ['User.Read', 'Mail.ReadWrite', 'offline_access'];
 
 export class AuthConfigurationError extends Error {
   constructor(message: string) {
@@ -58,7 +58,10 @@ export class AuthService {
 
       return sessionFromAccount(result.account ?? account);
     } catch (error) {
-      if (error instanceof InteractionRequiredAuthError) {
+      if (
+        error instanceof InteractionRequiredAuthError ||
+        shouldPromptForInteractiveSignIn(error)
+      ) {
         return { status: 'unauthenticated' };
       }
 
@@ -185,6 +188,27 @@ export function shouldUsePlaintextCacheFallback(error: unknown) {
   return (
     message.includes('Dpapi bindings unavailable') ||
     message.includes('Dpapi is not supported on this platform')
+  );
+}
+
+function shouldPromptForInteractiveSignIn(error: unknown) {
+  const candidate = error as {
+    errorCode?: string;
+    errorMessage?: string;
+    message?: string;
+  };
+  const errorCode = candidate.errorCode?.toLowerCase();
+  const message = (
+    candidate.errorMessage ??
+    candidate.message ??
+    String(error)
+  ).toLowerCase();
+
+  return (
+    errorCode === 'invalid_grant' ||
+    message.includes('invalid_grant') ||
+    message.includes('aadsts70000') ||
+    message.includes('must first sign in and grant')
   );
 }
 
