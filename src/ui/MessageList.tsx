@@ -3,7 +3,6 @@ import { Loader2, Search, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { Separator } from '../components/ui/separator';
 import {
   Tooltip,
   TooltipContent,
@@ -95,7 +94,7 @@ export function MessageList({
         className,
       )}
     >
-      <header className="flex min-h-16 items-center justify-between gap-3 px-5">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b px-5">
         {isSearching ? (
           <form
             className="flex min-w-0 flex-1 items-center gap-2"
@@ -154,7 +153,6 @@ export function MessageList({
           </>
         )}
       </header>
-      <Separator />
       {isLoading && <PanelStatus label="Loading messages..." />}
       {!isLoading && error && <PanelStatus label={error.message} />}
       {!isLoading && !error && messages.length > 0 && (

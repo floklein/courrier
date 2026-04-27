@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import DOMPurify from 'dompurify';
 import { ArrowLeft, MoreHorizontal, Reply, Send, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -15,7 +16,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '../components/ui/tooltip';
-import type { MailFolder, MailMessageDetail, MailMessageSummary } from '../lib/mail-types';
+import type {
+  MailFolder,
+  MailMessageDetail,
+  MailMessageSummary,
+} from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
 import { MailActionDropdownContent } from './MailActionMenu';
@@ -58,6 +63,12 @@ export function ReadingPane({
   onReplyToMessage: (message: MailMessageSummary) => void;
   className?: string;
 }) {
+  const [htmlFrameHeight, setHtmlFrameHeight] = useState(80);
+
+  useEffect(() => {
+    setHtmlFrameHeight(80);
+  }, [message?.id]);
+
   if (isLoading) {
     return (
       <section
@@ -107,6 +118,11 @@ export function ReadingPane({
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base target="_blank" />
     <style>
+      html,
+      body {
+        margin: 0;
+      }
+
       body {
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -119,9 +135,12 @@ export function ReadingPane({
 
   return (
     <article
-      className={cn('flex min-h-0 min-w-0 flex-col bg-background', className)}
+      className={cn(
+        'flex min-h-0 min-w-0 flex-col overflow-hidden bg-background',
+        className,
+      )}
     >
-      <header className="flex min-h-16 items-center justify-between gap-4 border-b px-4">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -193,7 +212,7 @@ export function ReadingPane({
           </DropdownMenu>
         </div>
       </header>
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1 overflow-hidden">
         <div className="flex w-full flex-col">
           <div className="flex items-start gap-4 border-b px-4 py-4">
             <Avatar className="size-11">
@@ -226,46 +245,57 @@ export function ReadingPane({
           ) : (
             <iframe
               title={message.subject || 'Message body'}
-              sandbox="allow-popups allow-popups-to-escape-sandbox"
-              className="h-[calc(100vh-10rem)] min-h-[32rem] w-full border-0 bg-white"
+              sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+              className="w-full border-0 bg-white"
+              style={{ height: htmlFrameHeight }}
+              onLoad={(event) => {
+                const document = event.currentTarget.contentDocument;
+                const height = Math.max(
+                  document?.body.scrollHeight ?? 0,
+                  document?.documentElement.scrollHeight ?? 0,
+                  80,
+                );
+
+                setHtmlFrameHeight(Math.ceil(height));
+              }}
               srcDoc={htmlDocument}
             />
           )}
-          {replyMessageId === message.id && (
-            <div className="border-t bg-card px-4 py-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">
-                    Reply to {message.sender.name}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {message.subject}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Close reply"
-                  onClick={onCloseReply}
-                >
-                  <X data-icon="inline-start" />
-                </Button>
-              </div>
-              <Textarea
-                placeholder="Write a reply"
-                aria-label="Reply"
-                className="min-h-28 resize-none"
-              />
-              <div className="mt-3 flex justify-end">
-                <Button disabled>
-                  <Send data-icon="inline-start" />
-                  Send
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </ScrollArea>
+      {replyMessageId === message.id && (
+        <div className="shrink-0 border-t bg-card px-4 py-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">
+                Reply to {message.sender.name}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {message.subject}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close reply"
+              onClick={onCloseReply}
+            >
+              <X data-icon="inline-start" />
+            </Button>
+          </div>
+          <Textarea
+            placeholder="Write a reply"
+            aria-label="Reply"
+            className="min-h-28 resize-none"
+          />
+          <div className="mt-3 flex justify-end">
+            <Button disabled>
+              <Send data-icon="inline-start" />
+              Send
+            </Button>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
