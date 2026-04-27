@@ -120,7 +120,7 @@ export function ReadingPane({
     <style>
       html,
       body {
-        margin: 0;
+        margin: 8px;
       }
 
       body {
