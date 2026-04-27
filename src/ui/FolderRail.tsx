@@ -40,7 +40,7 @@ export function FolderRail({
     <aside
       className={cn('flex min-h-0 flex-col border-r bg-card/70', className)}
     >
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b px-3 max-lg:justify-center max-lg:px-2">
+      <div className="app-window-header app-window-controls-start flex h-16 shrink-0 items-center gap-2 border-b px-3 max-lg:justify-center max-lg:px-2">
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Mail className="size-4" />
         </div>

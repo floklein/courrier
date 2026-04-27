@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, shell } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { AuthService } from './main/auth-service';
@@ -13,12 +13,17 @@ if (started) {
 }
 
 const createWindow = () => {
+  const titleBarOverlay = getTitleBarOverlayOptions();
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 920,
     minHeight: 640,
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 14, y: 12 },
+    autoHideMenuBar: true,
+    titleBarOverlay,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -41,6 +46,20 @@ const createWindow = () => {
   }
 };
 
+function getTitleBarOverlayOptions() {
+  return {
+    color: nativeTheme.shouldUseDarkColors ? '#171717' : '#ffffff',
+    symbolColor: nativeTheme.shouldUseDarkColors ? '#ffffff' : '#171717',
+    height: 64,
+  };
+}
+
+nativeTheme.on('updated', () => {
+  BrowserWindow.getAllWindows().forEach((window) => {
+    window.setTitleBarOverlay(getTitleBarOverlayOptions());
+  });
+});
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -48,6 +67,7 @@ app.on('ready', () => {
   const authService = new AuthService();
   const graphClient = new GraphClient(authService);
 
+  Menu.setApplicationMenu(null);
   registerIpcHandlers(authService, graphClient);
   createWindow();
 });
