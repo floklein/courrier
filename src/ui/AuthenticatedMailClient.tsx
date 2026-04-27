@@ -1,3 +1,4 @@
+import { cleanup as cleanupLiveRegion } from '@atlaskit/pragmatic-drag-and-drop-live-region';
 import {
   useInfiniteQuery,
   useMutation,
@@ -36,6 +37,7 @@ export function AuthenticatedMailClient({
   const { folderId, messageId } = parseMailPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
   const [replyMessageId, setReplyMessageId] = useState<string>();
+  const [isMailDragActive, setIsMailDragActive] = useState(false);
   const manuallyMarkedUnreadMessageId = useRef<string | undefined>(undefined);
   const foldersQuery = useQuery({
     queryKey: ['mail', 'folders'],
@@ -120,6 +122,8 @@ export function AuthenticatedMailClient({
     markReadMutation.isPending ||
     moveMutation.isPending ||
     deleteMutation.isPending;
+
+  useEffect(() => cleanupLiveRegion, []);
 
   useEffect(() => {
     if (!currentFolder || messageId || !messages[0]) {
@@ -251,6 +255,8 @@ export function AuthenticatedMailClient({
           folders={folders}
           isLoading={foldersQuery.isPending}
           error={foldersQuery.error as Error | null}
+          isActionPending={isActionPending}
+          onMoveMessage={handleMoveMessage}
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
         <MessageList
@@ -268,6 +274,7 @@ export function AuthenticatedMailClient({
             void messagesQuery.fetchNextPage();
           }}
           onDeleteMessage={handleDeleteMessage}
+          onDragActiveChange={setIsMailDragActive}
           onMarkMessageReadState={handleMarkMessageReadState}
           onMoveMessage={handleMoveMessage}
           onReplyToMessage={handleReplyToMessage}
@@ -283,6 +290,7 @@ export function AuthenticatedMailClient({
           replyMessageId={replyMessageId}
           isLoading={messageQuery.isPending && Boolean(messageId)}
           error={messageQuery.error as Error | null}
+          isMailDragActive={isMailDragActive}
           onCloseReply={handleCloseReply}
           onDeleteMessage={handleDeleteMessage}
           onMarkMessageReadState={handleMarkMessageReadState}
