@@ -727,18 +727,18 @@ function ReadingPane({
             </Badge>
           </div>
 
-          <div className="px-4 py-4">
-            {message.bodyContentType === 'text' ? (
+          {message.bodyContentType === 'text' ? (
+            <div className="px-4 py-4">
               <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-card-foreground">
                 {message.bodyContent}
               </pre>
-            ) : (
-              <div
-                className="prose prose-sm max-w-none text-card-foreground [&_*]:max-w-full"
-                dangerouslySetInnerHTML={{ __html: sanitizedBody }}
-              />
-            )}
-          </div>
+            </div>
+          ) : (
+            <div
+              className="prose prose-sm max-w-none text-card-foreground"
+              dangerouslySetInnerHTML={{ __html: sanitizedBody }}
+            />
+          )}
         </div>
       </ScrollArea>
     </article>
