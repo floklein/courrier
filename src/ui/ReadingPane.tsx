@@ -1,33 +1,61 @@
 import { Link } from '@tanstack/react-router';
 import DOMPurify from 'dompurify';
-import { Archive, ArrowLeft, MoreHorizontal, Reply } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Reply, Send, Trash2, X } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { Textarea } from '../components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '../components/ui/tooltip';
-import type { MailMessageDetail } from '../lib/mail-types';
+import type { MailFolder, MailMessageDetail, MailMessageSummary } from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
+import { MailActionDropdownContent } from './MailActionMenu';
 import { formatMailDate, getInitials } from './mail-utils';
 import { PanelStatus } from './StatusViews';
 import { ToolbarButton } from './ToolbarButton';
 
 export function ReadingPane({
   folderId,
+  folders,
+  isActionPending,
   message,
+  replyMessageId,
   isLoading,
   error,
+  onCloseReply,
+  onDeleteMessage,
+  onMarkMessageReadState,
+  onMoveMessage,
+  onReplyToMessage,
   className,
 }: {
   folderId: string;
+  folders: MailFolder[];
+  isActionPending: boolean;
   message: MailMessageDetail | undefined;
+  replyMessageId: string | undefined;
   isLoading: boolean;
   error: Error | null;
+  onCloseReply: () => void;
+  onDeleteMessage: (message: MailMessageSummary) => void;
+  onMarkMessageReadState: (
+    message: MailMessageSummary,
+    isRead: boolean,
+  ) => void;
+  onMoveMessage: (
+    message: MailMessageSummary,
+    destinationFolderId: string,
+  ) => void;
+  onReplyToMessage: (message: MailMessageSummary) => void;
   className?: string;
 }) {
   if (isLoading) {
@@ -124,9 +152,45 @@ export function ReadingPane({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <ToolbarButton icon={Reply} label="Reply" />
-          <ToolbarButton icon={Archive} label="Archive" />
-          <ToolbarButton icon={MoreHorizontal} label="More actions" />
+          <ToolbarButton
+            icon={Reply}
+            label="Reply"
+            disabled={isActionPending}
+            onClick={() => onReplyToMessage(message)}
+          />
+          <ToolbarButton
+            icon={Trash2}
+            label="Delete"
+            disabled={isActionPending}
+            onClick={() => onDeleteMessage(message)}
+          />
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="More actions"
+                    disabled={isActionPending}
+                  >
+                    <MoreHorizontal data-icon="inline-start" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>More actions</TooltipContent>
+            </Tooltip>
+            <MailActionDropdownContent
+              currentFolderId={folderId}
+              folders={folders}
+              isBusy={isActionPending}
+              message={message}
+              onDelete={onDeleteMessage}
+              onMarkReadState={onMarkMessageReadState}
+              onMove={onMoveMessage}
+              onReply={onReplyToMessage}
+            />
+          </DropdownMenu>
         </div>
       </header>
       <ScrollArea className="min-h-0 flex-1">
@@ -166,6 +230,39 @@ export function ReadingPane({
               className="h-[calc(100vh-10rem)] min-h-[32rem] w-full border-0 bg-white"
               srcDoc={htmlDocument}
             />
+          )}
+          {replyMessageId === message.id && (
+            <div className="border-t bg-card px-4 py-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">
+                    Reply to {message.sender.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {message.subject}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Close reply"
+                  onClick={onCloseReply}
+                >
+                  <X data-icon="inline-start" />
+                </Button>
+              </div>
+              <Textarea
+                placeholder="Write a reply"
+                aria-label="Reply"
+                className="min-h-28 resize-none"
+              />
+              <div className="mt-3 flex justify-end">
+                <Button disabled>
+                  <Send data-icon="inline-start" />
+                  Send
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       </ScrollArea>

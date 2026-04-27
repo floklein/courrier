@@ -6,9 +6,15 @@ export const api = {
   },
   mail: {
     listFolders: () => window.courrier.mail.listFolders(),
-    listMessages: (folderId: string, pageUrl?: string) =>
-      window.courrier.mail.listMessages(folderId, pageUrl),
+    listMessages: (folderId: string, pageUrl?: string, searchQuery?: string) =>
+      window.courrier.mail.listMessages(folderId, pageUrl, searchQuery),
     getMessage: (folderId: string, messageId: string) =>
       window.courrier.mail.getMessage(folderId, messageId),
+    markMessageReadState: (messageId: string, isRead: boolean) =>
+      window.courrier.mail.markMessageReadState(messageId, isRead),
+    moveMessage: (messageId: string, destinationFolderId: string) =>
+      window.courrier.mail.moveMessage(messageId, destinationFolderId),
+    deleteMessage: (messageId: string) =>
+      window.courrier.mail.deleteMessage(messageId),
   },
 };

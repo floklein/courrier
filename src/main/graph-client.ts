@@ -46,12 +46,12 @@ export class GraphClient {
   async listMessages(
     folderId: string,
     nextPageUrl?: string,
+    searchQuery?: string,
   ): Promise<PagedMessages> {
+    const search = searchQuery?.trim();
     const url =
       getValidatedMessagePageUrl(folderId, nextPageUrl) ??
-      `${graphBaseUrl}/me/mailFolders/${encodeURIComponent(
-        folderId,
-      )}/messages?$top=25&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients`;
+      createMessagesUrl(folderId, search);
 
     const data = await this.fetchGraph<GraphCollection<GraphMessage>>(url);
 
@@ -76,6 +76,44 @@ export class GraphClient {
     );
 
     return mapGraphMessageDetail(folderId, data);
+  }
+
+  async markMessageReadState(
+    messageId: string,
+    isRead: boolean,
+  ): Promise<void> {
+    await this.fetchGraph(
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(messageId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isRead }),
+      },
+    );
+  }
+
+  async moveMessage(
+    messageId: string,
+    destinationFolderId: string,
+  ): Promise<MailMessageDetail> {
+    const data = await this.fetchGraph<GraphMessageDetail>(
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(messageId)}/move`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ destinationId: destinationFolderId }),
+      },
+    );
+
+    return mapGraphMessageDetail(destinationFolderId, data);
+  }
+
+  async deleteMessage(messageId: string): Promise<MailMessageDetail> {
+    return this.moveMessage(messageId, 'deleteditems');
   }
 
   private async fetchFolders(url: string, depth: number): Promise<MailFolder[]> {
@@ -149,15 +187,20 @@ export class GraphClient {
     });
   }
 
-  private async fetchGraph<T>(url: string): Promise<T> {
+  private async fetchGraph<T>(
+    url: string,
+    init: RequestInit = {},
+  ): Promise<T> {
     if (!url.startsWith(graphBaseUrl)) {
       throw new Error('Refusing to fetch a non-Microsoft Graph URL.');
     }
 
     const token = await this.authService.getAccessToken();
     const response = await fetch(url, {
+      ...init,
       headers: {
         Authorization: `Bearer ${token}`,
+        ...init.headers,
       },
     });
 
@@ -166,8 +209,30 @@ export class GraphClient {
       throw new Error(`Microsoft Graph request failed: ${response.status} ${body}`);
     }
 
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     return response.json() as Promise<T>;
   }
+}
+
+function createMessagesUrl(folderId: string, search?: string) {
+  const params = new URLSearchParams({
+    $top: '25',
+    $select:
+      'id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients',
+  });
+
+  if (search) {
+    params.set('$search', `"${search.replaceAll('"', '\\"')}"`);
+  } else {
+    params.set('$orderby', 'receivedDateTime desc');
+  }
+
+  return `${graphBaseUrl}/me/mailFolders/${encodeURIComponent(
+    folderId,
+  )}/messages?${params.toString()}`;
 }
 
 export function getValidatedMessagePageUrl(
