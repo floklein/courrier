@@ -72,6 +72,22 @@ export function ReadingPane({
   const sanitizedBody = DOMPurify.sanitize(message.bodyContent, {
     USE_PROFILES: { html: true },
   });
+  const htmlDocument = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base target="_blank" />
+    <style>
+      body {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    ${sanitizedBody}
+  </body>
+</html>`;
 
   return (
     <article
@@ -144,9 +160,11 @@ export function ReadingPane({
               </pre>
             </div>
           ) : (
-            <div
-              className="prose prose-sm max-w-none text-card-foreground"
-              dangerouslySetInnerHTML={{ __html: sanitizedBody }}
+            <iframe
+              title={message.subject || 'Message body'}
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
+              className="h-[calc(100vh-10rem)] min-h-[32rem] w-full border-0 bg-white"
+              srcDoc={htmlDocument}
             />
           )}
         </div>
