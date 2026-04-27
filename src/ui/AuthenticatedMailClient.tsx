@@ -1,4 +1,7 @@
-import { cleanup as cleanupLiveRegion } from '@atlaskit/pragmatic-drag-and-drop-live-region';
+import {
+  announce,
+  cleanup as cleanupLiveRegion,
+} from '@atlaskit/pragmatic-drag-and-drop-live-region';
 import {
   useInfiniteQuery,
   useMutation,
@@ -105,8 +108,16 @@ export function AuthenticatedMailClient({
       message: MailMessageSummary;
       destinationFolderId: string;
     }) => api.mail.moveMessage(message.id, destinationFolderId),
-    onSuccess: async (_data, { message }) => {
+    onSuccess: async (_data, { message, destinationFolderId }) => {
       handleMessageRemoved(message);
+      const destinationFolder = folders.find(
+        (folder) => folder.id === destinationFolderId,
+      );
+
+      if (destinationFolder) {
+        announce(`Moved "${message.subject}" to ${destinationFolder.label}.`);
+      }
+
       await invalidateMailLists();
     },
   });

@@ -1,5 +1,4 @@
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { announce } from '@atlaskit/pragmatic-drag-and-drop-live-region';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Mail } from 'lucide-react';
@@ -137,10 +136,9 @@ function FolderRailItem({
         }
 
         onMoveMessage(data.message, folder.id);
-        announce(`Moved "${data.message.subject}" to ${folder.label}.`);
       },
     });
-  }, [folder.id, folder.label, isActionPending, onMoveMessage]);
+  }, [folder.id, isActionPending, onMoveMessage]);
 
   return (
     <Link

@@ -2,7 +2,7 @@ import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { disableNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/disable-native-drag-preview';
 import { Link } from '@tanstack/react-router';
 import { Paperclip } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import {
@@ -41,26 +41,45 @@ export function MessageListItem({
   onReply: (message: MailMessageSummary) => void;
 }) {
   const dragRef = useRef<HTMLDivElement>(null);
+  const isActionPendingRef = useRef(isActionPending);
+  const folderIdRef = useRef(folderId);
+  const messageRef = useRef(message);
   const [isDragging, setIsDragging] = useState(false);
   const [dragPreview, setDragPreview] = useState<DragPreviewState>();
 
-  useEffect(() => {
-    return () => onDragActiveChange(false);
+  const clearDragState = useCallback(() => {
+    setIsDragging(false);
+    setDragPreview(undefined);
+    onDragActiveChange(false);
   }, [onDragActiveChange]);
+
+  useEffect(() => {
+    isActionPendingRef.current = isActionPending;
+  }, [isActionPending]);
+
+  useEffect(() => {
+    folderIdRef.current = folderId;
+    messageRef.current = message;
+  }, [folderId, message]);
+
+  useEffect(() => {
+    return clearDragState;
+  }, [clearDragState]);
 
   useEffect(() => {
     const element = dragRef.current;
 
-    if (!element || isActionPending) {
+    if (!element) {
       return;
     }
 
-    return draggable({
+    const cleanup = draggable({
       element,
+      canDrag: () => !isActionPendingRef.current,
       getInitialData: () => ({
         type: mailMessageDragType,
-        message,
-        sourceFolderId: folderId,
+        message: messageRef.current,
+        sourceFolderId: folderIdRef.current,
       }),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         disableNativeDragPreview({ nativeSetDragImage });
@@ -87,12 +106,15 @@ export function MessageListItem({
         );
       },
       onDrop: () => {
-        setIsDragging(false);
-        setDragPreview(undefined);
-        onDragActiveChange(false);
+        clearDragState();
       },
     });
-  }, [folderId, isActionPending, message, onDragActiveChange]);
+
+    return () => {
+      cleanup();
+      clearDragState();
+    };
+  }, [clearDragState]);
 
   return (
     <ContextMenu>
