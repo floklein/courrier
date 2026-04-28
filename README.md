@@ -13,13 +13,9 @@ triaging messages.
 - Outlook folder navigation, including nested and well-known folders
 - Message list pagination and Microsoft Graph search
 - HTML and plain-text message rendering with sanitized HTML content
-- Read/unread, move, reply draft UI, and move-to-trash actions
+- Read/unread, move, compose, reply, and move-to-trash actions
 - Hardened Electron bridge with context isolation and trusted IPC checks
 - Responsive layout for narrower desktop windows
-
-> [!NOTE]
-> Sending replies is not wired to Microsoft Graph yet. The reply composer UI is
-> present, but its Send button is currently disabled.
 
 ## Tech Stack
 
@@ -76,7 +72,8 @@ http://localhost
 
 The app uses delegated Microsoft Graph access for the signed-in user. Mail
 actions such as marking messages read, moving messages, and moving messages to
-trash require mailbox write permission.
+trash require mailbox write permission. Sending new messages and replies
+requires mail send permission.
 
 For the full setup flow, see [docs/oauth.md](docs/oauth.md).
 

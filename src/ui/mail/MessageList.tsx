@@ -1,18 +1,18 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Loader2, Search, X } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { ScrollArea } from '../components/ui/scroll-area';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { ScrollArea } from '../../components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../components/ui/tooltip';
-import type { MailFolder, MailMessageSummary } from '../lib/mail-types';
-import { cn } from '../lib/utils';
+} from '../../components/ui/tooltip';
+import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
+import { cn } from '../../lib/utils';
+import { PanelStatus } from '../app/StatusViews';
 import { EmptyFolder } from './EmptyFolder';
 import { MessageListItem } from './MessageListItem';
-import { PanelStatus } from './StatusViews';
 
 export function MessageList({
   folderId,
@@ -139,19 +139,21 @@ export function MessageList({
                     }`}
               </p>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Search mail"
-                  onClick={() => setIsSearching(true)}
-                >
-                  <Search data-icon="inline-start" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Search mail</TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Search mail"
+                    onClick={() => setIsSearching(true)}
+                  >
+                    <Search data-icon="inline-start" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Search mail</TooltipContent>
+              </Tooltip>
+            </div>
           </>
         )}
       </header>

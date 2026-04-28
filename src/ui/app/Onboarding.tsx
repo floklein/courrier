@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Mail } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { api } from '../lib/api-client';
-import type { AuthSession } from '../lib/mail-types';
+import { Button } from '../../components/ui/button';
+import { api } from '../../lib/api-client';
+import type { AuthSession } from '../../lib/mail-types';
 
 export function Onboarding({
   session,

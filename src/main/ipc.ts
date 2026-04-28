@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import type { GraphClient } from './graph-client';
 import type { AuthService } from './auth-service';
 import { assertTrustedSender } from './security';
+import type { ReplyToMessageInput, SendMailInput } from '../lib/mail-types';
 
 export function registerIpcHandlers(
   authService: AuthService,
@@ -53,4 +54,15 @@ export function registerIpcHandlers(
     assertTrustedSender(event);
     return graphClient.deleteMessage(messageId);
   });
+  ipcMain.handle('mail:send-message', (event, input: SendMailInput) => {
+    assertTrustedSender(event);
+    return graphClient.sendMessage(input);
+  });
+  ipcMain.handle(
+    'mail:reply-to-message',
+    (event, input: ReplyToMessageInput) => {
+      assertTrustedSender(event);
+      return graphClient.replyToMessage(input);
+    },
+  );
 }

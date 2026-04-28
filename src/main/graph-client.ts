@@ -11,6 +11,8 @@ import type {
   MailFolder,
   MailMessageDetail,
   PagedMessages,
+  ReplyToMessageInput,
+  SendMailInput,
 } from '../lib/mail-types';
 import type { AuthService } from './auth-service';
 
@@ -116,6 +118,67 @@ export class GraphClient {
     return this.moveMessage(messageId, 'deleteditems');
   }
 
+  async sendMessage(input: SendMailInput): Promise<void> {
+    await this.fetchGraph(`${graphBaseUrl}/me/sendMail`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: {
+          subject: input.subject,
+          body: {
+            contentType: 'HTML',
+            content: input.bodyHtml,
+          },
+          toRecipients: input.toRecipients.map(formatGraphRecipient),
+        },
+        saveToSentItems: true,
+      }),
+    });
+  }
+
+  async replyToMessage(input: ReplyToMessageInput): Promise<void> {
+    const draft = await this.fetchGraph<GraphMessageDetail>(
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(
+        input.messageId,
+      )}/createReply`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    if (!draft.id) {
+      throw new Error('Microsoft Graph did not return a reply draft ID.');
+    }
+
+    await this.fetchGraph(
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(draft.id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          body: {
+            contentType: 'HTML',
+            content: input.bodyHtml,
+          },
+        }),
+      },
+    );
+
+    await this.fetchGraph(
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(draft.id)}/send`,
+      {
+        method: 'POST',
+      },
+    );
+  }
+
   private async fetchFolders(url: string, depth: number): Promise<MailFolder[]> {
     const data = await this.fetchGraph<GraphCollection<GraphMailFolder>>(url);
     const folders: MailFolder[] = [];
@@ -209,11 +272,13 @@ export class GraphClient {
       throw new Error(`Microsoft Graph request failed: ${response.status} ${body}`);
     }
 
-    if (response.status === 204) {
+    const body = await response.text();
+
+    if (!body) {
       return undefined as T;
     }
 
-    return response.json() as Promise<T>;
+    return JSON.parse(body) as T;
   }
 }
 
@@ -273,4 +338,13 @@ export function getValidatedMessagePageUrl(
   }
 
   return nextPageUrl;
+}
+
+function formatGraphRecipient(recipient: SendMailInput['toRecipients'][number]) {
+  return {
+    emailAddress: {
+      name: recipient.name || recipient.email,
+      address: recipient.email,
+    },
+  };
 }

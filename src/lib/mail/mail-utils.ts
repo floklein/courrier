@@ -1,4 +1,4 @@
-import { decodeRouteId } from '../lib/route-ids';
+import { decodeRouteId } from '../route-ids';
 
 export function parseMailPath(pathname: string) {
   const parts = pathname.split('/').filter(Boolean);
