@@ -8,8 +8,8 @@ import {
   Sun,
   type LucideIcon,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '../components/ui/avatar';
-import { Button } from '../components/ui/button';
+import { Avatar, AvatarFallback } from '../../components/ui/avatar';
+import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +18,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu';
-import { useTheme } from '../theme/ThemeProvider';
-import { getInitials } from './mail-utils';
+} from '../../components/ui/dropdown-menu';
+import { getInitials } from '../../lib/mail/mail-utils';
+import { useTheme } from '../../theme/ThemeProvider';
 
 export function UserMenu({
   accountEmail,

@@ -1,32 +1,32 @@
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '../components/ui/avatar';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
+import { Avatar, AvatarFallback } from '../../components/ui/avatar';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu';
-import { ScrollArea } from '../components/ui/scroll-area';
+} from '../../components/ui/dropdown-menu';
+import { ScrollArea } from '../../components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../components/ui/tooltip';
+} from '../../components/ui/tooltip';
 import type {
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
   ReplyToMessageInput,
-} from '../lib/mail-types';
-import { encodeRouteId } from '../lib/route-ids';
-import { cn } from '../lib/utils';
+} from '../../lib/mail-types';
+import { formatMailDate, getInitials } from '../../lib/mail/mail-utils';
+import { encodeRouteId } from '../../lib/route-ids';
+import { cn } from '../../lib/utils';
+import { PanelStatus } from '../app/StatusViews';
+import { MailComposer } from '../compose/MailComposer';
+import { ToolbarButton } from '../primitives/ToolbarButton';
 import { HtmlMessageBody } from './HtmlMessageBody';
 import { MailActionDropdownContent } from './MailActionMenu';
-import { MailComposer } from './MailComposer';
-import { formatMailDate, getInitials } from './mail-utils';
-import { PanelStatus } from './StatusViews';
-import { ToolbarButton } from './ToolbarButton';
 
 export function ReadingPane({
   folderId,

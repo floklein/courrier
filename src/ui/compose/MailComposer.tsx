@@ -1,41 +1,20 @@
-import DOMPurify from 'dompurify';
-import { ExternalLink, Minus, Send, X } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { FormEvent, useEffect, useId, useMemo, useState } from 'react';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '../components/ui/tooltip';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import {
   emptyComposeWindowDraft,
   type ComposeWindowDraft,
-} from '../lib/compose-window';
+} from '../../lib/compose-window';
 import type {
-  MailComposeRecipient,
   MailMessageDetail,
   ReplyToMessageInput,
   SendMailInput,
-} from '../lib/mail-types';
-import { cn } from '../lib/utils';
+} from '../../lib/mail-types';
+import { parseRecipients, sanitizeOutgoingMailHtml } from '../../lib/mail/mail-compose-utils';
+import { cn } from '../../lib/utils';
+import { MailComposerHeader } from './MailComposerHeader';
 import { RichTextMailEditor, type RichTextMailEditorValue } from './RichTextMailEditor';
-
-const outgoingMailTags = [
-  'a',
-  'blockquote',
-  'br',
-  'em',
-  'li',
-  'ol',
-  'p',
-  's',
-  'strong',
-  'u',
-  'ul',
-];
-
-const outgoingMailAttributes = ['href', 'rel', 'target'];
 
 export function MailComposer({
   mode,
@@ -156,77 +135,16 @@ export function MailComposer({
       className={cn('flex min-h-0 flex-col overflow-hidden bg-card', className)}
       onSubmit={handleSubmit}
     >
-      <div
-        className={cn(
-          'flex shrink-0 items-center justify-between gap-3 border-b px-4',
-          isReply ? 'py-4' : 'h-16',
-          !isReply && useWindowHeader && 'app-window-header app-window-controls-end',
-        )}
-      >
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold">
-            {isReply ? `Reply to ${replyMessage?.sender.name ?? 'message'}` : 'New message'}
-          </h2>
-          {isReply && replyMessage && (
-            <p className="truncate text-xs text-muted-foreground">
-              {replyMessage.subject}
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {onMinimize && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Minimize composer"
-                  disabled={isSending}
-                  onClick={onMinimize}
-                >
-                  <Minus data-icon="inline-start" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Minimize</TooltipContent>
-            </Tooltip>
-          )}
-          {onMoveToWindow && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Move composer to window"
-                  disabled={isSending}
-                  onClick={() => onMoveToWindow(currentDraft)}
-                >
-                  <ExternalLink data-icon="inline-start" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Open in window</TooltipContent>
-            </Tooltip>
-          )}
-          {!useWindowHeader && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Cancel composer"
-                  disabled={isSending}
-                  onClick={handleClose}
-                >
-                  <X data-icon="inline-start" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Cancel</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-      </div>
+      <MailComposerHeader
+        currentDraft={currentDraft}
+        isReply={isReply}
+        isSending={isSending}
+        replyMessage={replyMessage}
+        useWindowHeader={useWindowHeader}
+        onClose={handleClose}
+        onMinimize={onMinimize}
+        onMoveToWindow={onMoveToWindow}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         {!isReply && (
@@ -296,50 +214,4 @@ export function MailComposer({
       </div>
     </form>
   );
-}
-
-function parseRecipients(value: string) {
-  const entries = value
-    .split(/[;,]/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  const valid: MailComposeRecipient[] = [];
-  const invalid: string[] = [];
-
-  for (const entry of entries) {
-    const recipient = parseRecipient(entry);
-
-    if (!recipient) {
-      invalid.push(entry);
-      continue;
-    }
-
-    valid.push(recipient);
-  }
-
-  return { valid, invalid };
-}
-
-function parseRecipient(value: string): MailComposeRecipient | undefined {
-  const namedMatch = value.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
-  const name = namedMatch?.[1]?.replace(/^"|"$/g, '').trim();
-  const email = (namedMatch?.[2] ?? value).trim();
-
-  if (!isValidEmail(email)) {
-    return undefined;
-  }
-
-  return name ? { name, email } : { email };
-}
-
-function isValidEmail(value: string) {
-  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
-}
-
-function sanitizeOutgoingMailHtml(html: string) {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: outgoingMailTags,
-    ALLOWED_ATTR: outgoingMailAttributes,
-    ALLOW_DATA_ATTR: false,
-  });
 }

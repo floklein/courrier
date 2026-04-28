@@ -12,7 +12,7 @@ import {
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from '../components/ui/context-menu';
+} from '../../components/ui/context-menu';
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -20,8 +20,8 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from '../components/ui/dropdown-menu';
-import type { MailFolder, MailMessageSummary } from '../lib/mail-types';
+} from '../../components/ui/dropdown-menu';
+import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
 
 interface MailActionMenuProps {
   currentFolderId: string;

@@ -3,21 +3,21 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { PenLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../components/ui/tooltip';
-import { api } from '../lib/api-client';
-import type { MailFolder, MailMessageSummary } from '../lib/mail-types';
-import { encodeRouteId } from '../lib/route-ids';
-import { cn } from '../lib/utils';
-import { isMailMessageDragData } from './mail-drag';
-import { folderIcons } from './mail-icons';
-import { RailStatus } from './StatusViews';
-import { UserMenu } from './UserMenu';
+} from '../../components/ui/tooltip';
+import { api } from '../../lib/api-client';
+import { isMailMessageDragData } from '../../lib/mail/mail-drag';
+import { folderIcons } from '../../lib/mail/mail-icons';
+import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
+import { encodeRouteId } from '../../lib/route-ids';
+import { cn } from '../../lib/utils';
+import { RailStatus } from '../app/StatusViews';
+import { UserMenu } from '../primitives/UserMenu';
 
 export function FolderRail({
   accountEmail,

@@ -6,8 +6,8 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { MailClient } from './ui/MailClient';
-import { ComposeWindow } from './ui/ComposeWindow';
+import { ComposeWindow } from './ui/app/ComposeWindow';
+import { MailClient } from './ui/app/MailClient';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,

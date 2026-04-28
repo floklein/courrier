@@ -1,7 +1,7 @@
 import DOMPurify from 'dompurify';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import darkReaderScript from 'virtual:darkreader-script';
-import { useTheme } from '../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 
 const darkReaderTheme = {
   brightness: 100,
