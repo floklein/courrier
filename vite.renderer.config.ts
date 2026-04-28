@@ -32,7 +32,15 @@ export default defineConfig(async () => {
   const tailwindcss = (await import('@tailwindcss/vite')).default;
 
   return {
-    plugins: [react(), tailwindcss(), darkReader()],
+    plugins: [
+      react({
+        babel: {
+          plugins: ['babel-plugin-react-compiler'],
+        },
+      }),
+      tailwindcss(),
+      darkReader(),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

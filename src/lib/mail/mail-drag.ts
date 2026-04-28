@@ -1,4 +1,4 @@
-import type { MailMessageSummary } from '../lib/mail-types';
+import type { MailMessageSummary } from '../mail-types';
 
 export const mailMessageDragType = 'courrier-mail-message';
 

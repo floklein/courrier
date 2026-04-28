@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { AuthSession } from '../lib/mail-types';
 
 const authority = 'https://login.microsoftonline.com/common';
-const scopes = ['User.Read', 'Mail.ReadWrite', 'offline_access'];
+const scopes = ['User.Read', 'Mail.ReadWrite', 'Mail.Send', 'offline_access'];
 
 export class AuthConfigurationError extends Error {
   constructor(message: string) {

@@ -1,31 +1,32 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, MoreHorizontal, Reply, Send, Trash2, X } from 'lucide-react';
-import { Avatar, AvatarFallback } from '../components/ui/avatar';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
+import { ArrowLeft, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
+import { Avatar, AvatarFallback } from '../../components/ui/avatar';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu';
-import { ScrollArea } from '../components/ui/scroll-area';
-import { Textarea } from '../components/ui/textarea';
+} from '../../components/ui/dropdown-menu';
+import { ScrollArea } from '../../components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../components/ui/tooltip';
+} from '../../components/ui/tooltip';
 import type {
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
-} from '../lib/mail-types';
-import { encodeRouteId } from '../lib/route-ids';
-import { cn } from '../lib/utils';
+  ReplyToMessageInput,
+} from '../../lib/mail-types';
+import { formatMailDate, getInitials } from '../../lib/mail/mail-utils';
+import { encodeRouteId } from '../../lib/route-ids';
+import { cn } from '../../lib/utils';
+import { PanelStatus } from '../app/StatusViews';
+import { MailComposer } from '../compose/MailComposer';
+import { ToolbarButton } from '../primitives/ToolbarButton';
 import { HtmlMessageBody } from './HtmlMessageBody';
 import { MailActionDropdownContent } from './MailActionMenu';
-import { formatMailDate, getInitials } from './mail-utils';
-import { PanelStatus } from './StatusViews';
-import { ToolbarButton } from './ToolbarButton';
 
 export function ReadingPane({
   folderId,
@@ -33,6 +34,8 @@ export function ReadingPane({
   isActionPending,
   message,
   replyMessageId,
+  isSendingMessage,
+  replyError,
   isLoading,
   error,
   isMailDragActive,
@@ -41,6 +44,7 @@ export function ReadingPane({
   onMarkMessageReadState,
   onMoveMessage,
   onReplyToMessage,
+  onReplyToMessageBody,
   className,
 }: {
   folderId: string;
@@ -48,6 +52,8 @@ export function ReadingPane({
   isActionPending: boolean;
   message: MailMessageDetail | undefined;
   replyMessageId: string | undefined;
+  isSendingMessage: boolean;
+  replyError: Error | null;
   isLoading: boolean;
   error: Error | null;
   isMailDragActive: boolean;
@@ -62,6 +68,7 @@ export function ReadingPane({
     destinationFolderId: string,
   ) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onReplyToMessageBody: (input: ReplyToMessageInput) => void;
   className?: string;
 }) {
   if (isLoading) {
@@ -222,37 +229,16 @@ export function ReadingPane({
         </div>
       </ScrollArea>
       {replyMessageId === message.id && (
-        <div className="shrink-0 border-t bg-card px-4 py-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">
-                Reply to {message.sender.name}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {message.subject}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close reply"
-              onClick={onCloseReply}
-            >
-              <X data-icon="inline-start" />
-            </Button>
-          </div>
-          <Textarea
-            placeholder="Write a reply"
-            aria-label="Reply"
-            className="min-h-28 resize-none"
-          />
-          <div className="mt-3 flex justify-end">
-            <Button disabled>
-              <Send data-icon="inline-start" />
-              Send
-            </Button>
-          </div>
-        </div>
+        <MailComposer
+          mode="reply"
+          replyMessage={message}
+          isSending={isSendingMessage}
+          error={replyError}
+          className="max-h-[46vh] shrink-0 border-t"
+          onClose={onCloseReply}
+          onReply={onReplyToMessageBody}
+          onSend={() => undefined}
+        />
       )}
     </article>
   );

@@ -4,18 +4,18 @@ import { Link } from '@tanstack/react-router';
 import { Paperclip } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Avatar, AvatarFallback } from '../components/ui/avatar';
+import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import {
   ContextMenu,
   ContextMenuTrigger,
-} from '../components/ui/context-menu';
-import type { MailFolder, MailMessageSummary } from '../lib/mail-types';
-import { encodeRouteId } from '../lib/route-ids';
-import { cn } from '../lib/utils';
+} from '../../components/ui/context-menu';
+import { mailMessageDragType } from '../../lib/mail/mail-drag';
+import { formatMailDate, getInitials } from '../../lib/mail/mail-utils';
+import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
+import { encodeRouteId } from '../../lib/route-ids';
+import { cn } from '../../lib/utils';
 import { MailActionContextContent } from './MailActionMenu';
 import { MailDragPreview } from './MailDragPreview';
-import { mailMessageDragType } from './mail-drag';
-import { formatMailDate, getInitials } from './mail-utils';
 
 export function MessageListItem({
   folderId,

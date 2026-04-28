@@ -1,5 +1,5 @@
-import type { MailMessageSummary } from '../lib/mail-types';
-import { cn } from '../lib/utils';
+import type { MailMessageSummary } from '../../lib/mail-types';
+import { cn } from '../../lib/utils';
 
 export function MailDragPreview({
   className,

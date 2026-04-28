@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api-client';
+import { api } from '../../lib/api-client';
 import { AuthenticatedMailClient } from './AuthenticatedMailClient';
 import { FullScreenStatus } from './StatusViews';
 import { Onboarding } from './Onboarding';

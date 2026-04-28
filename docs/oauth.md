@@ -30,7 +30,8 @@ In the app registration, open **API permissions** and add delegated Microsoft
 Graph permissions:
 
 - `User.Read`
-- `Mail.Read`
+- `Mail.ReadWrite`
+- `Mail.Send`
 
 Only delegated permissions are needed for the first version. Do not add
 application permissions for mail access.
@@ -84,7 +85,10 @@ the Electron main process before it creates the Microsoft auth service.
   supports only organizational accounts.
 - **Missing redirect URI:** Microsoft rejects the callback unless
   `http://localhost` is configured as a public client redirect URI.
-- **Missing `Mail.Read`:** sign-in can succeed, but Graph mail requests fail.
+- **Missing `Mail.ReadWrite`:** sign-in can succeed, but Graph read/write
+  requests fail.
+- **Missing `Mail.Send`:** reading mail can work, but sending new messages and
+  replies fails.
 - **Tenant consent required:** some organizations block user consent until an
   administrator approves the delegated permissions.
 

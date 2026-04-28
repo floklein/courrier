@@ -1,17 +1,23 @@
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Mail } from 'lucide-react';
+import { PenLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Badge } from '../components/ui/badge';
-import { api } from '../lib/api-client';
-import type { MailFolder, MailMessageSummary } from '../lib/mail-types';
-import { encodeRouteId } from '../lib/route-ids';
-import { cn } from '../lib/utils';
-import { isMailMessageDragData } from './mail-drag';
-import { folderIcons } from './mail-icons';
-import { RailStatus } from './StatusViews';
-import { UserMenu } from './UserMenu';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../components/ui/tooltip';
+import { api } from '../../lib/api-client';
+import { isMailMessageDragData } from '../../lib/mail/mail-drag';
+import { folderIcons } from '../../lib/mail/mail-icons';
+import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
+import { encodeRouteId } from '../../lib/route-ids';
+import { cn } from '../../lib/utils';
+import { RailStatus } from '../app/StatusViews';
+import { UserMenu } from '../primitives/UserMenu';
 
 export function FolderRail({
   accountEmail,
@@ -21,6 +27,7 @@ export function FolderRail({
   isLoading,
   error,
   isActionPending,
+  onComposeMessage,
   onMoveMessage,
   className,
 }: {
@@ -31,6 +38,7 @@ export function FolderRail({
   isLoading: boolean;
   error: Error | null;
   isActionPending: boolean;
+  onComposeMessage: () => void;
   onMoveMessage: (
     message: MailMessageSummary,
     destinationFolderId: string,
@@ -50,15 +58,25 @@ export function FolderRail({
     <aside
       className={cn('flex min-h-0 flex-col border-r bg-card/70', className)}
     >
-      <div className="app-window-header app-window-controls-start flex h-16 shrink-0 items-center gap-2 border-b px-3 max-lg:justify-center max-lg:px-2">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-          <Mail className="size-4" />
-        </div>
+      <div className="app-window-header app-window-controls-start flex h-16 shrink-0 items-center justify-between gap-2 border-b px-3 max-lg:justify-center max-lg:px-2">
         <div className="flex min-w-0 max-lg:hidden">
           <span className="truncate text-sm font-semibold tracking-tight">
             Courrier
           </span>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon-sm"
+              aria-label="Compose mail"
+              disabled={isActionPending}
+              onClick={onComposeMessage}
+            >
+              <PenLine data-icon="inline-start" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Compose mail</TooltipContent>
+        </Tooltip>
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
         {isLoading && <RailStatus label="Loading folders" />}

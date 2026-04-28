@@ -106,6 +106,54 @@ a,
   -webkit-app-region: no-drag;
 }
 
+.prose-mail-editor .ProseMirror {
+  min-height: 9rem;
+  outline: none;
+}
+
+.prose-mail-editor .ProseMirror p {
+  margin: 0;
+}
+
+.prose-mail-editor .ProseMirror p + p {
+  margin-top: 0.75rem;
+}
+
+.prose-mail-editor .ProseMirror ul,
+.prose-mail-editor .ProseMirror ol {
+  margin: 0.75rem 0;
+  padding-left: 1.25rem;
+}
+
+.prose-mail-editor .ProseMirror ul {
+  list-style: disc;
+}
+
+.prose-mail-editor .ProseMirror ol {
+  list-style: decimal;
+}
+
+.prose-mail-editor .ProseMirror blockquote {
+  margin: 0.75rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.prose-mail-editor .ProseMirror a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose-mail-editor .is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
 :root {
   --app-window-controls-end-size: 158px;
   --app-window-controls-start-size: 84px;
