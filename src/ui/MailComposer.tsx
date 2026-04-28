@@ -123,7 +123,14 @@ export function MailComposer({
       className={cn('flex min-h-0 flex-col overflow-hidden bg-card', className)}
       onSubmit={handleSubmit}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-4">
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between gap-3 border-b px-4',
+          isReply
+            ? 'py-4'
+            : 'app-window-header app-window-controls-end h-16',
+        )}
+      >
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold">
             {isReply ? `Reply to ${replyMessage?.sender.name ?? 'message'}` : 'New message'}

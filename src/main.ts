@@ -48,9 +48,9 @@ const createWindow = () => {
 
 function getTitleBarOverlayOptions() {
   return {
-    color: nativeTheme.shouldUseDarkColors ? '#171717' : '#ffffff',
+    color: '#00000000',
     symbolColor: nativeTheme.shouldUseDarkColors ? '#ffffff' : '#171717',
-    height: 64,
+    height: 63,
   };
 }
 
