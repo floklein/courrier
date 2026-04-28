@@ -272,11 +272,13 @@ export class GraphClient {
       throw new Error(`Microsoft Graph request failed: ${response.status} ${body}`);
     }
 
-    if (response.status === 204) {
+    const body = await response.text();
+
+    if (!body) {
       return undefined as T;
     }
 
-    return response.json() as Promise<T>;
+    return JSON.parse(body) as T;
   }
 }
 
