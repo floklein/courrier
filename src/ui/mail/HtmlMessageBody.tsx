@@ -121,6 +121,7 @@ export function HtmlMessageBody({
       html,
       body {
         margin: 8px;
+        overflow-x: hidden;
       }
 
       body {
