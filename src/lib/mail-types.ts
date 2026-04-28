@@ -1,7 +1,9 @@
 export type FolderIcon =
   | 'inbox'
   | 'send'
+  | 'folder'
   | 'file'
+  | 'mail-x'
   | 'archive'
   | 'trash'
   | 'star'

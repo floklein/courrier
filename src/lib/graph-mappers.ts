@@ -57,7 +57,7 @@ const wellKnownIcons: Record<string, FolderIcon> = {
   sentitems: 'send',
   archive: 'archive',
   deleteditems: 'trash',
-  junkemail: 'trash',
+  junkemail: 'mail-x',
 };
 
 export function mapGraphFolder(
@@ -69,7 +69,9 @@ export function mapGraphFolder(
   return {
     id: folder.id || '',
     label: folder.displayName || 'Untitled folder',
-    icon: wellKnownName ? (wellKnownIcons[wellKnownName] ?? 'file') : 'file',
+    icon: wellKnownName
+      ? (wellKnownIcons[wellKnownName] ?? 'folder')
+      : 'folder',
     unreadCount: folder.unreadItemCount ?? 0,
     totalCount: folder.totalItemCount ?? 0,
     parentFolderId: folder.parentFolderId || undefined,
