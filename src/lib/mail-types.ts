@@ -24,6 +24,22 @@ export interface MailAddress {
   email: string;
 }
 
+export interface MailComposeRecipient {
+  name?: string;
+  email: string;
+}
+
+export interface SendMailInput {
+  toRecipients: MailComposeRecipient[];
+  subject: string;
+  bodyHtml: string;
+}
+
+export interface ReplyToMessageInput {
+  messageId: string;
+  bodyHtml: string;
+}
+
 export interface MailMessageSummary {
   id: string;
   folderId: string;

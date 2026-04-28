@@ -4,6 +4,8 @@ import type {
   MailFolder,
   MailMessageDetail,
   PagedMessages,
+  ReplyToMessageInput,
+  SendMailInput,
 } from './lib/mail-types';
 
 const courrier = {
@@ -46,6 +48,10 @@ const courrier = {
         'mail:delete-message',
         messageId,
       ) as Promise<MailMessageDetail>,
+    sendMessage: (input: SendMailInput) =>
+      ipcRenderer.invoke('mail:send-message', input) as Promise<void>,
+    replyToMessage: (input: ReplyToMessageInput) =>
+      ipcRenderer.invoke('mail:reply-to-message', input) as Promise<void>,
   },
 };
 

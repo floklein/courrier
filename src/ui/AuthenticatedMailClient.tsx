@@ -20,6 +20,8 @@ import type {
   MailMessageDetail,
   MailMessageSummary,
   PagedMessages,
+  ReplyToMessageInput,
+  SendMailInput,
 } from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
@@ -41,6 +43,7 @@ export function AuthenticatedMailClient({
   const { folderId, messageId } = parseMailPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
   const [replyMessageId, setReplyMessageId] = useState<string>();
+  const [isComposingNew, setIsComposingNew] = useState(false);
   const [isMailDragActive, setIsMailDragActive] = useState(false);
   const manuallyMarkedUnreadMessageId = useRef<string | undefined>(undefined);
   const foldersQuery = useQuery({
@@ -186,10 +189,28 @@ export function AuthenticatedMailClient({
       await invalidateMailLists();
     },
   });
+  const sendMessageMutation = useMutation({
+    mutationFn: (input: SendMailInput) => api.mail.sendMessage(input),
+    onSuccess: async () => {
+      setIsComposingNew(false);
+      await invalidateMailLists();
+    },
+  });
+  const replyToMessageMutation = useMutation({
+    mutationFn: (input: ReplyToMessageInput) => api.mail.replyToMessage(input),
+    onSuccess: async () => {
+      setReplyMessageId(undefined);
+      await invalidateMailLists();
+    },
+  });
   const isActionPending =
     markReadMutation.isPending ||
     moveMutation.isPending ||
-    deleteMutation.isPending;
+    deleteMutation.isPending ||
+    sendMessageMutation.isPending ||
+    replyToMessageMutation.isPending;
+  const isSendingMessage =
+    sendMessageMutation.isPending || replyToMessageMutation.isPending;
 
   useEffect(() => cleanupLiveRegion, []);
 
@@ -211,6 +232,7 @@ export function AuthenticatedMailClient({
   useEffect(() => {
     setSearchQuery('');
     setReplyMessageId(undefined);
+    setIsComposingNew(false);
     manuallyMarkedUnreadMessageId.current = undefined;
   }, [resolvedFolderId]);
 
@@ -253,6 +275,8 @@ export function AuthenticatedMailClient({
   }
 
   function handleReplyToMessage(message: MailMessageSummary) {
+    setIsComposingNew(false);
+    replyToMessageMutation.reset();
     setReplyMessageId(message.id);
 
     if (message.id === messageId) {
@@ -270,7 +294,27 @@ export function AuthenticatedMailClient({
   }
 
   function handleCloseReply() {
+    replyToMessageMutation.reset();
     setReplyMessageId(undefined);
+  }
+
+  function handleComposeMessage() {
+    sendMessageMutation.reset();
+    setReplyMessageId(undefined);
+    setIsComposingNew(true);
+  }
+
+  function handleCloseCompose() {
+    sendMessageMutation.reset();
+    setIsComposingNew(false);
+  }
+
+  function handleSendMessage(input: SendMailInput) {
+    sendMessageMutation.mutate(input);
+  }
+
+  function handleReplyToMessageBody(input: ReplyToMessageInput) {
+    replyToMessageMutation.mutate(input);
   }
 
   function handleSearch(query: string) {
@@ -341,6 +385,7 @@ export function AuthenticatedMailClient({
           onLoadMore={() => {
             void messagesQuery.fetchNextPage();
           }}
+          onComposeMessage={handleComposeMessage}
           onDeleteMessage={handleDeleteMessage}
           onDragActiveChange={setIsMailDragActive}
           onMarkMessageReadState={handleMarkMessageReadState}
@@ -356,14 +401,21 @@ export function AuthenticatedMailClient({
           isActionPending={isActionPending}
           message={selectedMessage}
           replyMessageId={replyMessageId}
+          isComposingNew={isComposingNew}
+          isSendingMessage={isSendingMessage}
+          sendError={sendMessageMutation.error as Error | null}
+          replyError={replyToMessageMutation.error as Error | null}
           isLoading={messageQuery.isPending && Boolean(messageId)}
           error={messageQuery.error as Error | null}
           isMailDragActive={isMailDragActive}
           onCloseReply={handleCloseReply}
+          onCloseCompose={handleCloseCompose}
           onDeleteMessage={handleDeleteMessage}
           onMarkMessageReadState={handleMarkMessageReadState}
           onMoveMessage={handleMoveMessage}
           onReplyToMessage={handleReplyToMessage}
+          onReplyToMessageBody={handleReplyToMessageBody}
+          onSendMessage={handleSendMessage}
           className={cn(isReadingMessage && 'max-md:col-span-2')}
         />
       </main>

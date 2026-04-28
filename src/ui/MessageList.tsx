@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { Loader2, Search, X } from 'lucide-react';
+import { Loader2, PenLine, Search, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -26,6 +26,7 @@ export function MessageList({
   isFetchingNextPage,
   isActionPending,
   onLoadMore,
+  onComposeMessage,
   onDeleteMessage,
   onDragActiveChange,
   onMarkMessageReadState,
@@ -46,6 +47,7 @@ export function MessageList({
   isFetchingNextPage: boolean;
   isActionPending: boolean;
   onLoadMore: () => void;
+  onComposeMessage: () => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
   onDragActiveChange: (isActive: boolean) => void;
   onMarkMessageReadState: (
@@ -139,19 +141,35 @@ export function MessageList({
                     }`}
               </p>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Search mail"
-                  onClick={() => setIsSearching(true)}
-                >
-                  <Search data-icon="inline-start" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Search mail</TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Compose mail"
+                    disabled={isActionPending}
+                    onClick={onComposeMessage}
+                  >
+                    <PenLine data-icon="inline-start" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Compose mail</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Search mail"
+                    onClick={() => setIsSearching(true)}
+                  >
+                    <Search data-icon="inline-start" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Search mail</TooltipContent>
+              </Tooltip>
+            </div>
           </>
         )}
       </header>

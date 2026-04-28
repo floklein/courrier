@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, MoreHorizontal, Reply, Send, Trash2, X } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { Textarea } from '../components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
@@ -18,11 +17,14 @@ import type {
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
+  ReplyToMessageInput,
+  SendMailInput,
 } from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
 import { HtmlMessageBody } from './HtmlMessageBody';
 import { MailActionDropdownContent } from './MailActionMenu';
+import { MailComposer } from './MailComposer';
 import { formatMailDate, getInitials } from './mail-utils';
 import { PanelStatus } from './StatusViews';
 import { ToolbarButton } from './ToolbarButton';
@@ -33,14 +35,21 @@ export function ReadingPane({
   isActionPending,
   message,
   replyMessageId,
+  isComposingNew,
+  isSendingMessage,
+  sendError,
+  replyError,
   isLoading,
   error,
   isMailDragActive,
   onCloseReply,
+  onCloseCompose,
   onDeleteMessage,
   onMarkMessageReadState,
   onMoveMessage,
   onReplyToMessage,
+  onReplyToMessageBody,
+  onSendMessage,
   className,
 }: {
   folderId: string;
@@ -48,10 +57,15 @@ export function ReadingPane({
   isActionPending: boolean;
   message: MailMessageDetail | undefined;
   replyMessageId: string | undefined;
+  isComposingNew: boolean;
+  isSendingMessage: boolean;
+  sendError: Error | null;
+  replyError: Error | null;
   isLoading: boolean;
   error: Error | null;
   isMailDragActive: boolean;
   onCloseReply: () => void;
+  onCloseCompose: () => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
@@ -62,8 +76,31 @@ export function ReadingPane({
     destinationFolderId: string,
   ) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onReplyToMessageBody: (input: ReplyToMessageInput) => void;
+  onSendMessage: (input: SendMailInput) => void;
   className?: string;
 }) {
+  if (isComposingNew) {
+    return (
+      <article
+        className={cn(
+          'flex min-h-0 min-w-0 flex-col overflow-hidden bg-background',
+          className,
+        )}
+      >
+        <MailComposer
+          mode="new"
+          isSending={isSendingMessage}
+          error={sendError}
+          className="flex-1"
+          onClose={onCloseCompose}
+          onReply={onReplyToMessageBody}
+          onSend={onSendMessage}
+        />
+      </article>
+    );
+  }
+
   if (isLoading) {
     return (
       <section
@@ -222,37 +259,16 @@ export function ReadingPane({
         </div>
       </ScrollArea>
       {replyMessageId === message.id && (
-        <div className="shrink-0 border-t bg-card px-4 py-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">
-                Reply to {message.sender.name}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {message.subject}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close reply"
-              onClick={onCloseReply}
-            >
-              <X data-icon="inline-start" />
-            </Button>
-          </div>
-          <Textarea
-            placeholder="Write a reply"
-            aria-label="Reply"
-            className="min-h-28 resize-none"
-          />
-          <div className="mt-3 flex justify-end">
-            <Button disabled>
-              <Send data-icon="inline-start" />
-              Send
-            </Button>
-          </div>
-        </div>
+        <MailComposer
+          mode="reply"
+          replyMessage={message}
+          isSending={isSendingMessage}
+          error={replyError}
+          className="max-h-[46vh] shrink-0 border-t"
+          onClose={onCloseReply}
+          onReply={onReplyToMessageBody}
+          onSend={onSendMessage}
+        />
       )}
     </article>
   );
