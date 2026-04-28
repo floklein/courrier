@@ -19,4 +19,9 @@ export const api = {
     sendMessage: window.courrier.mail.sendMessage,
     replyToMessage: window.courrier.mail.replyToMessage,
   },
+  window: {
+    closeCurrent: () => window.courrier.window.closeCurrent(),
+    getComposeDraft: () => window.courrier.window.getComposeDraft(),
+    openComposeWindow: window.courrier.window.openComposeWindow,
+  },
 };

@@ -29,21 +29,20 @@ import {
 import { Separator } from '../components/ui/separator';
 import { Toggle } from '../components/ui/toggle';
 import { cn } from '../lib/utils';
+import type { ComposeEditorValue } from '../lib/compose-window';
 
-export interface RichTextMailEditorValue {
-  html: string;
-  text: string;
-  isEmpty: boolean;
-}
+export type RichTextMailEditorValue = ComposeEditorValue;
 
 export function RichTextMailEditor({
   className,
   disabled,
+  initialValue,
   placeholder = 'Write a message',
   onChange,
 }: {
   className?: string;
   disabled?: boolean;
+  initialValue?: RichTextMailEditorValue;
   placeholder?: string;
   onChange: (value: RichTextMailEditorValue) => void;
 }) {
@@ -71,7 +70,7 @@ export function RichTextMailEditor({
         placeholder,
       }),
     ],
-    content: '',
+    content: initialValue?.html ?? '',
     editorProps: {
       attributes: {
         'aria-label': placeholder,

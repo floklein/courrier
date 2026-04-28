@@ -7,6 +7,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { MailClient } from './ui/MailClient';
+import { ComposeWindow } from './ui/ComposeWindow';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -30,10 +31,17 @@ const mailMessageRoute = createRoute({
   component: MailClient,
 });
 
+const composeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/compose',
+  component: ComposeWindow,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   mailFolderRoute,
   mailMessageRoute,
+  composeRoute,
 ]);
 
 const hashHistory = createHashHistory();

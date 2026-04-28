@@ -11,9 +11,12 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
+import { PenLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '../components/ui/button';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { api } from '../lib/api-client';
+import type { ComposeWindowDraft } from '../lib/compose-window';
 import type {
   AuthSession,
   MailFolder,
@@ -26,7 +29,9 @@ import type {
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
 import { FolderRail } from './FolderRail';
+import { MailComposer } from './MailComposer';
 import { MessageList } from './MessageList';
+import { useComposeStore } from './compose-store';
 import { parseMailPath } from './mail-utils';
 import { ReadingPane } from './ReadingPane';
 
@@ -43,8 +48,11 @@ export function AuthenticatedMailClient({
   const { folderId, messageId } = parseMailPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
   const [replyMessageId, setReplyMessageId] = useState<string>();
-  const [isComposingNew, setIsComposingNew] = useState(false);
+  const [isOpeningComposeWindow, setIsOpeningComposeWindow] = useState(false);
   const [isMailDragActive, setIsMailDragActive] = useState(false);
+  const isComposingNew = useComposeStore((state) => state.isOpen);
+  const closeCompose = useComposeStore((state) => state.close);
+  const openCompose = useComposeStore((state) => state.open);
   const manuallyMarkedUnreadMessageId = useRef<string | undefined>(undefined);
   const foldersQuery = useQuery({
     queryKey: ['mail', 'folders'],
@@ -192,7 +200,7 @@ export function AuthenticatedMailClient({
   const sendMessageMutation = useMutation({
     mutationFn: (input: SendMailInput) => api.mail.sendMessage(input),
     onSuccess: async () => {
-      setIsComposingNew(false);
+      closeCompose();
       await invalidateMailLists();
     },
   });
@@ -232,9 +240,9 @@ export function AuthenticatedMailClient({
   useEffect(() => {
     setSearchQuery('');
     setReplyMessageId(undefined);
-    setIsComposingNew(false);
+    closeCompose();
     manuallyMarkedUnreadMessageId.current = undefined;
-  }, [resolvedFolderId]);
+  }, [closeCompose, resolvedFolderId]);
 
   useEffect(() => {
     if (
@@ -275,7 +283,7 @@ export function AuthenticatedMailClient({
   }
 
   function handleReplyToMessage(message: MailMessageSummary) {
-    setIsComposingNew(false);
+    closeCompose();
     replyToMessageMutation.reset();
     setReplyMessageId(message.id);
 
@@ -301,16 +309,27 @@ export function AuthenticatedMailClient({
   function handleComposeMessage() {
     sendMessageMutation.reset();
     setReplyMessageId(undefined);
-    setIsComposingNew(true);
+    openCompose();
   }
 
   function handleCloseCompose() {
     sendMessageMutation.reset();
-    setIsComposingNew(false);
+    closeCompose();
   }
 
   function handleSendMessage(input: SendMailInput) {
     sendMessageMutation.mutate(input);
+  }
+
+  async function handleMoveComposeToWindow(draft: ComposeWindowDraft) {
+    setIsOpeningComposeWindow(true);
+
+    try {
+      await api.window.openComposeWindow(draft);
+      closeCompose();
+    } finally {
+      setIsOpeningComposeWindow(false);
+    }
   }
 
   function handleReplyToMessageBody(input: ReplyToMessageInput) {
@@ -368,6 +387,7 @@ export function AuthenticatedMailClient({
           isLoading={foldersQuery.isPending}
           error={foldersQuery.error as Error | null}
           isActionPending={isActionPending}
+          onComposeMessage={handleComposeMessage}
           onMoveMessage={handleMoveMessage}
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
@@ -385,7 +405,6 @@ export function AuthenticatedMailClient({
           onLoadMore={() => {
             void messagesQuery.fetchNextPage();
           }}
-          onComposeMessage={handleComposeMessage}
           onDeleteMessage={handleDeleteMessage}
           onDragActiveChange={setIsMailDragActive}
           onMarkMessageReadState={handleMarkMessageReadState}
@@ -401,25 +420,95 @@ export function AuthenticatedMailClient({
           isActionPending={isActionPending}
           message={selectedMessage}
           replyMessageId={replyMessageId}
-          isComposingNew={isComposingNew}
           isSendingMessage={isSendingMessage}
-          sendError={sendMessageMutation.error as Error | null}
           replyError={replyToMessageMutation.error as Error | null}
           isLoading={messageQuery.isPending && Boolean(messageId)}
           error={messageQuery.error as Error | null}
           isMailDragActive={isMailDragActive}
           onCloseReply={handleCloseReply}
-          onCloseCompose={handleCloseCompose}
           onDeleteMessage={handleDeleteMessage}
           onMarkMessageReadState={handleMarkMessageReadState}
           onMoveMessage={handleMoveMessage}
           onReplyToMessage={handleReplyToMessage}
           onReplyToMessageBody={handleReplyToMessageBody}
-          onSendMessage={handleSendMessage}
           className={cn(isReadingMessage && 'max-md:col-span-2')}
         />
+        {isComposingNew && (
+          <NewMessageComposerOverlay
+            isSending={isSendingMessage || isOpeningComposeWindow}
+            error={sendMessageMutation.error as Error | null}
+            onClose={handleCloseCompose}
+            onMoveToWindow={(draft) => {
+              void handleMoveComposeToWindow(draft);
+            }}
+            onSend={handleSendMessage}
+          />
+        )}
       </main>
     </TooltipProvider>
+  );
+}
+
+function NewMessageComposerOverlay({
+  isSending,
+  error,
+  onClose,
+  onMoveToWindow,
+  onSend,
+}: {
+  isSending: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onMoveToWindow: (draft: ComposeWindowDraft) => void;
+  onSend: (input: SendMailInput) => void;
+}) {
+  const draftSubject = useComposeStore((state) => state.draft.subject);
+  const isMinimized = useComposeStore((state) => state.isMinimized);
+  const setDraft = useComposeStore((state) => state.setDraft);
+  const setMinimized = useComposeStore((state) => state.setMinimized);
+  const minimizedTitle = draftSubject.trim() || 'New message';
+
+  return (
+    <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex items-end justify-end max-sm:inset-x-2">
+      <div
+        role="dialog"
+        aria-label="New message"
+        className={cn(
+          'pointer-events-auto w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-lg border bg-card shadow-2xl max-sm:w-full',
+          isMinimized && 'hidden',
+        )}
+      >
+        <MailComposer
+          mode="new"
+          initialDraft={useComposeStore.getState().draft}
+          isSending={isSending}
+          error={error}
+          className="h-[min(640px,calc(100vh-6rem))]"
+          onClose={onClose}
+          onDraftChange={setDraft}
+          onMinimize={() => setMinimized(true)}
+          onMoveToWindow={onMoveToWindow}
+          onReply={() => undefined}
+          onSend={onSend}
+        />
+      </div>
+      {isMinimized && (
+        <div className="pointer-events-none flex w-full justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="pointer-events-auto h-11 w-[min(360px,calc(100vw-1rem))] justify-start border bg-card px-3 text-left shadow-lg"
+            onClick={() => setMinimized(false)}
+          >
+            <PenLine data-icon="inline-start" />
+            <span className="min-w-0 flex-1 truncate">{minimizedTitle}</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              Draft
+            </span>
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

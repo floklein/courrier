@@ -1,8 +1,17 @@
 import DOMPurify from 'dompurify';
-import { Send, X } from 'lucide-react';
-import { FormEvent, useId, useState } from 'react';
+import { ExternalLink, Minus, Send, X } from 'lucide-react';
+import { FormEvent, useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../components/ui/tooltip';
+import {
+  emptyComposeWindowDraft,
+  type ComposeWindowDraft,
+} from '../lib/compose-window';
 import type {
   MailComposeRecipient,
   MailMessageDetail,
@@ -33,36 +42,60 @@ export function MailComposer({
   isSending,
   error,
   replyMessage,
+  initialDraft,
   className,
   onClose,
+  onDraftChange,
+  onMinimize,
+  onMoveToWindow,
   onReply,
   onSend,
+  useWindowHeader,
 }: {
   mode: 'new' | 'reply';
   isSending: boolean;
   error: Error | null;
   replyMessage?: MailMessageDetail;
+  initialDraft?: ComposeWindowDraft;
   className?: string;
   onClose: () => void;
+  onDraftChange?: (draft: ComposeWindowDraft) => void;
+  onMinimize?: () => void;
+  onMoveToWindow?: (draft: ComposeWindowDraft) => void;
   onReply: (input: ReplyToMessageInput) => void;
   onSend: (input: SendMailInput) => void;
+  useWindowHeader?: boolean;
 }) {
   const toInputId = useId();
   const subjectInputId = useId();
-  const [toValue, setToValue] = useState('');
-  const [subject, setSubject] = useState('');
+  const [toValue, setToValue] = useState(initialDraft?.toValue ?? '');
+  const [subject, setSubject] = useState(initialDraft?.subject ?? '');
   const [editorValue, setEditorValue] = useState<RichTextMailEditorValue>({
-    html: '',
-    text: '',
-    isEmpty: true,
+    ...(initialDraft?.editorValue ?? emptyComposeWindowDraft.editorValue),
   });
   const [validationMessage, setValidationMessage] = useState('');
   const isReply = mode === 'reply';
+  const currentDraft = useMemo<ComposeWindowDraft>(
+    () => ({
+      toValue,
+      subject,
+      editorValue,
+    }),
+    [editorValue, subject, toValue],
+  );
   const hasBody = editorValue.text.trim().length > 0 && !editorValue.isEmpty;
   const isDirty =
     toValue.trim().length > 0 ||
     subject.trim().length > 0 ||
     editorValue.text.trim().length > 0;
+
+  useEffect(() => {
+    if (isReply) {
+      return;
+    }
+
+    onDraftChange?.(currentDraft);
+  }, [currentDraft, isReply, onDraftChange]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -126,9 +159,8 @@ export function MailComposer({
       <div
         className={cn(
           'flex shrink-0 items-center justify-between gap-3 border-b px-4',
-          isReply
-            ? 'py-4'
-            : 'app-window-header app-window-controls-end h-16',
+          isReply ? 'py-4' : 'h-16',
+          !isReply && useWindowHeader && 'app-window-header app-window-controls-end',
         )}
       >
         <div className="min-w-0">
@@ -141,16 +173,59 @@ export function MailComposer({
             </p>
           )}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Close composer"
-          disabled={isSending}
-          onClick={handleClose}
-        >
-          <X data-icon="inline-start" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {onMinimize && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Minimize composer"
+                  disabled={isSending}
+                  onClick={onMinimize}
+                >
+                  <Minus data-icon="inline-start" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Minimize</TooltipContent>
+            </Tooltip>
+          )}
+          {onMoveToWindow && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Move composer to window"
+                  disabled={isSending}
+                  onClick={() => onMoveToWindow(currentDraft)}
+                >
+                  <ExternalLink data-icon="inline-start" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open in window</TooltipContent>
+            </Tooltip>
+          )}
+          {!useWindowHeader && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Cancel composer"
+                  disabled={isSending}
+                  onClick={handleClose}
+                >
+                  <X data-icon="inline-start" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Cancel</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
@@ -193,6 +268,7 @@ export function MailComposer({
         <RichTextMailEditor
           className={cn(!isReply && 'flex-1')}
           disabled={isSending}
+          initialValue={initialDraft?.editorValue}
           placeholder={isReply ? 'Write a reply' : 'Write a message'}
           onChange={setEditorValue}
         />
@@ -207,11 +283,11 @@ export function MailComposer({
       <div className="flex shrink-0 justify-end gap-2 border-t px-4 py-3">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           disabled={isSending}
           onClick={handleClose}
         >
-          Close
+          Cancel
         </Button>
         <Button type="submit" disabled={isSending}>
           <Send data-icon="inline-start" />

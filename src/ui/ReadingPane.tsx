@@ -18,7 +18,6 @@ import type {
   MailMessageDetail,
   MailMessageSummary,
   ReplyToMessageInput,
-  SendMailInput,
 } from '../lib/mail-types';
 import { encodeRouteId } from '../lib/route-ids';
 import { cn } from '../lib/utils';
@@ -35,21 +34,17 @@ export function ReadingPane({
   isActionPending,
   message,
   replyMessageId,
-  isComposingNew,
   isSendingMessage,
-  sendError,
   replyError,
   isLoading,
   error,
   isMailDragActive,
   onCloseReply,
-  onCloseCompose,
   onDeleteMessage,
   onMarkMessageReadState,
   onMoveMessage,
   onReplyToMessage,
   onReplyToMessageBody,
-  onSendMessage,
   className,
 }: {
   folderId: string;
@@ -57,15 +52,12 @@ export function ReadingPane({
   isActionPending: boolean;
   message: MailMessageDetail | undefined;
   replyMessageId: string | undefined;
-  isComposingNew: boolean;
   isSendingMessage: boolean;
-  sendError: Error | null;
   replyError: Error | null;
   isLoading: boolean;
   error: Error | null;
   isMailDragActive: boolean;
   onCloseReply: () => void;
-  onCloseCompose: () => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
@@ -77,30 +69,8 @@ export function ReadingPane({
   ) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
   onReplyToMessageBody: (input: ReplyToMessageInput) => void;
-  onSendMessage: (input: SendMailInput) => void;
   className?: string;
 }) {
-  if (isComposingNew) {
-    return (
-      <article
-        className={cn(
-          'flex min-h-0 min-w-0 flex-col overflow-hidden bg-background',
-          className,
-        )}
-      >
-        <MailComposer
-          mode="new"
-          isSending={isSendingMessage}
-          error={sendError}
-          className="flex-1"
-          onClose={onCloseCompose}
-          onReply={onReplyToMessageBody}
-          onSend={onSendMessage}
-        />
-      </article>
-    );
-  }
-
   if (isLoading) {
     return (
       <section
@@ -267,7 +237,7 @@ export function ReadingPane({
           className="max-h-[46vh] shrink-0 border-t"
           onClose={onCloseReply}
           onReply={onReplyToMessageBody}
-          onSend={onSendMessage}
+          onSend={() => undefined}
         />
       )}
     </article>

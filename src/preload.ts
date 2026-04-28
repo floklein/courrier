@@ -7,6 +7,7 @@ import type {
   ReplyToMessageInput,
   SendMailInput,
 } from './lib/mail-types';
+import type { ComposeWindowDraft } from './lib/compose-window';
 
 const courrier = {
   platform: process.platform,
@@ -52,6 +53,15 @@ const courrier = {
       ipcRenderer.invoke('mail:send-message', input) as Promise<void>,
     replyToMessage: (input: ReplyToMessageInput) =>
       ipcRenderer.invoke('mail:reply-to-message', input) as Promise<void>,
+  },
+  window: {
+    closeCurrent: () => ipcRenderer.invoke('window:close-current') as Promise<void>,
+    getComposeDraft: () =>
+      ipcRenderer.invoke('window:get-compose-draft') as Promise<
+        ComposeWindowDraft | undefined
+      >,
+    openComposeWindow: (draft: ComposeWindowDraft) =>
+      ipcRenderer.invoke('window:open-compose', draft) as Promise<void>,
   },
 };
 
