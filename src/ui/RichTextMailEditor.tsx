@@ -111,7 +111,7 @@ export function RichTextMailEditor({
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-col overflow-hidden rounded-md border bg-background',
+        'flex min-h-0 flex-col gap-2',
         className,
       )}
     >
@@ -122,9 +122,10 @@ export function RichTextMailEditor({
       <EditorContent
         editor={editor}
         className={cn(
-          'flex min-h-36 flex-1 flex-col overflow-y-auto px-3 py-3 text-sm leading-6 [&>.ProseMirror]:flex-1',
+          'border-input focus-within:border-ring focus-within:ring-ring/50 flex min-h-36 w-full flex-1 flex-col rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] md:text-sm',
+          '[&>.ProseMirror]:flex-1 [&>.ProseMirror]:overflow-y-auto [&>.ProseMirror]:outline-none',
           'prose-mail-editor',
-          disabled && 'opacity-70',
+          disabled && 'cursor-not-allowed opacity-50',
         )}
       />
     </div>
@@ -165,7 +166,7 @@ function EditorToolbar({
   }
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-card/60 p-2">
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
       <ButtonGroup aria-label="Text formatting">
         <ToolbarToggle
           pressed={Boolean(editor?.isActive('bold'))}
