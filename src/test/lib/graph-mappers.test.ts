@@ -4,7 +4,7 @@ import {
   mapGraphMessageDetail,
   mapGraphMessageSummary,
   sortMailFolders,
-} from './graph-mappers';
+} from '../../lib/graph-mappers';
 
 describe('graph mail mappers', () => {
   it('orders well-known folders before custom folders and keeps unread counts', () => {

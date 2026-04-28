@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatMailDate, getInitials, parseMailPath } from './mail-utils';
+import { encodeRouteId } from '../../../lib/route-ids';
+import {
+  formatMailDate,
+  getInitials,
+  parseMailPath,
+} from '../../../lib/mail/mail-utils';
 
 describe('mail utils', () => {
   it('parses folder and message ids from mail routes', () => {
@@ -10,6 +15,20 @@ describe('mail utils', () => {
     expect(parseMailPath('/mail/archive/message-1')).toEqual({
       folderId: 'archive',
       messageId: 'message-1',
+    });
+  });
+
+  it('decodes opaque Outlook ids from mail route segments', () => {
+    const folderId = 'AAMkAGI2T/folder+abc=';
+    const messageId = 'AAMkAGI2T/message+def=';
+
+    expect(
+      parseMailPath(
+        `/mail/${encodeRouteId(folderId)}/${encodeRouteId(messageId)}`,
+      ),
+    ).toEqual({
+      folderId,
+      messageId,
     });
   });
 
