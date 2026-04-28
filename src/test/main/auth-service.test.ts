@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldUsePlaintextCacheFallback } from './auth-service';
+import { shouldUsePlaintextCacheFallback } from '../../main/auth-service';
 
 describe('auth cache fallback detection', () => {
   it('detects unavailable DPAPI persistence validation errors', () => {

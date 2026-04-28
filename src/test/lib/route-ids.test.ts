@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeRouteId, encodeRouteId } from './route-ids';
+import { decodeRouteId, encodeRouteId } from '../../lib/route-ids';
 
 describe('mail route ids', () => {
   it('encodes opaque Outlook ids without path separators', () => {
