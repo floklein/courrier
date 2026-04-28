@@ -8,6 +8,7 @@ import {
   useQuery,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
 } from '@tanstack/react-query';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
@@ -88,7 +89,17 @@ export function AuthenticatedMailClient({
     }) => api.mail.markMessageReadState(message.id, isRead),
     onMutate: async ({ message, isRead }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
+      const snapshot = createMailCacheSnapshot(queryClient);
       updateCachedMessageReadState(queryClient, message.id, isRead);
+      updateCachedFolderCounts(queryClient, {
+        folderId: message.folderId,
+        unreadDelta: getReadStateUnreadDelta(message.isRead, isRead),
+      });
+
+      return { snapshot };
+    },
+    onError: (_error, _variables, context) => {
+      restoreMailCacheSnapshot(queryClient, context?.snapshot);
     },
     onSettled: async (_data, _error, { message }) => {
       await Promise.all([
@@ -108,8 +119,22 @@ export function AuthenticatedMailClient({
       message: MailMessageSummary;
       destinationFolderId: string;
     }) => api.mail.moveMessage(message.id, destinationFolderId),
-    onSuccess: async (_data, { message, destinationFolderId }) => {
+    onMutate: async ({ message, destinationFolderId }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail'] });
+      const snapshot = createMailCacheSnapshot(queryClient);
+
       handleMessageRemoved(message);
+      updateCachedFolderCounts(queryClient, {
+        folderId: message.folderId,
+        totalDelta: -1,
+        unreadDelta: message.isRead ? 0 : -1,
+      });
+      updateCachedFolderCounts(queryClient, {
+        folderId: destinationFolderId,
+        totalDelta: 1,
+        unreadDelta: message.isRead ? 0 : 1,
+      });
+
       const destinationFolder = folders.find(
         (folder) => folder.id === destinationFolderId,
       );
@@ -118,14 +143,46 @@ export function AuthenticatedMailClient({
         announce(`Moved "${message.subject}" to ${destinationFolder.label}.`);
       }
 
+      return { snapshot };
+    },
+    onError: (_error, _variables, context) => {
+      restoreMailCacheSnapshot(queryClient, context?.snapshot);
+    },
+    onSettled: async () => {
       await invalidateMailLists();
     },
   });
   const deleteMutation = useMutation({
     mutationFn: ({ message }: { message: MailMessageSummary }) =>
       api.mail.deleteMessage(message.id),
-    onSuccess: async (_data, { message }) => {
+    onMutate: async ({ message }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail'] });
+      const snapshot = createMailCacheSnapshot(queryClient);
+      const trashFolder = folders.find(
+        (folder) => folder.wellKnownName === 'deleteditems',
+      );
+
       handleMessageRemoved(message);
+      updateCachedFolderCounts(queryClient, {
+        folderId: message.folderId,
+        totalDelta: -1,
+        unreadDelta: message.isRead ? 0 : -1,
+      });
+
+      if (trashFolder && trashFolder.id !== message.folderId) {
+        updateCachedFolderCounts(queryClient, {
+          folderId: trashFolder.id,
+          totalDelta: 1,
+          unreadDelta: message.isRead ? 0 : 1,
+        });
+      }
+
+      return { snapshot };
+    },
+    onError: (_error, _variables, context) => {
+      restoreMailCacheSnapshot(queryClient, context?.snapshot);
+    },
+    onSettled: async () => {
       await invalidateMailLists();
     },
   });
@@ -315,7 +372,7 @@ export function AuthenticatedMailClient({
 }
 
 function updateCachedMessageReadState(
-  queryClient: ReturnType<typeof useQueryClient>,
+  queryClient: QueryClient,
   messageId: string,
   isRead: boolean,
 ) {
@@ -350,7 +407,7 @@ function updateCachedMessageReadState(
 }
 
 function removeCachedMessage(
-  queryClient: ReturnType<typeof useQueryClient>,
+  queryClient: QueryClient,
   messageId: string,
 ) {
   queryClient.setQueriesData<InfiniteData<PagedMessages>>(
@@ -370,4 +427,68 @@ function removeCachedMessage(
     },
   );
   queryClient.removeQueries({ queryKey: ['mail', 'message'], exact: false });
+}
+
+function updateCachedFolderCounts(
+  queryClient: QueryClient,
+  {
+    folderId,
+    totalDelta = 0,
+    unreadDelta = 0,
+  }: {
+    folderId: string;
+    totalDelta?: number;
+    unreadDelta?: number;
+  },
+) {
+  if (totalDelta === 0 && unreadDelta === 0) {
+    return;
+  }
+
+  queryClient.setQueryData<MailFolder[]>(['mail', 'folders'], (folders) =>
+    folders?.map((folder) =>
+      folder.id === folderId
+        ? {
+            ...folder,
+            totalCount: clampCount(folder.totalCount + totalDelta),
+            unreadCount: clampCount(folder.unreadCount + unreadDelta),
+          }
+        : folder,
+    ),
+  );
+}
+
+function getReadStateUnreadDelta(wasRead: boolean, isRead: boolean) {
+  if (wasRead === isRead) {
+    return 0;
+  }
+
+  return isRead ? -1 : 1;
+}
+
+function clampCount(value: number) {
+  return Math.max(0, value);
+}
+
+function createMailCacheSnapshot(queryClient: QueryClient) {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey: ['mail'] })
+    .map((query) => ({
+      queryKey: query.queryKey,
+      data: query.state.data,
+    }));
+}
+
+function restoreMailCacheSnapshot(
+  queryClient: QueryClient,
+  snapshot: ReturnType<typeof createMailCacheSnapshot> | undefined,
+) {
+  if (!snapshot) {
+    return;
+  }
+
+  for (const query of snapshot) {
+    queryClient.setQueryData(query.queryKey, query.data);
+  }
 }
