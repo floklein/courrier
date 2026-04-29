@@ -4,12 +4,16 @@ import {
 } from '@tanstack/react-query';
 import { useRouterState } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '../lib/api-client';
 import type {
   MailFolder,
   MailMessageDetail,
   PagedMessages,
 } from '../lib/mail-types';
+import {
+  mailFoldersQueryOptions,
+  mailMessageQueryOptions,
+  mailMessagesQueryOptions,
+} from '../lib/mail/mail-query-options';
 import { parseMailPath } from '../lib/mail/mail-utils';
 
 export function useMailClientState() {
@@ -18,10 +22,7 @@ export function useMailClientState() {
   });
   const { folderId, messageId } = parseMailPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
-  const foldersQuery = useQuery({
-    queryKey: ['mail', 'folders'],
-    queryFn: api.mail.listFolders,
-  });
+  const foldersQuery = useQuery(mailFoldersQueryOptions());
   const folders = (foldersQuery.data ?? []) as MailFolder[];
   const currentFolder =
     folders.find((folder) => folder.id === folderId) ??
@@ -29,23 +30,14 @@ export function useMailClientState() {
     folders[0];
   const resolvedFolderId = currentFolder?.id ?? folderId;
   const messagesQuery = useInfiniteQuery({
-    queryKey: ['mail', 'messages', resolvedFolderId, searchQuery],
-    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
-      api.mail.listMessages(
-        resolvedFolderId,
-        pageParam,
-        searchQuery || undefined,
-      ),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: PagedMessages) => lastPage.nextPageUrl,
+    ...mailMessagesQueryOptions(resolvedFolderId, searchQuery),
     enabled: Boolean(currentFolder),
   });
   const messages =
     messagesQuery.data?.pages.flatMap((page: PagedMessages) => page.messages) ??
     [];
   const messageQuery = useQuery({
-    queryKey: ['mail', 'message', resolvedFolderId, messageId],
-    queryFn: () => api.mail.getMessage(resolvedFolderId, messageId ?? ''),
+    ...mailMessageQueryOptions(resolvedFolderId, messageId),
     enabled: Boolean(currentFolder && messageId),
   });
   const selectedMessage = messageQuery.data as MailMessageDetail | undefined;
