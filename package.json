@@ -8,7 +8,6 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "turbo run dev --filter @courrier/desktop",
     "dev": "turbo run dev",
     "package": "turbo run package",
     "make": "turbo run make",
