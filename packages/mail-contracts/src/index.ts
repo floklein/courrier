@@ -57,7 +57,7 @@ export const mailRemoteChangeEventSchema = z.object({
   id: z.string().min(1),
   clientId: z.string().min(1),
   subscriptionId: z.string().min(1),
-  changeType: graphChangeTypeSchema.or(z.literal('missed')),
+  changeType: graphChangeTypeSchema.or(graphLifecycleEventSchema),
   resource: z.string().optional(),
   messageId: z.string().optional(),
   receivedAt: z.string().datetime(),

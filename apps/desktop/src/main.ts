@@ -3,7 +3,7 @@ import { app, BrowserWindow, Menu, ipcMain, nativeTheme, shell } from 'electron'
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import type { ComposeWindowDraft } from './lib/compose-window';
-import { AuthService } from './main/auth-service';
+import { AuthRequiredError, AuthService } from './main/auth-service';
 import { GraphClient } from './main/graph-client';
 import { registerIpcHandlers } from './main/ipc';
 import { MailSubscriptionManager } from './main/mail-subscription-manager';
@@ -116,10 +116,12 @@ app.on('ready', () => {
   });
 
   Menu.setApplicationMenu(null);
-  registerIpcHandlers(authService, graphClient);
+  registerIpcHandlers(authService, graphClient, {
+    startMailSubscriptions: () => startMailSubscriptions(subscriptionManager),
+  });
   registerWindowIpcHandlers();
   createWindow();
-  void subscriptionManager.start();
+  void startMailSubscriptions(subscriptionManager);
   app.on('before-quit', () => {
     subscriptionManager.stop();
   });
@@ -138,6 +140,18 @@ function registerWindowIpcHandlers() {
     assertTrustedSender(event);
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
+}
+
+async function startMailSubscriptions(subscriptionManager: MailSubscriptionManager) {
+  try {
+    await subscriptionManager.start();
+  } catch (error) {
+    if (error instanceof AuthRequiredError) {
+      return;
+    }
+
+    console.warn('Mail subscription startup failed.', error);
+  }
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common

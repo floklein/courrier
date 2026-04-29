@@ -48,6 +48,11 @@ describe('RealtimeHub', () => {
     const store = new InMemoryRelayStore();
     const server = buildServer({ config, store });
 
+    await store.upsertSubscription({
+      clientId: 'desktop-1',
+      clientState: 'client-state-with-enough-length',
+      authToken: 'auth-token-with-enough-length',
+    });
     await store.appendEvent({
       id: 'event-1',
       clientId: 'desktop-1',
@@ -62,13 +67,46 @@ describe('RealtimeHub', () => {
       changeType: 'updated',
       receivedAt: new Date().toISOString(),
     });
+    await server.ready();
 
-    await store.acknowledgeEvent('desktop-1', 'event-1');
+    const socket = await server.injectWS('/ws');
+    const messages: string[] = [];
+    socket.on('message', (message) => {
+      messages.push(message.toString());
+    });
 
-    await expect(store.listEventsAfter('desktop-1')).resolves.toMatchObject([
-      { id: 'event-2' },
+    socket.send(
+      JSON.stringify({
+        type: 'register',
+        clientId: 'desktop-1',
+        token: 'auth-token-with-enough-length',
+        lastEventId: 'event-1',
+      }),
+    );
+
+    await waitFor(() => messages.length === 2);
+
+    expect(messages.map((message) => JSON.parse(message))).toMatchObject([
+      { type: 'ready', clientId: 'desktop-1' },
+      { type: 'mail-change', event: { id: 'event-2' } },
     ]);
 
+    socket.send(JSON.stringify({ type: 'ack', eventId: 'event-2' }));
+    await waitFor(async () => (await store.listEventsAfter('desktop-1')).length === 0);
+
+    socket.close();
     await server.close();
   });
 });
+
+async function waitFor(predicate: () => boolean | Promise<boolean>) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (await predicate()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  throw new Error('Timed out waiting for condition.');
+}

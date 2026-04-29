@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   graphNotificationCollectionSchema,
+  mailRemoteChangeEventSchema,
   type MailRemoteChangeEvent,
 } from '@courrier/mail-contracts';
 import type { FastifyInstance } from 'fastify';
@@ -78,16 +79,13 @@ export function registerGraphWebhookRoutes({
         continue;
       }
 
-      const changeType =
-        notification.lifecycleEvent === 'missed'
-          ? 'missed'
-          : notification.changeType;
+      const changeType = notification.lifecycleEvent ?? notification.changeType;
 
       if (!changeType) {
         continue;
       }
 
-      const event: MailRemoteChangeEvent = {
+      const event: MailRemoteChangeEvent = mailRemoteChangeEventSchema.parse({
         id: randomUUID(),
         clientId: subscription.clientId,
         subscriptionId: notification.subscriptionId,
@@ -95,7 +93,7 @@ export function registerGraphWebhookRoutes({
         resource: notification.resource,
         messageId: notification.resourceData?.id,
         receivedAt: new Date().toISOString(),
-      };
+      });
 
       await store.appendEvent(event);
       realtime.sendMailChange(event);

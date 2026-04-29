@@ -208,7 +208,7 @@ export class GraphClient {
         changeType: 'created,updated,deleted',
         notificationUrl: input.notificationUrl,
         lifecycleNotificationUrl: input.notificationUrl,
-        resource: '/me/messages',
+        resource: 'me/messages',
         expirationDateTime: input.expirationDateTime,
         clientState: input.clientState,
       }),

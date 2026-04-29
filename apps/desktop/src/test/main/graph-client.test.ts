@@ -42,7 +42,7 @@ describe('GraphClient write requests', () => {
       jsonResponse({
         id: 'subscription-1',
         expirationDateTime: '2026-04-29T12:00:00.000Z',
-        resource: '/me/messages',
+        resource: 'me/messages',
       }, 201),
     );
     const client = createGraphClient();
@@ -56,7 +56,7 @@ describe('GraphClient write requests', () => {
     expect(subscription).toEqual({
       id: 'subscription-1',
       expirationDateTime: '2026-04-29T12:00:00.000Z',
-      resource: '/me/messages',
+      resource: 'me/messages',
     });
     expect(fetchMock).toHaveBeenCalledWith(`${graphBaseUrl}/subscriptions`, {
       method: 'POST',
@@ -68,7 +68,7 @@ describe('GraphClient write requests', () => {
         changeType: 'created,updated,deleted',
         notificationUrl: 'https://relay.example.com/graph/notifications',
         lifecycleNotificationUrl: 'https://relay.example.com/graph/notifications',
-        resource: '/me/messages',
+        resource: 'me/messages',
         expirationDateTime: '2026-04-29T12:00:00.000Z',
         clientState: 'client-state',
       }),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   graphNotificationCollectionSchema,
+  relayServerMessageSchema,
   relayClientMessageSchema,
 } from './index';
 
@@ -33,5 +34,20 @@ describe('mail contract schemas', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('accepts relay mail change messages for Graph lifecycle events', () => {
+    const result = relayServerMessageSchema.safeParse({
+      type: 'mail-change',
+      event: {
+        id: 'event-1',
+        clientId: 'desktop-1',
+        subscriptionId: 'subscription-1',
+        changeType: 'subscriptionRemoved',
+        receivedAt: '2026-04-29T10:00:00.000Z',
+      },
+    });
+
+    expect(result.success).toBe(true);
   });
 });

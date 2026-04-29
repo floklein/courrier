@@ -12,14 +12,23 @@ import type {
 export function registerIpcHandlers(
   authService: AuthService,
   graphClient: GraphClient,
+  options: {
+    startMailSubscriptions?: () => Promise<void>;
+  } = {},
 ) {
   ipcMain.handle('auth:get-session', (event) => {
     assertTrustedSender(event);
     return authService.getSession();
   });
-  ipcMain.handle('auth:sign-in', (event) => {
+  ipcMain.handle('auth:sign-in', async (event) => {
     assertTrustedSender(event);
-    return authService.signIn();
+    const session = await authService.signIn();
+
+    if (session.status === 'authenticated') {
+      await options.startMailSubscriptions?.();
+    }
+
+    return session;
   });
   ipcMain.handle('auth:sign-out', (event) => {
     assertTrustedSender(event);
