@@ -1,7 +1,11 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2, Search, X } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+} from '../../components/ui/context-menu';
 import { Input } from '../../components/ui/input';
 import {
   Tooltip,
@@ -12,6 +16,7 @@ import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
 import { cn } from '../../lib/utils';
 import { PanelStatus } from '../app/StatusViews';
 import { EmptyFolder } from './EmptyFolder';
+import { MailActionContextContent } from './MailActionMenu';
 import { MessageListItem } from './MessageListItem';
 
 const messageRowEstimate = 104;
@@ -67,6 +72,8 @@ export function MessageList({
 }) {
   const [isSearching, setIsSearching] = useState(Boolean(searchQuery));
   const [draftSearch, setDraftSearch] = useState(searchQuery);
+  const [contextMessage, setContextMessage] =
+    useState<MailMessageSummary>();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollParentRef = useRef<HTMLDivElement>(null);
   const loadMoreRequestLengthRef = useRef<number | null>(null);
@@ -96,6 +103,15 @@ export function MessageList({
   useEffect(() => {
     loadMoreRequestLengthRef.current = null;
   }, [folderId, messages.length, searchQuery]);
+
+  useEffect(() => {
+    if (
+      contextMessage &&
+      !messages.some((message) => message.id === contextMessage.id)
+    ) {
+      setContextMessage(undefined);
+    }
+  }, [contextMessage, messages]);
 
   useEffect(() => {
     const lastVirtualRow = virtualRows.at(-1);
@@ -130,6 +146,28 @@ export function MessageList({
     setDraftSearch('');
     setIsSearching(false);
     onSearch('');
+  }
+
+  function handleContextMenu(event: MouseEvent<HTMLDivElement>) {
+    if (!(event.target instanceof Element)) {
+      event.preventDefault();
+      setContextMessage(undefined);
+      return;
+    }
+
+    const messageElement = event.target.closest<HTMLElement>(
+      '[data-mail-message-id]',
+    );
+    const messageId = messageElement?.dataset.mailMessageId;
+    const message = messages.find((item) => item.id === messageId);
+
+    if (!message) {
+      event.preventDefault();
+      setContextMessage(undefined);
+      return;
+    }
+
+    setContextMessage(message);
   }
 
   return (
@@ -203,59 +241,71 @@ export function MessageList({
       {isLoading && <PanelStatus label="Loading messages..." />}
       {!isLoading && error && <PanelStatus label={error.message} />}
       {!isLoading && !error && messages.length > 0 && (
-        <div
-          ref={scrollParentRef}
-          className="min-h-0 min-w-0 flex-1 overflow-auto"
-        >
-          <div
-            className="relative w-full min-w-0 max-w-full"
-            style={{ height: rowVirtualizer.getTotalSize() }}
-          >
-            {virtualRows.map((virtualRow) => {
-              const message = messages[virtualRow.index];
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
+              ref={scrollParentRef}
+              className="min-h-0 min-w-0 flex-1 overflow-auto"
+              onContextMenu={handleContextMenu}
+            >
+              <div
+                className="relative w-full min-w-0 max-w-full"
+                style={{ height: rowVirtualizer.getTotalSize() }}
+              >
+                {virtualRows.map((virtualRow) => {
+                  const message = messages[virtualRow.index];
 
-              return (
-                <div
-                  key={virtualRow.key}
-                  ref={rowVirtualizer.measureElement}
-                  data-index={virtualRow.index}
-                  className="absolute left-0 top-0 w-full"
-                  style={{
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  {message ? (
-                    <MessageListItem
-                      folderId={folderId}
-                      folders={folders}
-                      isSelected={message.id === selectedMessageId}
-                      isActionPending={isActionPending}
-                      message={message}
-                      onDelete={onDeleteMessage}
-                      onDragActiveChange={onDragActiveChange}
-                      onMarkReadState={onMarkMessageReadState}
-                      onMove={onMoveMessage}
-                      onReply={onReplyToMessage}
-                    />
-                  ) : (
-                    <div className="flex h-12 items-center justify-center gap-2 text-sm text-muted-foreground">
-                      {isFetchingNextPage && (
-                        <Loader2 className="size-4 animate-spin" />
-                      )}
-                      {isFetchingNextPage ? (
-                        'Loading more messages...'
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      ref={rowVirtualizer.measureElement}
+                      data-index={virtualRow.index}
+                      className="absolute left-0 top-0 w-full"
+                      style={{
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      {message ? (
+                        <MessageListItem
+                          folderId={folderId}
+                          isSelected={message.id === selectedMessageId}
+                          isActionPending={isActionPending}
+                          message={message}
+                          onDragActiveChange={onDragActiveChange}
+                        />
                       ) : (
-                        <Button variant="ghost" onClick={onLoadMore}>
-                          Load more
-                        </Button>
+                        <div className="flex h-12 items-center justify-center gap-2 text-sm text-muted-foreground">
+                          {isFetchingNextPage && (
+                            <Loader2 className="size-4 animate-spin" />
+                          )}
+                          {isFetchingNextPage ? (
+                            'Loading more messages...'
+                          ) : (
+                            <Button variant="ghost" onClick={onLoadMore}>
+                              Load more
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                  );
+                })}
+              </div>
+            </div>
+          </ContextMenuTrigger>
+          {contextMessage && (
+            <MailActionContextContent
+              currentFolderId={folderId}
+              folders={folders}
+              isBusy={isActionPending}
+              message={contextMessage}
+              onDelete={onDeleteMessage}
+              onMarkReadState={onMarkMessageReadState}
+              onMove={onMoveMessage}
+              onReply={onReplyToMessage}
+            />
+          )}
+        </ContextMenu>
       )}
       {!isLoading && !error && messages.length === 0 && <EmptyFolder />}
     </section>
