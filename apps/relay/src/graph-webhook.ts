@@ -5,9 +5,9 @@ import {
 } from '@courrier/mail-contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { RelayConfig } from './config';
-import type { RelayStore } from './store';
-import type { RealtimeHub } from './realtime';
+import type { RelayConfig } from './config.js';
+import type { RelayStore } from './store.js';
+import type { RealtimeHub } from './realtime.js';
 
 const relaySubscriptionRegistrationSchema = z.object({
   clientId: z.string().min(1),

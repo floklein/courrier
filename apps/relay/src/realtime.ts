@@ -6,7 +6,7 @@ import {
 } from '@courrier/mail-contracts';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
-import type { RelayStore } from './store';
+import type { RelayStore } from './store.js';
 
 export class RealtimeHub {
   private readonly socketsByClientId = new Map<string, Set<WebSocket>>();

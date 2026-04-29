@@ -1,9 +1,9 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
-import { loadConfig, type RelayConfig } from './config';
-import { registerGraphWebhookRoutes } from './graph-webhook';
-import { RealtimeHub } from './realtime';
-import { InMemoryRelayStore, type RelayStore } from './store';
+import { loadConfig, type RelayConfig } from './config.js';
+import { registerGraphWebhookRoutes } from './graph-webhook.js';
+import { RealtimeHub } from './realtime.js';
+import { InMemoryRelayStore, type RelayStore } from './store.js';
 
 export interface BuildServerOptions {
   config: RelayConfig;
