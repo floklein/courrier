@@ -1,14 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api-client';
+import { authSessionQueryOptions } from '../../lib/mail/mail-query-options';
 import { AuthenticatedMailClient } from './AuthenticatedMailClient';
 import { FullScreenStatus } from './StatusViews';
 import { Onboarding } from './Onboarding';
 
 export function MailClient() {
-  const sessionQuery = useQuery({
-    queryKey: ['auth', 'session'],
-    queryFn: api.auth.getSession,
-  });
+  const sessionQuery = useQuery(authSessionQueryOptions());
 
   if (sessionQuery.isPending) {
     return <FullScreenStatus label="Checking Microsoft session..." />;
