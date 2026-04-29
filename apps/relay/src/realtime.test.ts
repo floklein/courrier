@@ -7,7 +7,6 @@ const config = {
   PORT: 3001,
   RELAY_ADMIN_TOKEN: 'admin-token-with-enough-length',
   RELAY_PUBLIC_URL: 'https://relay.example.com',
-  RELAY_SHARED_SECRET: 'shared-secret-with-enough-length',
 };
 
 describe('RealtimeHub', () => {

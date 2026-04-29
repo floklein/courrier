@@ -115,7 +115,6 @@ Relay environment variables:
 
 ```dotenv
 RELAY_PUBLIC_URL=https://your-relay.example.com
-RELAY_SHARED_SECRET=<reserved shared secret, at least 24 chars>
 RELAY_ADMIN_TOKEN=<desktop registration token, at least 24 chars>
 PORT=3001
 HOST=0.0.0.0
