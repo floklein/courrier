@@ -20,5 +20,15 @@
   },
   "devDependencies": {
     "turbo": "^2.6.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@azure/msal-node-extensions",
+      "@azure/msal-node-runtime",
+      "electron-winstaller",
+      "electron",
+      "esbuild",
+      "keytar"
+    ]
   }
 }
