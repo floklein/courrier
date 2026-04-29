@@ -1,7 +1,8 @@
 # Courrier
 
-Courrier is a desktop mail client for Microsoft Outlook accounts. It is built
-with Electron, React, Vite, Tailwind CSS, and Microsoft Graph.
+Courrier is a desktop mail client for Microsoft Outlook accounts. It is a
+pnpm/Turborepo monorepo with an Electron desktop app and a Fastify relay for
+Microsoft Graph update notifications.
 
 The app signs in with Microsoft OAuth, reads folders and messages through Graph,
 and provides a focused three-pane mail interface for browsing, searching, and
@@ -28,7 +29,7 @@ triaging messages.
 
 ## Prerequisites
 
-- Node.js and npm
+- Node.js and pnpm
 - A Microsoft account with Outlook mail access
 - A Microsoft Entra app registration for local desktop OAuth
 
@@ -37,25 +38,27 @@ triaging messages.
 Install dependencies:
 
 ```powershell
-npm install
+pnpm install
 ```
 
 Create a local environment file:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item apps/desktop/.env.example apps/desktop/.env
 ```
 
 Set your Microsoft application client ID in `.env`:
 
 ```dotenv
 MICROSOFT_CLIENT_ID=<Application client ID>
+RELAY_PUBLIC_URL=https://your-relay.example.com
+RELAY_ADMIN_TOKEN=<shared relay admin token>
 ```
 
 Start the app in development mode:
 
 ```powershell
-npm start
+pnpm start
 ```
 
 Electron Forge starts the Electron main process, preload script, and Vite
@@ -81,27 +84,48 @@ For the full setup flow, see [docs/oauth.md](docs/oauth.md).
 
 | Command | Description |
 | --- | --- |
-| `npm start` | Run Courrier in development mode. |
-| `npm run package` | Package the Electron app locally. |
-| `npm run make` | Create distributable installers/packages. |
-| `npm run publish` | Publish Electron Forge artifacts. |
-| `npm test` | Run the Vitest suite. |
-| `npm run typecheck` | Run TypeScript without emitting files. |
-| `npm run lint` | Run ESLint for TypeScript and React files. |
+| `pnpm start` | Run Courrier desktop in development mode. |
+| `pnpm package` | Package the Electron app locally. |
+| `pnpm make` | Create distributable installers/packages. |
+| `pnpm test` | Run workspace Vitest suites. |
+| `pnpm typecheck` | Run workspace TypeScript checks. |
+| `pnpm lint` | Run workspace ESLint checks. |
 
 ## Project Structure
 
 ```text
-src/
-  main/          Electron main-process services, Microsoft auth, Graph client, IPC
-  components/   Shared UI primitives
-  data/         Local mail fixture data
-  lib/          Shared types, API bridge helpers, Graph mappers, route helpers
-  test/         Vitest setup
-  theme/        Theme provider
-  ui/           Mail client screens, panes, menus, and status views
+apps/
+  desktop/      Electron desktop app
+  relay/        Fastify Graph webhook and WebSocket relay
+packages/
+  mail-contracts/ Zod schemas and shared relay/desktop event types
+  tsconfig/     Shared TypeScript base config
 docs/
   oauth.md      Microsoft OAuth registration and troubleshooting guide
+```
+
+## Graph Update Relay
+
+Microsoft Graph change notifications require a public HTTPS webhook endpoint. The
+desktop app keeps Microsoft tokens locally and creates the Graph subscription,
+while `apps/relay` receives Graph webhook POSTs and pushes compact invalidation
+events to the desktop app over WebSocket.
+
+Relay environment variables:
+
+```dotenv
+RELAY_PUBLIC_URL=https://your-relay.example.com
+RELAY_SHARED_SECRET=<reserved shared secret, at least 24 chars>
+RELAY_ADMIN_TOKEN=<desktop registration token, at least 24 chars>
+PORT=3001
+HOST=0.0.0.0
+```
+
+Desktop relay environment variables:
+
+```dotenv
+RELAY_PUBLIC_URL=https://your-relay.example.com
+RELAY_ADMIN_TOKEN=<same registration token>
 ```
 
 ## Security Notes
