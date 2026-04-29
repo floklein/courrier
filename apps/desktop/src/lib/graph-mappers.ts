@@ -94,7 +94,13 @@ export function sortMailFolders(folders: MailFolder[]) {
       return left.depth - right.depth;
     }
 
-    return left.label.localeCompare(right.label);
+    const labelOrder = left.label.localeCompare(right.label);
+
+    if (labelOrder !== 0) {
+      return labelOrder;
+    }
+
+    return left.id.localeCompare(right.id);
   });
 }
 
