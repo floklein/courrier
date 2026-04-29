@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  '@azure/msal-node-extensions': true
+  '@azure/msal-node-runtime': true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  keytar: true
+nodeLinker: hoisted
+blockExoticSubdeps: false
