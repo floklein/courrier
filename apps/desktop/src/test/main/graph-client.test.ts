@@ -23,7 +23,7 @@ describe('Graph message pagination URL validation', () => {
         'inbox',
         'https://graph.microsoft.com/v1.0/me/messages?$top=25',
       ),
-    ).toThrow('Refusing to fetch an unexpected Microsoft Graph page URL.');
+    ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
   });
 
   it('rejects next links for a different folder', () => {
@@ -32,7 +32,7 @@ describe('Graph message pagination URL validation', () => {
         'inbox',
         'https://graph.microsoft.com/v1.0/me/mailFolders/archive/messages?$top=25',
       ),
-    ).toThrow('Refusing to fetch an unexpected Microsoft Graph page URL.');
+    ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
   });
 });
 

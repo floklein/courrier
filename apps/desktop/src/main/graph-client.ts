@@ -375,31 +375,79 @@ export function getValidatedMessagePageUrl(
   try {
     url = new URL(nextPageUrl);
   } catch {
-    throw new Error('Refusing to fetch an unexpected Microsoft Graph page URL.');
+    throw new Error(
+      `Refusing to fetch an unexpected Microsoft Graph page URL: ${describeRejectedMessagePageUrl(
+        nextPageUrl,
+      )}`,
+    );
   }
 
   const graphBase = new URL(graphBaseUrl);
-  const pathSegments = url.pathname.split('/').map((segment) => {
-    try {
-      return decodeURIComponent(segment);
-    } catch {
-      return segment;
-    }
-  });
+  const pathSegments = url.pathname.split('/');
+  const pageFolderId = getMessagePageFolderId(pathSegments);
   const isExpectedMessagePage =
     url.origin === graphBase.origin &&
-    pathSegments.length === 6 &&
     pathSegments[1] === 'v1.0' &&
     pathSegments[2] === 'me' &&
-    pathSegments[3] === 'mailFolders' &&
-    pathSegments[4] === folderId &&
-    pathSegments[5] === 'messages';
+    pageFolderId === folderId &&
+    pathSegments.at(-1) === 'messages';
 
   if (!isExpectedMessagePage) {
-    throw new Error('Refusing to fetch an unexpected Microsoft Graph page URL.');
+    throw new Error(
+      `Refusing to fetch an unexpected Microsoft Graph page URL: ${describeRejectedMessagePageUrl(
+        nextPageUrl,
+      )}`,
+    );
   }
 
   return nextPageUrl;
+}
+
+function getMessagePageFolderId(pathSegments: string[]) {
+  if (pathSegments[3] === 'mailFolders' && pathSegments.length >= 6) {
+    return pathSegments
+      .slice(4, -1)
+      .map(decodeGraphPathSegment)
+      .join('/');
+  }
+
+  const keyedMailFolderMatch = pathSegments[3]?.match(
+    /^mailFolders\('(.+)'\)$/,
+  );
+
+  if (keyedMailFolderMatch && pathSegments.length === 5) {
+    return decodeGraphPathSegment(
+      keyedMailFolderMatch[1].replaceAll("''", "'"),
+    );
+  }
+
+  return undefined;
+}
+
+function decodeGraphPathSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function describeRejectedMessagePageUrl(nextPageUrl: string) {
+  try {
+    const url = new URL(nextPageUrl);
+    const queryKeys = Array.from(url.searchParams.keys()).sort();
+
+    return JSON.stringify({
+      origin: url.origin,
+      pathname: url.pathname,
+      queryKeys,
+    });
+  } catch {
+    return JSON.stringify({
+      valueType: typeof nextPageUrl,
+      length: nextPageUrl.length,
+    });
+  }
 }
 
 function formatGraphRecipient(recipient: SendMailInput['toRecipients'][number]) {
