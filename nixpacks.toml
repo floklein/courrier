@@ -1,4 +1,4 @@
 
 [phases.setup]
-nixPkgs = ["pnpm", "turbo", "nodejs"]
+nixPkgs = ["...", "turbo"]
 aptPkgs = []
