@@ -116,7 +116,7 @@ export function FolderRail({
             ))}
         </nav>
       </ScrollArea>
-      <div className="shrink-0 border-t p-2 max-lg:flex max-lg:justify-center">
+      <div className="shrink-0 border-t p-2">
         <UserMenu
           accountEmail={accountEmail}
           accountName={accountName}
