@@ -3,9 +3,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { BrowserWindow, app } from 'electron';
 import {
+  relaySubscriptionRegistrationSchema,
   relayServerMessageSchema,
   type MailRemoteChangeEvent,
 } from '@courrier/mail-contracts';
+import { z } from 'zod';
 import type { GraphClient } from './graph-client';
 
 const subscriptionStateFileName = 'mail-subscription.json';
@@ -30,6 +32,19 @@ interface MailSubscriptionManagerOptions {
   reconnectDelayMs?: number;
   statePath?: string;
 }
+
+const mailSubscriptionStateSchema = z.object({
+  clientId: z.string().min(1),
+  clientState: z.string().min(24),
+  authToken: z.string().min(24),
+  subscriptionId: z.string().min(1).optional(),
+  expirationDateTime: z.string().datetime().optional(),
+  lastEventId: z.string().min(1).optional(),
+});
+
+type StopOptions = {
+  deleteRemoteSubscription?: boolean;
+};
 
 export class MailSubscriptionManager {
   private renewalTimer: NodeJS.Timeout | undefined;
@@ -56,7 +71,7 @@ export class MailSubscriptionManager {
     this.connectWebSocket(state);
   }
 
-  stop() {
+  async stop(options: StopOptions = {}) {
     this.isStopped = true;
     if (this.renewalTimer) {
       clearTimeout(this.renewalTimer);
@@ -71,6 +86,10 @@ export class MailSubscriptionManager {
     const socket = this.webSocket;
     this.webSocket = undefined;
     socket?.close();
+
+    if (options.deleteRemoteSubscription) {
+      await this.deleteRemoteSubscription();
+    }
   }
 
   private async ensureSubscription(state: MailSubscriptionState) {
@@ -120,19 +139,20 @@ export class MailSubscriptionManager {
 
   private async registerWithRelay(state: MailSubscriptionState) {
     const relayUrl = new URL('/relay/subscriptions', this.options.relayPublicUrl);
+    const body = relaySubscriptionRegistrationSchema.parse({
+      clientId: state.clientId,
+      clientState: state.clientState,
+      authToken: state.authToken,
+      subscriptionId: state.subscriptionId,
+      expirationDateTime: state.expirationDateTime,
+    });
     const response = await fetch(relayUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.options.relayAdminToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        clientId: state.clientId,
-        clientState: state.clientState,
-        authToken: state.authToken,
-        subscriptionId: state.subscriptionId,
-        expirationDateTime: state.expirationDateTime,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -159,7 +179,15 @@ export class MailSubscriptionManager {
       );
     });
     socket.addEventListener('message', (event) => {
-      void this.handleSocketMessage(state, event.data);
+      void this.handleSocketMessage(state, event.data, socket).catch(
+        (error: unknown) => {
+          console.warn('Relay WebSocket message processing failed.', error);
+
+          if (this.webSocket === socket) {
+            socket.close();
+          }
+        },
+      );
     });
     socket.addEventListener('error', () => {
       if (this.webSocket === socket) {
@@ -176,7 +204,11 @@ export class MailSubscriptionManager {
     });
   }
 
-  private async handleSocketMessage(state: MailSubscriptionState, data: unknown) {
+  private async handleSocketMessage(
+    state: MailSubscriptionState,
+    data: unknown,
+    socket: WebSocket,
+  ) {
     const result = relayServerMessageSchema.safeParse(parseSocketData(data));
 
     if (!result.success) {
@@ -192,29 +224,36 @@ export class MailSubscriptionManager {
       return;
     }
 
+    await this.recoverFromLifecycleEvent(state, result.data.event);
+    sendRemoteChangeToRenderers(result.data.event);
     state.lastEventId = result.data.event.id;
     await this.saveState(state);
-    sendRemoteChangeToRenderers(result.data.event);
-    this.webSocket?.send(
-      JSON.stringify({ type: 'ack', eventId: result.data.event.id }),
-    );
-
-    await this.recoverFromLifecycleEvent(state, result.data.event.changeType);
+    socket.send(JSON.stringify({ type: 'ack', eventId: result.data.event.id }));
   }
 
   private async loadState(): Promise<MailSubscriptionState> {
     try {
-      return JSON.parse(await fs.readFile(this.getStatePath(), 'utf8'));
+      const result = mailSubscriptionStateSchema.safeParse(
+        JSON.parse(await fs.readFile(this.getStatePath(), 'utf8')),
+      );
+
+      if (result.success) {
+        return result.data;
+      }
+
+      console.warn('Stored mail subscription state is invalid; resetting it.', result.error);
+      return createInitialState();
     } catch (error) {
+      if (error instanceof SyntaxError) {
+        console.warn('Stored mail subscription state is corrupt; resetting it.', error);
+        return createInitialState();
+      }
+
       if (!isNodeError(error) || error.code !== 'ENOENT') {
         throw error;
       }
 
-      return {
-        clientId: randomUUID(),
-        clientState: randomSecret(),
-        authToken: randomSecret(),
-      };
+      return createInitialState();
     }
   }
 
@@ -259,23 +298,53 @@ export class MailSubscriptionManager {
 
   private async recoverFromLifecycleEvent(
     state: MailSubscriptionState,
-    changeType: MailRemoteChangeEvent['changeType'],
+    event: MailRemoteChangeEvent,
   ) {
-    try {
-      if (changeType === 'subscriptionRemoved') {
-        state.subscriptionId = undefined;
-        state.expirationDateTime = undefined;
-        await this.saveState(state);
-        await this.start();
-        return;
-      }
-
-      if (changeType === 'reauthorizationRequired') {
-        await this.start();
-      }
-    } catch (error) {
-      console.warn('Mail subscription lifecycle recovery failed.', error);
+    if (event.kind !== 'lifecycle') {
+      return;
     }
+
+    if (event.changeType === 'subscriptionRemoved') {
+      state.subscriptionId = undefined;
+      state.expirationDateTime = undefined;
+    }
+
+    if (
+      event.changeType === 'subscriptionRemoved' ||
+      event.changeType === 'reauthorizationRequired'
+    ) {
+      const subscription = await this.ensureSubscription(state);
+      state.subscriptionId = subscription.id;
+      state.expirationDateTime = subscription.expirationDateTime;
+      await this.saveState(state);
+      await this.registerWithRelay(state);
+      this.scheduleRenewal(state);
+    }
+  }
+
+  private async deleteRemoteSubscription() {
+    let state: MailSubscriptionState;
+
+    try {
+      state = await this.loadState();
+    } catch (error) {
+      console.warn('Could not read mail subscription state during sign-out.', error);
+      return;
+    }
+
+    if (!state.subscriptionId) {
+      return;
+    }
+
+    try {
+      await this.options.graphClient.deleteSubscription(state.subscriptionId);
+    } catch (error) {
+      console.warn('Could not delete Microsoft Graph mail subscription.', error);
+    }
+
+    state.subscriptionId = undefined;
+    state.expirationDateTime = undefined;
+    await this.saveState(state);
   }
 }
 
@@ -317,6 +386,14 @@ function parseSocketData(data: unknown) {
 
 function randomSecret() {
   return randomBytes(32).toString('base64url');
+}
+
+function createInitialState(): MailSubscriptionState {
+  return {
+    clientId: randomUUID(),
+    clientState: randomSecret(),
+    authToken: randomSecret(),
+  };
 }
 
 function isExpired(expirationDateTime: string, now = new Date()) {

@@ -47,13 +47,14 @@ Create a local environment file:
 Copy-Item apps/desktop/.env.example apps/desktop/.env
 ```
 
-Set your Microsoft application client ID in `.env`:
+Edit `apps/desktop/.env` and set your Microsoft application client ID:
 
 ```dotenv
 MICROSOFT_CLIENT_ID=<Application client ID>
-RELAY_PUBLIC_URL=https://your-relay.example.com
-RELAY_ADMIN_TOKEN=<shared relay admin token>
 ```
+
+The relay variables are optional for basic local desktop use. Add them only when
+you are running a Graph update relay.
 
 Start the app in development mode:
 
@@ -111,21 +112,32 @@ desktop app keeps Microsoft tokens locally and creates the Graph subscription,
 while `apps/relay` receives Graph webhook POSTs and pushes compact invalidation
 events to the desktop app over WebSocket.
 
+The current relay is intended for a self-hosted, single-user deployment. It uses
+an in-memory store, so registrations and pending events are lost on process
+restart and are not shared across multiple relay instances. Add a durable
+`RelayStore` before running it as a production multi-instance service.
+
 Relay environment variables:
 
 ```dotenv
 RELAY_PUBLIC_URL=https://your-relay.example.com
-RELAY_ADMIN_TOKEN=<desktop registration token, at least 24 chars>
+RELAY_ADMIN_TOKEN=<shared relay admin token, at least 24 chars>
 PORT=3001
 HOST=0.0.0.0
 ```
+
+`apps/relay` reads these values from the host process environment.
+`apps/relay/.env.example` is a template unless your deployment runner loads it.
 
 Desktop relay environment variables:
 
 ```dotenv
 RELAY_PUBLIC_URL=https://your-relay.example.com
-RELAY_ADMIN_TOKEN=<same registration token>
+RELAY_ADMIN_TOKEN=<same shared relay admin token>
 ```
+
+Because Courrier is a public desktop client, do not use the shared relay admin
+token for a public multi-user relay. Treat it as a self-hosted deployment secret.
 
 ## Security Notes
 
@@ -137,3 +149,6 @@ Courrier keeps Electron renderer privileges narrow:
 - External navigation opens in the system browser instead of inside the app.
 - Microsoft tokens are cached with MSAL Node Extensions where platform support
   is available.
+- Plaintext token cache fallback is disabled by default. Set
+  `COURRIER_ALLOW_PLAINTEXT_TOKEN_CACHE=true` only if you accept storing tokens
+  without OS encryption on the current machine.

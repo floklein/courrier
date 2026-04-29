@@ -2,21 +2,13 @@ import { randomUUID } from 'node:crypto';
 import {
   graphNotificationCollectionSchema,
   mailRemoteChangeEventSchema,
+  relaySubscriptionRegistrationSchema,
   type MailRemoteChangeEvent,
 } from '@courrier/mail-contracts';
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import type { RelayConfig } from './config.js';
 import type { RelayStore } from './store.js';
 import type { RealtimeHub } from './realtime.js';
-
-const relaySubscriptionRegistrationSchema = z.object({
-  clientId: z.string().min(1),
-  clientState: z.string().min(24),
-  authToken: z.string().min(24),
-  subscriptionId: z.string().optional(),
-  expirationDateTime: z.string().optional(),
-});
 
 export function registerGraphWebhookRoutes({
   config,
@@ -82,19 +74,32 @@ export function registerGraphWebhookRoutes({
       const changeType = notification.lifecycleEvent ?? notification.changeType;
 
       if (!changeType) {
+        request.log.warn({ notification }, 'Graph notification missing change type');
         continue;
       }
 
-      const event: MailRemoteChangeEvent = mailRemoteChangeEventSchema.parse({
+      const eventResult = mailRemoteChangeEventSchema.safeParse({
         id: randomUUID(),
         clientId: subscription.clientId,
         subscriptionId: notification.subscriptionId,
+        kind: notification.lifecycleEvent ? 'lifecycle' : 'message-change',
         changeType,
         resource: notification.resource,
-        messageId: notification.resourceData?.id,
+        messageId: notification.lifecycleEvent
+          ? undefined
+          : (notification.resourceData?.id ?? getMessageIdFromResource(notification.resource)),
         receivedAt: new Date().toISOString(),
       });
 
+      if (!eventResult.success) {
+        request.log.warn(
+          { error: eventResult.error, notification },
+          'Graph notification could not be converted to a relay event',
+        );
+        continue;
+      }
+
+      const event: MailRemoteChangeEvent = eventResult.data;
       await store.appendEvent(event);
       realtime.sendMailChange(event);
     }
@@ -110,4 +115,18 @@ function getValidationToken(url: string) {
 
 function isAuthorized(authorization: string | undefined, token: string) {
   return authorization === `Bearer ${token}`;
+}
+
+function getMessageIdFromResource(resource: string | undefined) {
+  if (!resource) {
+    return undefined;
+  }
+
+  const quotedMessageId = /messages\('([^']+)'\)/i.exec(resource)?.[1];
+
+  if (quotedMessageId) {
+    return quotedMessageId;
+  }
+
+  return /\/messages\/([^/?#]+)/i.exec(resource)?.[1];
 }

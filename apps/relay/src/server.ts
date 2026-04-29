@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
+import { pathToFileURL } from 'node:url';
 import { loadConfig, type RelayConfig } from './config.js';
 import { registerGraphWebhookRoutes } from './graph-webhook.js';
 import { RealtimeHub } from './realtime.js';
@@ -25,7 +26,7 @@ export function buildServer({ config, store = new InMemoryRelayStore() }: BuildS
   return fastify;
 }
 
-if (import.meta.url === `file://${process.argv[1]?.replaceAll('\\', '/')}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const config = loadConfig();
   const server = buildServer({ config });
 

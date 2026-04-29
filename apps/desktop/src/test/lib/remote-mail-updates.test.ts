@@ -11,6 +11,7 @@ describe('invalidateRemoteMailUpdate', () => {
       id: 'event-1',
       clientId: 'desktop-1',
       subscriptionId: 'subscription-1',
+      kind: 'message-change',
       changeType: 'updated',
       messageId: 'message-1',
       receivedAt: '2026-04-29T10:00:00.000Z',

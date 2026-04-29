@@ -18,9 +18,9 @@ export const graphResourceDataSchema = z
 
 export const graphChangeNotificationSchema = z
   .object({
-    subscriptionId: z.string(),
+    subscriptionId: z.string().min(1),
     subscriptionExpirationDateTime: z.string().optional(),
-    clientState: z.string().optional(),
+    clientState: z.string().min(1).optional(),
     changeType: graphChangeTypeSchema.optional(),
     resource: z.string().optional(),
     tenantId: z.string().optional(),
@@ -53,15 +53,40 @@ export const relayClientMessageSchema = z.discriminatedUnion('type', [
   relayClientAckSchema,
 ]);
 
-export const mailRemoteChangeEventSchema = z.object({
+export const relaySubscriptionRegistrationSchema = z.object({
+  clientId: z.string().min(1),
+  clientState: z.string().min(24),
+  authToken: z.string().min(24),
+  subscriptionId: z.string().min(1).optional(),
+  expirationDateTime: z.string().datetime().optional(),
+});
+
+const mailRemoteChangeEventBaseSchema = z.object({
   id: z.string().min(1),
   clientId: z.string().min(1),
   subscriptionId: z.string().min(1),
-  changeType: graphChangeTypeSchema.or(graphLifecycleEventSchema),
   resource: z.string().optional(),
-  messageId: z.string().optional(),
   receivedAt: z.string().datetime(),
 });
+
+export const mailRemoteMessageChangeEventSchema =
+  mailRemoteChangeEventBaseSchema.extend({
+    kind: z.literal('message-change'),
+    changeType: graphChangeTypeSchema,
+    messageId: z.string().min(1).optional(),
+  });
+
+export const mailRemoteLifecycleEventSchema =
+  mailRemoteChangeEventBaseSchema.extend({
+    kind: z.literal('lifecycle'),
+    changeType: graphLifecycleEventSchema,
+    messageId: z.never().optional(),
+  });
+
+export const mailRemoteChangeEventSchema = z.discriminatedUnion('kind', [
+  mailRemoteMessageChangeEventSchema,
+  mailRemoteLifecycleEventSchema,
+]);
 
 export const relayServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
@@ -91,5 +116,8 @@ export type RelayClientRegistration = z.infer<
   typeof relayClientRegistrationSchema
 >;
 export type RelayClientAck = z.infer<typeof relayClientAckSchema>;
+export type RelaySubscriptionRegistration = z.infer<
+  typeof relaySubscriptionRegistrationSchema
+>;
 export type MailRemoteChangeEvent = z.infer<typeof mailRemoteChangeEventSchema>;
 export type RelayServerMessage = z.infer<typeof relayServerMessageSchema>;

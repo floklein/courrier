@@ -1,10 +1,8 @@
 import { ipcMain } from 'electron';
 import type { GraphClient } from './graph-client';
-import { AuthRequiredError, type AuthService } from './auth-service';
+import type { AuthService } from './auth-service';
 import { assertTrustedSender } from './security';
 import type {
-  MailMessageDetail,
-  PagedMessages,
   ReplyToMessageInput,
   SendMailInput,
 } from '../lib/mail-types';
@@ -14,6 +12,7 @@ export function registerIpcHandlers(
   graphClient: GraphClient,
   options: {
     startMailSubscriptions?: () => Promise<void>;
+    stopMailSubscriptions?: () => Promise<void>;
   } = {},
 ) {
   ipcMain.handle('auth:get-session', (event) => {
@@ -30,33 +29,26 @@ export function registerIpcHandlers(
 
     return session;
   });
-  ipcMain.handle('auth:sign-out', (event) => {
+  ipcMain.handle('auth:sign-out', async (event) => {
     assertTrustedSender(event);
+    await options.stopMailSubscriptions?.();
     return authService.signOut();
   });
 
   ipcMain.handle('mail:list-folders', (event) => {
     assertTrustedSender(event);
-    return graphClient.listFolders().catch((error: unknown) =>
-      handleAuthRequiredRead(error, []),
-    );
+    return graphClient.listFolders();
   });
   ipcMain.handle(
     'mail:list-messages',
     (event, folderId: string, pageUrl?: string, searchQuery?: string) => {
       assertTrustedSender(event);
-      return graphClient
-        .listMessages(folderId, pageUrl, searchQuery)
-        .catch((error: unknown) =>
-          handleAuthRequiredRead<PagedMessages>(error, { messages: [] }),
-        );
+      return graphClient.listMessages(folderId, pageUrl, searchQuery);
     },
   );
   ipcMain.handle('mail:get-message', (event, folderId: string, messageId: string) => {
     assertTrustedSender(event);
-    return graphClient.getMessage(folderId, messageId).catch((error: unknown) =>
-      handleAuthRequiredRead<MailMessageDetail | undefined>(error, undefined),
-    );
+    return graphClient.getMessage(folderId, messageId);
   });
   ipcMain.handle(
     'mail:mark-message-read-state',
@@ -87,15 +79,4 @@ export function registerIpcHandlers(
       return graphClient.replyToMessage(input);
     },
   );
-}
-
-function handleAuthRequiredRead<T>(error: unknown, fallback: T): T {
-  if (
-    error instanceof AuthRequiredError ||
-    (error instanceof Error && error.message === 'Microsoft sign-in is required.')
-  ) {
-    return fallback;
-  }
-
-  throw error;
 }

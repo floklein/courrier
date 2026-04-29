@@ -117,13 +117,15 @@ app.on('ready', () => {
 
   Menu.setApplicationMenu(null);
   registerIpcHandlers(authService, graphClient, {
-    startMailSubscriptions: () => startMailSubscriptions(subscriptionManager),
+    startMailSubscriptions: () => subscriptionManager.start(),
+    stopMailSubscriptions: () =>
+      subscriptionManager.stop({ deleteRemoteSubscription: true }),
   });
   registerWindowIpcHandlers();
   createWindow();
   void startMailSubscriptions(subscriptionManager);
   app.on('before-quit', () => {
-    subscriptionManager.stop();
+    void subscriptionManager.stop();
   });
 });
 

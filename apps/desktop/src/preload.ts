@@ -8,7 +8,10 @@ import type {
   SendMailInput,
 } from './lib/mail-types';
 import type { ComposeWindowDraft } from './lib/compose-window';
-import type { MailRemoteChangeEvent } from '@courrier/mail-contracts';
+import {
+  mailRemoteChangeEventSchema,
+  type MailRemoteChangeEvent,
+} from '@courrier/mail-contracts';
 
 const courrier = {
   platform: process.platform,
@@ -56,7 +59,11 @@ const courrier = {
       ipcRenderer.invoke('mail:reply-to-message', input) as Promise<void>,
     onRemoteChange: (listener: (event: MailRemoteChangeEvent) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, change: unknown) => {
-        listener(change as MailRemoteChangeEvent);
+        const result = mailRemoteChangeEventSchema.safeParse(change);
+
+        if (result.success) {
+          listener(result.data);
+        }
       };
 
       ipcRenderer.on('mail:remote-change', handler);

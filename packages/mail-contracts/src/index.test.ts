@@ -43,6 +43,7 @@ describe('mail contract schemas', () => {
         id: 'event-1',
         clientId: 'desktop-1',
         subscriptionId: 'subscription-1',
+        kind: 'lifecycle',
         changeType: 'subscriptionRemoved',
         receivedAt: '2026-04-29T10:00:00.000Z',
       },

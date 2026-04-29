@@ -83,6 +83,7 @@ describe('MailSubscriptionManager', () => {
         id: 'event-1',
         clientId: 'client-1',
         subscriptionId: 'subscription-1',
+        kind: 'message-change',
         changeType: 'created',
         messageId: 'message-1',
         receivedAt: '2026-04-29T10:00:00.000Z',
@@ -104,6 +105,14 @@ describe('MailSubscriptionManager', () => {
     expect(rendererSend).toHaveBeenCalledWith(
       'mail:remote-change',
       expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
+    );
+    await waitFor(() =>
+      MockWebSocket.instances[0].sent.some(
+        (message) =>
+          isRecord(message) &&
+          message.type === 'ack' &&
+          message.eventId === 'event-1',
+      ),
     );
     expect(MockWebSocket.instances[0].sent).toContainEqual({
       type: 'ack',
@@ -196,6 +205,7 @@ describe('MailSubscriptionManager', () => {
         id: 'event-removed',
         clientId: 'client-1',
         subscriptionId: 'subscription-1',
+        kind: 'lifecycle',
         changeType: 'subscriptionRemoved',
         receivedAt: '2026-04-29T10:00:00.000Z',
       },
@@ -272,4 +282,8 @@ async function waitFor(predicate: () => boolean | Promise<boolean>) {
   }
 
   throw new Error('Timed out waiting for condition.');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

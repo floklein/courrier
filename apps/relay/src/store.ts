@@ -1,20 +1,9 @@
-import type { MailRemoteChangeEvent } from '@courrier/mail-contracts';
+import type {
+  MailRemoteChangeEvent,
+  RelaySubscriptionRegistration,
+} from '@courrier/mail-contracts';
 
-export interface RelaySubscription {
-  clientId: string;
-  clientState: string;
-  authToken: string;
-  subscriptionId?: string;
-  expirationDateTime?: string;
-}
-
-export interface RegisterRelaySubscriptionInput {
-  clientId: string;
-  clientState: string;
-  authToken: string;
-  subscriptionId?: string;
-  expirationDateTime?: string;
-}
+export type RelaySubscription = RelaySubscriptionRegistration;
 
 export interface RelayStore {
   upsertSubscription(subscription: RelaySubscription): Promise<void>;

@@ -5,6 +5,16 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".vite/**", "out/**"]
     },
+    "dev": {
+      "dependsOn": ["^build"],
+      "with": ["@courrier/mail-contracts#watch"],
+      "cache": false,
+      "persistent": true
+    },
+    "watch": {
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []

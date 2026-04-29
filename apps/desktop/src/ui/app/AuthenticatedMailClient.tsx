@@ -7,7 +7,10 @@ import { useMailActions } from '../../hooks/useMailActions';
 import { useMailClientState } from '../../hooks/useMailClientState';
 import { api } from '../../lib/api-client';
 import type { ComposeWindowDraft } from '../../lib/compose-window';
-import { isGraphItemNotFoundError } from '../../lib/graph-errors';
+import {
+  isGraphItemNotFoundError,
+  isMicrosoftSignInRequiredError,
+} from '../../lib/graph-errors';
 import type {
   AuthSession,
   MailMessageSummary,
@@ -54,6 +57,7 @@ export function AuthenticatedMailClient({
     isSendingMessage,
     markReadMutation,
     moveMutation,
+    queryClient,
     replyToMessageMutation,
     sendMessageMutation,
   } = useMailActions({
@@ -66,6 +70,24 @@ export function AuthenticatedMailClient({
   });
 
   useEffect(() => cleanupLiveRegion, []);
+
+  useEffect(() => {
+    if (
+      !isMicrosoftSignInRequiredError(foldersQuery.error) &&
+      !isMicrosoftSignInRequiredError(messagesQuery.error) &&
+      !isMicrosoftSignInRequiredError(messageQuery.error)
+    ) {
+      return;
+    }
+
+    queryClient.removeQueries({ queryKey: ['mail'] });
+    void queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+  }, [
+    foldersQuery.error,
+    messageQuery.error,
+    messagesQuery.error,
+    queryClient,
+  ]);
 
   useEffect(() => {
     if (!currentFolder || messageId || !messages[0]) {

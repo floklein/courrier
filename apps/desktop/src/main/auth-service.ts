@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {
   InteractionRequiredAuthError,
   PublicClientApplication,
@@ -203,6 +204,7 @@ export class AuthService {
         throw error;
       }
 
+      console.warn('Resetting unreadable Microsoft auth cache.', error);
       await resetAuthCache();
       return [];
     }
@@ -234,9 +236,17 @@ async function createCachePlugin() {
     persistence = await createEncryptedPersistence(cachePath);
   } catch (error) {
     if (shouldResetEncryptedCache(error)) {
+      console.warn('Resetting unreadable Microsoft auth cache.', error);
       await fs.rm(cachePath, { force: true });
       persistence = await createEncryptedPersistence(cachePath);
     } else if (shouldUsePlaintextCacheFallback(error)) {
+      if (process.env.COURRIER_ALLOW_PLAINTEXT_TOKEN_CACHE !== 'true') {
+        throw new AuthConfigurationError(
+          'Encrypted Microsoft token storage is unavailable. Set COURRIER_ALLOW_PLAINTEXT_TOKEN_CACHE=true only if you accept storing tokens without OS encryption.',
+        );
+      }
+
+      console.warn('Using plaintext Microsoft auth cache fallback.', error);
       persistence = await FilePersistence.create(cachePath);
     } else {
       throw error;

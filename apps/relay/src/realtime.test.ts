@@ -57,6 +57,7 @@ describe('RealtimeHub', () => {
       id: 'event-1',
       clientId: 'desktop-1',
       subscriptionId: 'subscription-1',
+      kind: 'message-change',
       changeType: 'created',
       receivedAt: new Date().toISOString(),
     });
@@ -64,6 +65,7 @@ describe('RealtimeHub', () => {
       id: 'event-2',
       clientId: 'desktop-1',
       subscriptionId: 'subscription-1',
+      kind: 'message-change',
       changeType: 'updated',
       receivedAt: new Date().toISOString(),
     });
