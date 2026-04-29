@@ -52,17 +52,18 @@ $env:MICROSOFT_CLIENT_ID = "<Application client ID>"
 You can also use the checked-in example file:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item apps/desktop/.env.example apps/desktop/.env
 ```
 
-Then edit `.env`:
+Then edit `apps/desktop/.env`:
 
 ```dotenv
 MICROSOFT_CLIENT_ID=<Application client ID>
 ```
 
-`.env` is ignored by Git and must not be committed. The app loads this file in
-the Electron main process before it creates the Microsoft auth service.
+`apps/desktop/.env` is ignored by Git and must not be committed. The app loads
+this file in the Electron main process before it creates the Microsoft auth
+service.
 
 ## 4. Verify the flow
 
