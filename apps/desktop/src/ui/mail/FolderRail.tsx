@@ -2,9 +2,11 @@ import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { PenLine } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { ScrollArea } from '../../components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
@@ -81,26 +83,28 @@ export function FolderRail({
           <TooltipContent>Compose mail</TooltipContent>
         </Tooltip>
       </div>
-      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-        {isLoading && <RailStatus label="Loading folders" />}
-        {!isLoading && error && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs leading-5 text-destructive max-lg:hidden">
-            {error.message}
-          </div>
-        )}
-        {!isLoading &&
-          !error &&
-          folders.map((folder) => (
-            <FolderRailItem
-              key={folder.id}
-              currentFolderId={currentFolderId}
-              folder={folder}
-              isActionPending={isActionPending}
-              onMoveMessage={onMoveMessage}
-            />
-          ))}
-      </nav>
-      <div className="shrink-0 border-t p-2">
+      <ScrollArea className="min-h-0 flex-1 overflow-hidden">
+        <nav className="flex flex-col gap-1 p-2">
+          {isLoading && <RailStatus label="Loading folders" />}
+          {!isLoading && error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs leading-5 text-destructive max-lg:hidden">
+              {error.message}
+            </div>
+          )}
+          {!isLoading &&
+            !error &&
+            folders.map((folder) => (
+              <FolderRailItem
+                key={folder.id}
+                currentFolderId={currentFolderId}
+                folder={folder}
+                isActionPending={isActionPending}
+                onMoveMessage={onMoveMessage}
+              />
+            ))}
+        </nav>
+      </ScrollArea>
+      <div className="shrink-0 border-t p-2 max-lg:flex max-lg:justify-center">
         <UserMenu
           accountEmail={accountEmail}
           accountName={accountName}
@@ -130,6 +134,11 @@ function FolderRailItem({
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const Icon = folderIcons[folder.icon];
   const isActive = folder.id === currentFolderId;
+  const indentStyle = {
+    '--folder-rail-item-indent': folder.depth
+      ? `${8 + folder.depth * 14}px`
+      : '0.75rem',
+  } as CSSProperties;
 
   useEffect(() => {
     const element = dropRef.current;
@@ -162,30 +171,35 @@ function FolderRailItem({
   }, [folder.id, isActionPending, onMoveMessage]);
 
   return (
-    <Link
-      ref={dropRef}
-      to="/mail/$folderId"
-      params={{ folderId: encodeRouteId(folder.id) }}
-      className={cn(
-        'flex h-10 shrink-0 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
-        isActive && 'bg-accent text-accent-foreground',
-        isDraggingOver &&
-          'bg-primary/10 text-accent-foreground ring-2 ring-inset ring-primary/30',
-      )}
-      style={{
-        paddingLeft: folder.depth ? 8 + folder.depth * 14 : undefined,
-      }}
-    >
-      <Icon className="size-4 shrink-0" />
-      <span className="truncate max-lg:hidden">{folder.label}</span>
-      {folder.unreadCount > 0 && (
-        <Badge
-          variant={isActive ? 'default' : 'secondary'}
-          className="ml-auto max-lg:hidden"
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          ref={dropRef}
+          to="/mail/$folderId"
+          params={{ folderId: encodeRouteId(folder.id) }}
+          className={cn(
+            'flex h-10 shrink-0 items-center gap-3 rounded-md pr-3 pl-[var(--folder-rail-item-indent)] text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
+            isActive && 'bg-accent text-accent-foreground',
+            isDraggingOver &&
+              'bg-primary/10 text-accent-foreground ring-2 ring-inset ring-primary/30',
+          )}
+          style={indentStyle}
         >
-          {folder.unreadCount}
-        </Badge>
-      )}
-    </Link>
+          <Icon className="size-4 shrink-0" />
+          <span className="truncate max-lg:hidden">{folder.label}</span>
+          {folder.unreadCount > 0 && (
+            <Badge
+              variant={isActive ? 'default' : 'secondary'}
+              className="ml-auto max-lg:hidden"
+            >
+              {folder.unreadCount}
+            </Badge>
+          )}
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="lg:hidden">
+        {folder.label}
+      </TooltipContent>
+    </Tooltip>
   );
 }
