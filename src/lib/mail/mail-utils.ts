@@ -32,8 +32,50 @@ export function formatMailDate(value: string, style: 'short' | 'long') {
     return value;
   }
 
+  if (style === 'short') {
+    return formatShortMailDate(date);
+  }
+
   return new Intl.DateTimeFormat(undefined, {
-    dateStyle: style === 'short' ? 'medium' : 'full',
-    timeStyle: style === 'short' ? undefined : 'short',
+    dateStyle: 'full',
+    timeStyle: 'short',
   }).format(date);
+}
+
+function formatShortMailDate(date: Date) {
+  const now = new Date();
+
+  if (isSameLocalDay(date, now)) {
+    return new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  }
+
+  const dayMonth = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(date);
+
+  if (date.getFullYear() !== now.getFullYear()) {
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(date);
+  }
+
+  const weekday = new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+  }).format(date);
+
+  return `${weekday} ${dayMonth}`;
+}
+
+function isSameLocalDay(date: Date, otherDate: Date) {
+  return (
+    date.getFullYear() === otherDate.getFullYear() &&
+    date.getMonth() === otherDate.getMonth() &&
+    date.getDate() === otherDate.getDate()
+  );
 }
