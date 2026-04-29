@@ -7,6 +7,7 @@ import { useMailActions } from '../../hooks/useMailActions';
 import { useMailClientState } from '../../hooks/useMailClientState';
 import { api } from '../../lib/api-client';
 import type { ComposeWindowDraft } from '../../lib/compose-window';
+import { isGraphItemNotFoundError } from '../../lib/graph-errors';
 import type {
   AuthSession,
   MailMessageSummary,
@@ -87,6 +88,18 @@ export function AuthenticatedMailClient({
     closeCompose();
     manuallyMarkedUnreadMessageId.current = undefined;
   }, [closeCompose, resolvedFolderId]);
+
+  useEffect(() => {
+    if (!messageId || !isGraphItemNotFoundError(messageQuery.error)) {
+      return;
+    }
+
+    void navigate({
+      to: '/mail/$folderId',
+      params: { folderId: encodeRouteId(resolvedFolderId) },
+      replace: true,
+    });
+  }, [messageId, messageQuery.error, navigate, resolvedFolderId]);
 
   useEffect(() => {
     if (

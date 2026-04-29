@@ -13,7 +13,12 @@
     "plugin:import/typescript"
   ],
   "settings": {
-    "import/ignore": ["^@tailwindcss/vite$", "^vitest/config$"]
+    "import/ignore": [
+      "^@tailwindcss/vite$",
+      "^@vitejs/plugin-react$",
+      "^vite$",
+      "^vitest/config$"
+    ]
   },
   "rules": {
     "import/no-unresolved": [
@@ -21,6 +26,8 @@
       {
         "ignore": [
           "^@tailwindcss/vite$",
+          "^@vitejs/plugin-react$",
+          "^vite$",
           "^vitest/config$",
           "^@/",
           "^virtual:darkreader-script$"
