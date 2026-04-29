@@ -37,26 +37,28 @@ export function UserMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="h-12 w-full justify-start gap-2 px-2 max-lg:size-10 max-lg:justify-center max-lg:px-0"
-          aria-label="User menu"
-        >
-          <Avatar className="size-8 max-lg:size-6">
-            <AvatarFallback>{getInitials(accountName)}</AvatarFallback>
-          </Avatar>
-          <span className="flex min-w-0 flex-1 flex-col items-start max-lg:hidden">
-            <span className="truncate text-sm font-semibold leading-5">
-              {accountName}
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            className="h-12 w-full justify-start gap-2 px-2 max-lg:size-10 max-lg:justify-center max-lg:px-0"
+            aria-label="User menu"
+          >
+            <Avatar className="size-8 max-lg:size-6">
+              <AvatarFallback>{getInitials(accountName)}</AvatarFallback>
+            </Avatar>
+            <span className="flex min-w-0 flex-1 flex-col items-start max-lg:hidden">
+              <span className="truncate text-sm font-semibold leading-5">
+                {accountName}
+              </span>
+              <span className="truncate text-xs font-normal leading-4 text-muted-foreground">
+                {accountEmail}
+              </span>
             </span>
-            <span className="truncate text-xs font-normal leading-4 text-muted-foreground">
-              {accountEmail}
-            </span>
-          </span>
-          <ChevronsUpDown data-icon="inline-end" className="ml-auto max-lg:hidden" />
-        </Button>
-      </DropdownMenuTrigger>
+            <ChevronsUpDown data-icon="inline-end" className="ml-auto max-lg:hidden" />
+          </Button>
+        }
+      />
       <DropdownMenuContent side="right" align="end" className="w-72 p-0">
         <DropdownMenuLabel className="flex items-center gap-3 p-3">
           <Avatar className="size-9">

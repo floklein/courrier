@@ -79,16 +79,18 @@ export function FolderRail({
           </span>
         </div>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon-sm"
-              aria-label="Compose mail"
-              disabled={isActionPending}
-              onClick={onComposeMessage}
-            >
-              <PenLine data-icon="inline-start" />
-            </Button>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-sm"
+                aria-label="Compose mail"
+                disabled={isActionPending}
+                onClick={onComposeMessage}
+              >
+                <PenLine data-icon="inline-start" />
+              </Button>
+            }
+          />
           <TooltipContent>Compose mail</TooltipContent>
         </Tooltip>
       </div>
@@ -184,34 +186,36 @@ function FolderRailItem({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Link
-          ref={dropRef}
-          to="/mail/$folderId"
-          params={{ folderId: encodeRouteId(folder.id) }}
-          onFocus={() => onPrefetchFolder(folder.id)}
-          onPointerEnter={() => onPrefetchFolder(folder.id)}
-          onTouchStart={() => onPrefetchFolder(folder.id)}
-          className={cn(
-            'flex h-10 shrink-0 items-center gap-3 rounded-md pr-3 pl-[var(--folder-rail-item-indent)] text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
-            isActive && 'bg-accent text-accent-foreground',
-            isDraggingOver &&
-              'bg-primary/10 text-accent-foreground ring-2 ring-inset ring-primary/30',
-          )}
-          style={indentStyle}
-        >
-          <Icon className="size-4 shrink-0" />
-          <span className="truncate max-lg:hidden">{folder.label}</span>
-          {folder.unreadCount > 0 && (
-            <Badge
-              variant={isActive ? 'default' : 'secondary'}
-              className="ml-auto max-lg:hidden"
-            >
-              {folder.unreadCount}
-            </Badge>
-          )}
-        </Link>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <Link
+            ref={dropRef}
+            to="/mail/$folderId"
+            params={{ folderId: encodeRouteId(folder.id) }}
+            onFocus={() => onPrefetchFolder(folder.id)}
+            onPointerEnter={() => onPrefetchFolder(folder.id)}
+            onTouchStart={() => onPrefetchFolder(folder.id)}
+            className={cn(
+              'flex h-10 shrink-0 items-center gap-3 rounded-md pr-3 pl-[var(--folder-rail-item-indent)] text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
+              isActive && 'bg-accent text-accent-foreground',
+              isDraggingOver &&
+                'bg-primary/10 text-accent-foreground ring-2 ring-inset ring-primary/30',
+            )}
+            style={indentStyle}
+          >
+            <Icon className="size-4 shrink-0" />
+            <span className="truncate max-lg:hidden">{folder.label}</span>
+            {folder.unreadCount > 0 && (
+              <Badge
+                variant={isActive ? 'default' : 'secondary'}
+                className="ml-auto max-lg:hidden"
+              >
+                {folder.unreadCount}
+              </Badge>
+            )}
+          </Link>
+        }
+      />
       <TooltipContent side="right" className="lg:hidden">
         {folder.label}
       </TooltipContent>

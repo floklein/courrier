@@ -220,7 +220,7 @@ export function AuthenticatedMailClient({
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delay={200}>
       <main className="grid h-full min-h-0 grid-cols-[240px_minmax(280px,360px)_minmax(0,1fr)] bg-background max-lg:grid-cols-[76px_minmax(280px,340px)_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)]">
         <FolderRail
           accountEmail={session.account.username}

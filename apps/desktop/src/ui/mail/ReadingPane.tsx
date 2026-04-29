@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { ArrowLeft, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
+import { Button, buttonVariants } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -120,22 +120,22 @@ export function ReadingPane({
       <header className="app-window-header app-window-controls-end app-window-controls-start-mobile flex h-16 shrink-0 items-center justify-between gap-4 border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Back to message list"
-                className="hidden shrink-0 max-md:inline-flex"
-                asChild
-              >
+            <TooltipTrigger
+              render={
                 <Link
                   to="/mail/$folderId"
                   params={{ folderId: encodeRouteId(folderId) }}
+                  aria-label="Back to message list"
+                  className={buttonVariants({
+                    variant: 'ghost',
+                    size: 'icon-sm',
+                    className: 'hidden shrink-0 max-md:inline-flex',
+                  })}
                 >
                   <ArrowLeft data-icon="inline-start" />
                 </Link>
-              </Button>
-            </TooltipTrigger>
+              }
+            />
             <TooltipContent>Back to message list</TooltipContent>
           </Tooltip>
           <div className="min-w-0">
@@ -162,18 +162,22 @@ export function ReadingPane({
           />
           <DropdownMenu>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="More actions"
-                    disabled={isActionPending}
-                  >
-                    <MoreHorizontal data-icon="inline-start" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="More actions"
+                        disabled={isActionPending}
+                      >
+                        <MoreHorizontal data-icon="inline-start" />
+                      </Button>
+                    }
+                  />
+                }
+              />
               <TooltipContent>More actions</TooltipContent>
             </Tooltip>
             <MailActionDropdownContent
