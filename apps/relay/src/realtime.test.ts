@@ -10,6 +10,40 @@ const config = {
 };
 
 describe('RealtimeHub', () => {
+  it('accepts WebSocket registration after relay subscription registration', async () => {
+    const store = new InMemoryRelayStore();
+    const server = buildServer({ config, store });
+
+    await store.upsertSubscription({
+      clientId: 'desktop-1',
+      clientState: 'client-state-with-enough-length',
+      authToken: 'auth-token-with-enough-length',
+    });
+    await server.ready();
+
+    const socket = await server.injectWS('/ws');
+    const messagePromise = new Promise<string>((resolve) => {
+      socket.once('message', (message) => {
+        resolve(message.toString());
+      });
+    });
+
+    socket.send(
+      JSON.stringify({
+        type: 'register',
+        clientId: 'desktop-1',
+        token: 'auth-token-with-enough-length',
+      }),
+    );
+
+    await expect(messagePromise).resolves.toBe(
+      JSON.stringify({ type: 'ready', clientId: 'desktop-1' }),
+    );
+
+    socket.close();
+    await server.close();
+  });
+
   it('replays events after the last acknowledged event', async () => {
     const store = new InMemoryRelayStore();
     const server = buildServer({ config, store });

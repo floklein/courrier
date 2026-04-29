@@ -15,10 +15,12 @@ export function buildServer({ config, store = new InMemoryRelayStore() }: BuildS
   const realtime = new RealtimeHub(store);
 
   fastify.register(websocket);
+  fastify.register(async (websocketFastify) => {
+    realtime.registerRoutes(websocketFastify);
+  });
 
   fastify.get('/health', async () => ({ ok: true }));
   registerGraphWebhookRoutes({ config, fastify, realtime, store });
-  realtime.registerRoutes(fastify);
 
   return fastify;
 }
