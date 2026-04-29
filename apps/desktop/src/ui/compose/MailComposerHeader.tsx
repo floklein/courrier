@@ -49,52 +49,58 @@ export function MailComposerHeader({
       <div className="flex shrink-0 items-center gap-1">
         {onMinimize && (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Minimize composer"
-                disabled={isSending}
-                onClick={onMinimize}
-              >
-                <Minus data-icon="inline-start" />
-              </Button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Minimize composer"
+                  disabled={isSending}
+                  onClick={onMinimize}
+                >
+                  <Minus data-icon="inline-start" />
+                </Button>
+              }
+            />
             <TooltipContent>Minimize</TooltipContent>
           </Tooltip>
         )}
         {onMoveToWindow && (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Move composer to window"
-                disabled={isSending}
-                onClick={() => onMoveToWindow(currentDraft)}
-              >
-                <ExternalLink data-icon="inline-start" />
-              </Button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Move composer to window"
+                  disabled={isSending}
+                  onClick={() => onMoveToWindow(currentDraft)}
+                >
+                  <ExternalLink data-icon="inline-start" />
+                </Button>
+              }
+            />
             <TooltipContent>Open in window</TooltipContent>
           </Tooltip>
         )}
         {!useWindowHeader && (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Cancel composer"
-                disabled={isSending}
-                onClick={onClose}
-              >
-                <X data-icon="inline-start" />
-              </Button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Cancel composer"
+                  disabled={isSending}
+                  onClick={onClose}
+                >
+                  <X data-icon="inline-start" />
+                </Button>
+              }
+            />
             <TooltipContent>Cancel</TooltipContent>
           </Tooltip>
         )}

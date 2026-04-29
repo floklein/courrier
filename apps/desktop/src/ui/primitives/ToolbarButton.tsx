@@ -19,17 +19,19 @@ export function ToolbarButton({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          disabled={disabled}
-          onClick={onClick}
-        >
-          <Icon data-icon="inline-start" />
-        </Button>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            disabled={disabled}
+            onClick={onClick}
+          >
+            <Icon data-icon="inline-start" />
+          </Button>
+        }
+      />
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );

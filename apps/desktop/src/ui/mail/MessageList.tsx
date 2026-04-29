@@ -192,17 +192,19 @@ export function MessageList({
               className="h-8"
             />
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Clear search"
-                  onClick={clearSearch}
-                >
-                  <X data-icon="inline-start" />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Clear search"
+                    onClick={clearSearch}
+                  >
+                    <X data-icon="inline-start" />
+                  </Button>
+                }
+              />
               <TooltipContent>Clear search</TooltipContent>
             </Tooltip>
           </form>
@@ -222,16 +224,18 @@ export function MessageList({
             </div>
             <div className="flex items-center gap-1">
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Search mail"
-                    onClick={() => setIsSearching(true)}
-                  >
-                    <Search data-icon="inline-start" />
-                  </Button>
-                </TooltipTrigger>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Search mail"
+                      onClick={() => setIsSearching(true)}
+                    >
+                      <Search data-icon="inline-start" />
+                    </Button>
+                  }
+                />
                 <TooltipContent>Search mail</TooltipContent>
               </Tooltip>
             </div>
@@ -242,57 +246,58 @@ export function MessageList({
       {!isLoading && error && <PanelStatus label={error.message} />}
       {!isLoading && !error && messages.length > 0 && (
         <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <div
-              ref={scrollParentRef}
-              className="min-h-0 min-w-0 flex-1 overflow-auto"
-              onContextMenu={handleContextMenu}
-            >
+          <ContextMenuTrigger
+            render={
               <div
-                className="relative w-full min-w-0 max-w-full"
-                style={{ height: rowVirtualizer.getTotalSize() }}
+                ref={scrollParentRef}
+                className="min-h-0 min-w-0 flex-1 overflow-auto"
+                onContextMenu={handleContextMenu}
               >
-                {virtualRows.map((virtualRow) => {
-                  const message = messages[virtualRow.index];
-
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      ref={rowVirtualizer.measureElement}
-                      data-index={virtualRow.index}
-                      className="absolute left-0 top-0 w-full"
-                      style={{
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                    >
-                      {message ? (
-                        <MessageListItem
-                          folderId={folderId}
-                          isSelected={message.id === selectedMessageId}
-                          isActionPending={isActionPending}
-                          message={message}
-                          onDragActiveChange={onDragActiveChange}
-                        />
-                      ) : (
-                        <div className="flex h-12 items-center justify-center gap-2 text-sm text-muted-foreground">
-                          {isFetchingNextPage && (
-                            <Loader2 className="size-4 animate-spin" />
-                          )}
-                          {isFetchingNextPage ? (
-                            'Loading more messages...'
-                          ) : (
-                            <Button variant="ghost" onClick={onLoadMore}>
-                              Load more
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                <div
+                  className="relative w-full min-w-0 max-w-full"
+                  style={{ height: rowVirtualizer.getTotalSize() }}
+                >
+                  {virtualRows.map((virtualRow) => {
+                    const message = messages[virtualRow.index];
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        ref={rowVirtualizer.measureElement}
+                        data-index={virtualRow.index}
+                        className="absolute left-0 top-0 w-full"
+                        style={{
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        {message ? (
+                          <MessageListItem
+                            folderId={folderId}
+                            isSelected={message.id === selectedMessageId}
+                            isActionPending={isActionPending}
+                            message={message}
+                            onDragActiveChange={onDragActiveChange}
+                          />
+                        ) : (
+                          <div className="flex h-12 items-center justify-center gap-2 text-sm text-muted-foreground">
+                            {isFetchingNextPage && (
+                              <Loader2 className="size-4 animate-spin" />
+                            )}
+                            {isFetchingNextPage ? (
+                              'Loading more messages...'
+                            ) : (
+                              <Button variant="ghost" onClick={onLoadMore}>
+                                Load more
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </ContextMenuTrigger>
+            }
+          />
           {contextMessage && (
             <MailActionContextContent
               currentFolderId={folderId}

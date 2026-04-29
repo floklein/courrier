@@ -121,19 +121,21 @@ export function RichTextMailEditorToolbar({
 
       <ButtonGroup aria-label="Link formatting">
         <Popover open={isLinkOpen} onOpenChange={setIsLinkOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant={editor?.isActive('link') ? 'secondary' : 'outline'}
-              size="icon-sm"
-              aria-label="Edit link"
-              title="Edit link"
-              disabled={isDisabled}
-              onClick={openLinkEditor}
-            >
-              <LinkIcon data-icon="inline-start" />
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant={editor?.isActive('link') ? 'secondary' : 'outline'}
+                size="icon-sm"
+                aria-label="Edit link"
+                title="Edit link"
+                disabled={isDisabled}
+                onClick={openLinkEditor}
+              >
+                <LinkIcon data-icon="inline-start" />
+              </Button>
+            }
+          />
           <PopoverContent className="w-80" align="start">
             <form
               className="flex flex-col gap-3"
