@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2, Search, X } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { ScrollArea } from '../../components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
@@ -13,6 +13,10 @@ import { cn } from '../../lib/utils';
 import { PanelStatus } from '../app/StatusViews';
 import { EmptyFolder } from './EmptyFolder';
 import { MessageListItem } from './MessageListItem';
+
+const messageRowEstimate = 104;
+const loaderRowEstimate = 52;
+const overscanRows = 8;
 
 export function MessageList({
   folderId,
@@ -64,6 +68,17 @@ export function MessageList({
   const [isSearching, setIsSearching] = useState(Boolean(searchQuery));
   const [draftSearch, setDraftSearch] = useState(searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollParentRef = useRef<HTMLDivElement>(null);
+  const loadMoreRequestLengthRef = useRef<number | null>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: hasNextPage ? messages.length + 1 : messages.length,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: (index) =>
+      index >= messages.length ? loaderRowEstimate : messageRowEstimate,
+    getItemKey: (index) => messages[index]?.id ?? `load-more-${folderId}`,
+    overscan: overscanRows,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
 
   useEffect(() => {
     setDraftSearch(searchQuery);
@@ -77,6 +92,34 @@ export function MessageList({
 
     searchInputRef.current?.focus();
   }, [isSearching]);
+
+  useEffect(() => {
+    loadMoreRequestLengthRef.current = null;
+  }, [folderId, messages.length, searchQuery]);
+
+  useEffect(() => {
+    const lastVirtualRow = virtualRows.at(-1);
+
+    if (!lastVirtualRow) {
+      return;
+    }
+
+    if (
+      lastVirtualRow.index >= messages.length &&
+      hasNextPage &&
+      !isFetchingNextPage &&
+      loadMoreRequestLengthRef.current !== messages.length
+    ) {
+      loadMoreRequestLengthRef.current = messages.length;
+      onLoadMore();
+    }
+  }, [
+    hasNextPage,
+    isFetchingNextPage,
+    messages.length,
+    onLoadMore,
+    virtualRows,
+  ]);
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -160,38 +203,59 @@ export function MessageList({
       {isLoading && <PanelStatus label="Loading messages..." />}
       {!isLoading && error && <PanelStatus label={error.message} />}
       {!isLoading && !error && messages.length > 0 && (
-        <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <div className="flex w-full min-w-0 max-w-full flex-col overflow-hidden">
-            {messages.map((message) => (
-              <MessageListItem
-                key={message.id}
-                folderId={folderId}
-                folders={folders}
-                isSelected={message.id === selectedMessageId}
-                isActionPending={isActionPending}
-                message={message}
-                onDelete={onDeleteMessage}
-                onDragActiveChange={onDragActiveChange}
-                onMarkReadState={onMarkMessageReadState}
-                onMove={onMoveMessage}
-                onReply={onReplyToMessage}
-              />
-            ))}
-            {hasNextPage && (
-              <Button
-                variant="ghost"
-                className="m-2"
-                disabled={isFetchingNextPage}
-                onClick={onLoadMore}
-              >
-                {isFetchingNextPage && (
-                  <Loader2 className="size-4 animate-spin" />
-                )}
-                Load more
-              </Button>
-            )}
+        <div
+          ref={scrollParentRef}
+          className="min-h-0 min-w-0 flex-1 overflow-auto"
+        >
+          <div
+            className="relative w-full min-w-0 max-w-full"
+            style={{ height: rowVirtualizer.getTotalSize() }}
+          >
+            {virtualRows.map((virtualRow) => {
+              const message = messages[virtualRow.index];
+
+              return (
+                <div
+                  key={virtualRow.key}
+                  ref={rowVirtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className="absolute left-0 top-0 w-full"
+                  style={{
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  {message ? (
+                    <MessageListItem
+                      folderId={folderId}
+                      folders={folders}
+                      isSelected={message.id === selectedMessageId}
+                      isActionPending={isActionPending}
+                      message={message}
+                      onDelete={onDeleteMessage}
+                      onDragActiveChange={onDragActiveChange}
+                      onMarkReadState={onMarkMessageReadState}
+                      onMove={onMoveMessage}
+                      onReply={onReplyToMessage}
+                    />
+                  ) : (
+                    <div className="flex h-12 items-center justify-center gap-2 text-sm text-muted-foreground">
+                      {isFetchingNextPage && (
+                        <Loader2 className="size-4 animate-spin" />
+                      )}
+                      {isFetchingNextPage ? (
+                        'Loading more messages...'
+                      ) : (
+                        <Button variant="ghost" onClick={onLoadMore}>
+                          Load more
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        </ScrollArea>
+        </div>
       )}
       {!isLoading && !error && messages.length === 0 && <EmptyFolder />}
     </section>
