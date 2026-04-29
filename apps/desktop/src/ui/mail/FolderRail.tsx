@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { PenLine } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { ScrollArea } from '../../components/ui/scroll-area';
@@ -15,6 +15,7 @@ import {
 import { api } from '../../lib/api-client';
 import { isMailMessageDragData } from '../../lib/mail/mail-drag';
 import { folderIcons } from '../../lib/mail/mail-icons';
+import { mailMessagesQueryOptions } from '../../lib/mail/mail-query-options';
 import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
 import { encodeRouteId } from '../../lib/route-ids';
 import { cn } from '../../lib/utils';
@@ -48,6 +49,14 @@ export function FolderRail({
   className?: string;
 }) {
   const queryClient = useQueryClient();
+  const prefetchFolderMessages = useCallback(
+    (folderId: string) => {
+      void queryClient
+        .prefetchInfiniteQuery(mailMessagesQueryOptions(folderId))
+        .catch(() => undefined);
+    },
+    [queryClient],
+  );
   const signOutMutation = useMutation({
     mutationFn: api.auth.signOut,
     onMutate: async () => {
@@ -100,6 +109,7 @@ export function FolderRail({
                 folder={folder}
                 isActionPending={isActionPending}
                 onMoveMessage={onMoveMessage}
+                onPrefetchFolder={prefetchFolderMessages}
               />
             ))}
         </nav>
@@ -121,6 +131,7 @@ function FolderRailItem({
   folder,
   isActionPending,
   onMoveMessage,
+  onPrefetchFolder,
 }: {
   currentFolderId: string;
   folder: MailFolder;
@@ -129,6 +140,7 @@ function FolderRailItem({
     message: MailMessageSummary,
     destinationFolderId: string,
   ) => void;
+  onPrefetchFolder: (folderId: string) => void;
 }) {
   const dropRef = useRef<HTMLAnchorElement>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -177,6 +189,9 @@ function FolderRailItem({
           ref={dropRef}
           to="/mail/$folderId"
           params={{ folderId: encodeRouteId(folder.id) }}
+          onFocus={() => onPrefetchFolder(folder.id)}
+          onPointerEnter={() => onPrefetchFolder(folder.id)}
+          onTouchStart={() => onPrefetchFolder(folder.id)}
           className={cn(
             'flex h-10 shrink-0 items-center gap-3 rounded-md pr-3 pl-[var(--folder-rail-item-indent)] text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-lg:justify-center max-lg:px-0',
             isActive && 'bg-accent text-accent-foreground',
