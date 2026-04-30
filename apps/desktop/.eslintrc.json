@@ -8,28 +8,20 @@
     "eslint:recommended",
     "plugin:@typescript-eslint/eslint-recommended",
     "plugin:@typescript-eslint/recommended",
-    "plugin:import/recommended",
-    "plugin:import/electron",
-    "plugin:import/typescript"
+    "plugin:import-x/recommended",
+    "plugin:import-x/electron",
+    "plugin:import-x/typescript"
   ],
   "settings": {
-    "import/ignore": [
-      "^@tailwindcss/vite$",
-      "^@vitejs/plugin-react$",
-      "^vite$",
-      "^vitest/config$"
+    "import-x/ignore": [
+      "^virtual:darkreader-script$"
     ]
   },
   "rules": {
-    "import/no-unresolved": [
+    "import-x/no-unresolved": [
       "error",
       {
         "ignore": [
-          "^@tailwindcss/vite$",
-          "^@vitejs/plugin-react$",
-          "^vite$",
-          "^vitest/config$",
-          "^@/",
           "^virtual:darkreader-script$"
         ]
       }

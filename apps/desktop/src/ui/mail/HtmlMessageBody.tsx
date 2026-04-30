@@ -1,4 +1,4 @@
-import DOMPurify from 'dompurify';
+import DP from 'dompurify';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import darkReaderScript from 'virtual:darkreader-script';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -162,7 +162,7 @@ export function HtmlMessageBody({
 }
 
 function sanitizeMailBodyHtml(html: string) {
-  const sanitized = DOMPurify.sanitize(html, {
+  const sanitized = DP.sanitize(html, {
     USE_PROFILES: { html: true },
     FORBID_ATTR: ['background', 'poster', 'src', 'srcset'],
   });
