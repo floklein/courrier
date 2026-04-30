@@ -49,12 +49,26 @@ type StopOptions = {
 export class MailSubscriptionManager {
   private renewalTimer: NodeJS.Timeout | undefined;
   private reconnectTimer: NodeJS.Timeout | undefined;
+  private startPromise: Promise<void> | undefined;
+  private readonly pendingSocketTasks = new Set<Promise<void>>();
   private webSocket: WebSocket | undefined;
   private isStopped = true;
 
   constructor(private readonly options: MailSubscriptionManagerOptions) {}
 
   async start() {
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+
+    this.startPromise = this.startOnce().finally(() => {
+      this.startPromise = undefined;
+    });
+
+    return this.startPromise;
+  }
+
+  private async startOnce() {
     if (!this.options.relayPublicUrl || !this.options.relayAdminToken) {
       return;
     }
@@ -86,6 +100,7 @@ export class MailSubscriptionManager {
     const socket = this.webSocket;
     this.webSocket = undefined;
     socket?.close();
+    await Promise.allSettled([...this.pendingSocketTasks]);
 
     if (options.deleteRemoteSubscription) {
       await this.deleteRemoteSubscription();
@@ -179,15 +194,19 @@ export class MailSubscriptionManager {
       );
     });
     socket.addEventListener('message', (event) => {
-      void this.handleSocketMessage(state, event.data, socket).catch(
-        (error: unknown) => {
+      const task = this.handleSocketMessage(state, event.data, socket)
+        .catch((error: unknown) => {
           console.warn('Relay WebSocket message processing failed.', error);
 
           if (this.webSocket === socket) {
             socket.close();
           }
-        },
-      );
+        })
+        .finally(() => {
+          this.pendingSocketTasks.delete(task);
+        });
+
+      this.pendingSocketTasks.add(task);
     });
     socket.addEventListener('error', () => {
       if (this.webSocket === socket) {
@@ -228,7 +247,10 @@ export class MailSubscriptionManager {
     sendRemoteChangeToRenderers(result.data.event);
     state.lastEventId = result.data.event.id;
     await this.saveState(state);
-    socket.send(JSON.stringify({ type: 'ack', eventId: result.data.event.id }));
+
+    if (this.webSocket === socket && !this.isStopped) {
+      socket.send(JSON.stringify({ type: 'ack', eventId: result.data.event.id }));
+    }
   }
 
   private async loadState(): Promise<MailSubscriptionState> {

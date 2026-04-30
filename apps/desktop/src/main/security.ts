@@ -1,8 +1,31 @@
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 type OpenExternal = (url: string) => Promise<void>;
 
-export function isTrustedAppUrl(rawUrl: string | undefined) {
+export interface AppUrlTrustPolicy {
+  appFilePath?: string;
+  devOrigin?: string;
+}
+
+export function createAppUrlTrustPolicy({
+  appFilePath,
+  devServerUrl,
+}: {
+  appFilePath?: string;
+  devServerUrl?: string;
+}): AppUrlTrustPolicy {
+  return {
+    appFilePath: appFilePath ? normalizeFilePath(appFilePath) : undefined,
+    devOrigin: devServerUrl ? new URL(devServerUrl).origin : undefined,
+  };
+}
+
+export function isTrustedAppUrl(
+  rawUrl: string | undefined,
+  trustPolicy: AppUrlTrustPolicy,
+) {
   if (!rawUrl) {
     return false;
   }
@@ -15,18 +38,22 @@ export function isTrustedAppUrl(rawUrl: string | undefined) {
     return false;
   }
 
-  if (url.protocol === 'file:') {
-    return url.pathname.endsWith('/index.html');
+  if (url.protocol === 'file:' && trustPolicy.appFilePath) {
+    return normalizeFilePath(fileURLToPath(url)) === trustPolicy.appFilePath;
   }
 
   return (
     url.protocol === 'http:' &&
-    (url.hostname === 'localhost' || url.hostname === '127.0.0.1')
+    Boolean(trustPolicy.devOrigin) &&
+    url.origin === trustPolicy.devOrigin
   );
 }
 
-export function assertTrustedSender(event: IpcMainInvokeEvent) {
-  if (!isTrustedAppUrl(event.senderFrame?.url)) {
+export function assertTrustedSender(
+  event: IpcMainInvokeEvent,
+  trustPolicy: AppUrlTrustPolicy,
+) {
+  if (!isTrustedAppUrl(event.senderFrame?.url, trustPolicy)) {
     throw new Error('Refusing privileged IPC from an untrusted page.');
   }
 }
@@ -34,9 +61,10 @@ export function assertTrustedSender(event: IpcMainInvokeEvent) {
 export function registerWindowNavigationGuards(
   window: BrowserWindow,
   openExternal: OpenExternal,
+  trustPolicy: AppUrlTrustPolicy,
 ) {
   window.webContents.on('will-navigate', (event, url) => {
-    if (isTrustedAppUrl(url)) {
+    if (isTrustedAppUrl(url, trustPolicy)) {
       return;
     }
 
@@ -63,4 +91,8 @@ function isHttpUrl(rawUrl: string) {
   } catch {
     return false;
   }
+}
+
+function normalizeFilePath(filePath: string) {
+  return path.normalize(filePath).toLowerCase();
 }

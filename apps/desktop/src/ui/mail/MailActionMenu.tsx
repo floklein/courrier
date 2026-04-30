@@ -35,8 +35,7 @@ interface MailActionMenuProps {
 }
 
 export function MailActionDropdownContent(props: MailActionMenuProps) {
-  const markLabel = props.message.isRead ? 'Mark as unread' : 'Mark as read';
-  const MarkIcon = props.message.isRead ? Mail : MailOpen;
+  const { MarkIcon, markLabel } = getMailActionState(props.message);
 
   return (
     <DropdownMenuContent align="end" className="w-56">
@@ -69,8 +68,7 @@ export function MailActionDropdownContent(props: MailActionMenuProps) {
 }
 
 export function MailActionContextContent(props: MailActionMenuProps) {
-  const markLabel = props.message.isRead ? 'Mark as unread' : 'Mark as read';
-  const MarkIcon = props.message.isRead ? Mail : MailOpen;
+  const { MarkIcon, markLabel } = getMailActionState(props.message);
 
   return (
     <ContextMenuContent className="w-56">
@@ -156,4 +154,11 @@ function ContextMoveSubmenu(props: MailActionMenuProps) {
 
 function getDestinationFolders(folders: MailFolder[], currentFolderId: string) {
   return folders.filter((folder) => folder.id !== currentFolderId);
+}
+
+function getMailActionState(message: MailMessageSummary) {
+  return {
+    MarkIcon: message.isRead ? Mail : MailOpen,
+    markLabel: message.isRead ? 'Mark as unread' : 'Mark as read',
+  };
 }

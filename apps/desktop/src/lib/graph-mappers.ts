@@ -82,6 +82,47 @@ export function mapGraphFolder(
 }
 
 export function sortMailFolders(folders: MailFolder[]) {
+  const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
+  const childrenByParentId = new Map<string, MailFolder[]>();
+  const roots: MailFolder[] = [];
+
+  for (const folder of folders) {
+    if (folder.parentFolderId && foldersById.has(folder.parentFolderId)) {
+      const siblings = childrenByParentId.get(folder.parentFolderId) ?? [];
+      siblings.push(folder);
+      childrenByParentId.set(folder.parentFolderId, siblings);
+      continue;
+    }
+
+    roots.push(folder);
+  }
+
+  const sorted: MailFolder[] = [];
+  const visited = new Set<string>();
+
+  function visit(folder: MailFolder) {
+    if (visited.has(folder.id)) {
+      return;
+    }
+
+    visited.add(folder.id);
+    sorted.push(folder);
+
+    for (const child of sortFolderSiblings(
+      childrenByParentId.get(folder.id) ?? [],
+    )) {
+      visit(child);
+    }
+  }
+
+  for (const folder of sortFolderSiblings(roots)) {
+    visit(folder);
+  }
+
+  return sorted;
+}
+
+function sortFolderSiblings(folders: MailFolder[]) {
   return [...folders].sort((left, right) => {
     const leftOrder = getFolderOrder(left);
     const rightOrder = getFolderOrder(right);

@@ -7,11 +7,18 @@ import {
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import type { RelayStore } from './store.js';
+import { secureTokenEquals } from './tokens.js';
 
 export class RealtimeHub {
   private readonly socketsByClientId = new Map<string, Set<WebSocket>>();
+  private readonly maxMessageBytes: number;
 
-  constructor(private readonly store: RelayStore) {}
+  constructor(
+    private readonly store: RelayStore,
+    { maxMessageBytes = 64 * 1024 }: { maxMessageBytes?: number } = {},
+  ) {
+    this.maxMessageBytes = maxMessageBytes;
+  }
 
   registerRoutes(fastify: FastifyInstance) {
     fastify.get('/ws', { websocket: true }, (socket) => {
@@ -19,7 +26,7 @@ export class RealtimeHub {
 
       socket.on('message', async (rawMessage) => {
         const result = relayClientMessageSchema.safeParse(
-          parseSocketMessage(rawMessage),
+          parseSocketMessage(rawMessage, this.maxMessageBytes),
         );
 
         if (!result.success) {
@@ -35,7 +42,10 @@ export class RealtimeHub {
             result.data.clientId,
           );
 
-          if (!subscription || subscription.authToken !== result.data.token) {
+          if (
+            !subscription ||
+            !secureTokenEquals(subscription.authToken, result.data.token)
+          ) {
             sendSocketMessage(socket, {
               type: 'error',
               message: 'Relay registration failed',
@@ -111,12 +121,19 @@ export class RealtimeHub {
   }
 }
 
-function parseSocketMessage(rawMessage: Buffer | ArrayBuffer | Buffer[]) {
+function parseSocketMessage(
+  rawMessage: Buffer | ArrayBuffer | Buffer[],
+  maxMessageBytes: number,
+) {
   const text = Array.isArray(rawMessage)
     ? Buffer.concat(rawMessage).toString('utf8')
     : rawMessage instanceof ArrayBuffer
       ? Buffer.from(new Uint8Array(rawMessage)).toString('utf8')
       : Buffer.from(rawMessage).toString('utf8');
+
+  if (Buffer.byteLength(text, 'utf8') > maxMessageBytes) {
+    return undefined;
+  }
 
   try {
     return JSON.parse(text) as unknown;

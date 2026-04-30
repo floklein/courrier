@@ -8,10 +8,11 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "pnpm --filter @courrier/desktop start",
     "dev": "turbo run dev",
     "package": "turbo run package",
     "make": "turbo run make",
-    "publish": "pnpm --filter @courrier/desktop publish",
+    "publish": "pnpm --filter @courrier/desktop run publish",
     "build": "turbo run build",
     "test": "turbo run test",
     "test:coverage": "pnpm --filter @courrier/desktop test:coverage",

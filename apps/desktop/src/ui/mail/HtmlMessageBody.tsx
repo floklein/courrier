@@ -72,9 +72,7 @@ export function HtmlMessageBody({
   const iframeWindowRef = useRef<Window | null>(null);
   const frameId = useId();
   const { resolvedTheme } = useTheme();
-  const sanitizedBody = DOMPurify.sanitize(bodyContent, {
-    USE_PROFILES: { html: true },
-  });
+  const sanitizedBody = sanitizeMailBodyHtml(bodyContent);
 
   useLayoutEffect(() => {
     setHtmlFrameHeight(0);
@@ -115,6 +113,7 @@ export function HtmlMessageBody({
 <html data-theme="${resolvedTheme}">
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: cid:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base target="_blank" />
     <style>
@@ -148,6 +147,7 @@ export function HtmlMessageBody({
       <iframe
         title={title}
         sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts"
+        referrerPolicy="no-referrer"
         className="w-full border-0"
         style={{
           height: htmlFrameHeight,
@@ -159,4 +159,22 @@ export function HtmlMessageBody({
       />
     </div>
   );
+}
+
+function sanitizeMailBodyHtml(html: string) {
+  const sanitized = DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_ATTR: ['background', 'poster', 'src', 'srcset'],
+  });
+  const document = new DOMParser().parseFromString(sanitized, 'text/html');
+
+  document.body.querySelectorAll('[style]').forEach((element) => {
+    const style = element.getAttribute('style');
+
+    if (style && /url\s*\(/i.test(style)) {
+      element.removeAttribute('style');
+    }
+  });
+
+  return document.body.innerHTML;
 }

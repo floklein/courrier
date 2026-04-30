@@ -8,12 +8,23 @@ import { InMemoryRelayStore, type RelayStore } from './store.js';
 
 export interface BuildServerOptions {
   config: RelayConfig;
+  bodyLimit?: number;
+  logger?: boolean;
+  maxWebSocketMessageBytes?: number;
   store?: RelayStore;
 }
 
-export function buildServer({ config, store = new InMemoryRelayStore() }: BuildServerOptions) {
-  const fastify = Fastify({ logger: true });
-  const realtime = new RealtimeHub(store);
+export function buildServer({
+  bodyLimit = 1024 * 1024,
+  config,
+  logger = true,
+  maxWebSocketMessageBytes,
+  store = new InMemoryRelayStore(),
+}: BuildServerOptions) {
+  const fastify = Fastify({ bodyLimit, logger });
+  const realtime = new RealtimeHub(store, {
+    maxMessageBytes: maxWebSocketMessageBytes,
+  });
 
   fastify.register(websocket);
   fastify.register(async (websocketFastify) => {

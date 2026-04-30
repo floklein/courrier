@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createAppUrlTrustPolicy } from '../../main/security';
 
 const ipcHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 
@@ -15,6 +16,9 @@ import { registerIpcHandlers } from '../../main/ipc';
 const trustedEvent = {
   senderFrame: { url: 'http://localhost:5173' },
 };
+const trustPolicy = createAppUrlTrustPolicy({
+  devServerUrl: 'http://localhost:5173',
+});
 
 beforeEach(() => {
   ipcHandlers.clear();
@@ -31,7 +35,10 @@ describe('IPC auth handlers', () => {
     const graphClient = createGraphClient();
     const startMailSubscriptions = vi.fn().mockResolvedValue(undefined);
 
-    registerIpcHandlers(authService as never, graphClient, { startMailSubscriptions });
+    registerIpcHandlers(authService as never, graphClient as never, {
+      startMailSubscriptions,
+      trustPolicy,
+    });
     const result = await ipcHandlers.get('auth:sign-in')?.(trustedEvent);
 
     expect(result).toBe(session);
@@ -47,10 +54,51 @@ describe('IPC auth handlers', () => {
     const graphClient = createGraphClient();
     const startMailSubscriptions = vi.fn().mockResolvedValue(undefined);
 
-    registerIpcHandlers(authService as never, graphClient, { startMailSubscriptions });
+    registerIpcHandlers(authService as never, graphClient as never, {
+      startMailSubscriptions,
+      trustPolicy,
+    });
     await ipcHandlers.get('auth:sign-in')?.(trustedEvent);
 
     expect(startMailSubscriptions).not.toHaveBeenCalled();
+  });
+});
+
+describe('IPC mail handlers', () => {
+  it('rejects invalid message identifiers before calling Graph', async () => {
+    const authService = {
+      signIn: vi.fn(),
+      getSession: vi.fn(),
+      signOut: vi.fn(),
+    };
+    const graphClient = createGraphClient();
+
+    registerIpcHandlers(authService as never, graphClient as never, { trustPolicy });
+
+    await expect(
+      invokeIpc('mail:mark-message-read-state', trustedEvent, '', true),
+    ).rejects.toThrow('Invalid IPC payload');
+    expect(graphClient.markMessageReadState).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed send-message payloads before calling Graph', async () => {
+    const authService = {
+      signIn: vi.fn(),
+      getSession: vi.fn(),
+      signOut: vi.fn(),
+    };
+    const graphClient = createGraphClient();
+
+    registerIpcHandlers(authService as never, graphClient as never, { trustPolicy });
+
+    await expect(
+      invokeIpc('mail:send-message', trustedEvent, {
+        toRecipients: [],
+        subject: 'Hello',
+        bodyHtml: '<p>Hi</p>',
+      }),
+    ).rejects.toThrow('Invalid IPC payload');
+    expect(graphClient.sendMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -64,5 +112,15 @@ function createGraphClient() {
     deleteMessage: vi.fn(),
     sendMessage: vi.fn(),
     replyToMessage: vi.fn(),
-  } as never;
+  };
+}
+
+async function invokeIpc(channel: string, event: unknown, ...args: unknown[]) {
+  const handler = ipcHandlers.get(channel);
+
+  if (!handler) {
+    throw new Error(`Missing IPC handler: ${channel}`);
+  }
+
+  return handler(event, ...args);
 }

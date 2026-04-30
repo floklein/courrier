@@ -21,8 +21,10 @@ import {
 
 const originalWebSocket = globalThis.WebSocket;
 let statePath: string;
+let managers: MailSubscriptionManager[] = [];
 
 beforeEach(async () => {
+  managers = [];
   MockWebSocket.instances = [];
   rendererSend.mockClear();
   vi.restoreAllMocks();
@@ -35,6 +37,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await Promise.all(managers.map((manager) => manager.stop()));
   vi.useRealTimers();
   vi.stubGlobal('WebSocket', originalWebSocket);
   await fs.rm(path.dirname(statePath), { recursive: true, force: true });
@@ -215,16 +218,28 @@ describe('MailSubscriptionManager', () => {
 
     expect(graphClient.renewSubscription).not.toHaveBeenCalled();
   });
+
+  it('deduplicates concurrent starts so only one socket and Graph subscription are created', async () => {
+    const graphClient = createGraphClient();
+    const manager = createManager(graphClient);
+
+    await Promise.all([manager.start(), manager.start()]);
+
+    expect(graphClient.createMailSubscription).toHaveBeenCalledTimes(1);
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
 });
 
 function createManager(graphClient = createGraphClient()) {
-  return new MailSubscriptionManager({
+  const manager = new MailSubscriptionManager({
     graphClient: graphClient as never,
     relayAdminToken: 'admin-token-with-enough-length',
     relayPublicUrl: 'https://relay.example.com',
     reconnectDelayMs: 1,
     statePath,
   });
+  managers.push(manager);
+  return manager;
 }
 
 function createGraphClient() {
