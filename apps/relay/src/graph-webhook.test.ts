@@ -11,7 +11,7 @@ const config = {
 
 describe('Graph webhook routes', () => {
   it('responds to Microsoft Graph validation tokens as plain text', async () => {
-    const server = buildServer({ config });
+    const server = buildServer({ config, logger: false });
 
     const response = await server.inject({
       method: 'POST',
@@ -25,7 +25,7 @@ describe('Graph webhook routes', () => {
 
   it('stores matching Graph notifications as mail change events', async () => {
     const store = new InMemoryRelayStore();
-    const server = buildServer({ config, store });
+    const server = buildServer({ config, store, logger: false });
 
     await store.upsertSubscription({
       clientId: 'desktop-1',
@@ -62,7 +62,7 @@ describe('Graph webhook routes', () => {
 
   it('delivers Graph notifications to registered WebSocket clients', async () => {
     const store = new InMemoryRelayStore();
-    const server = buildServer({ config, store });
+    const server = buildServer({ config, store, logger: false });
 
     await store.upsertSubscription({
       clientId: 'desktop-1',
@@ -118,7 +118,7 @@ describe('Graph webhook routes', () => {
 
   it('forwards Graph lifecycle notifications as mail change events', async () => {
     const store = new InMemoryRelayStore();
-    const server = buildServer({ config, store });
+    const server = buildServer({ config, store, logger: false });
 
     await store.upsertSubscription({
       clientId: 'desktop-1',

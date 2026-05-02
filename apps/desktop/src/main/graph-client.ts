@@ -14,6 +14,7 @@ import type {
   ReplyToMessageInput,
   SendMailInput,
 } from '../lib/mail-types';
+import { GraphRequestError } from '../lib/graph-errors';
 import type { AuthService } from './auth-service';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
@@ -316,7 +317,7 @@ export class GraphClient {
     url: string,
     init: RequestInit = {},
   ): Promise<T> {
-    if (!url.startsWith(graphBaseUrl)) {
+    if (!isMicrosoftGraphUrl(url)) {
       throw new Error('Refusing to fetch a non-Microsoft Graph URL.');
     }
 
@@ -331,7 +332,7 @@ export class GraphClient {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Microsoft Graph request failed: ${response.status} ${body}`);
+      throw createGraphRequestError(response.status, body);
     }
 
     const body = await response.text();
@@ -341,6 +342,52 @@ export class GraphClient {
     }
 
     return JSON.parse(body) as T;
+  }
+}
+
+function isMicrosoftGraphUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const graphBase = new URL(graphBaseUrl);
+
+    return (
+      url.origin === graphBase.origin &&
+      (url.pathname === graphBase.pathname ||
+        url.pathname.startsWith(`${graphBase.pathname}/`))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function createGraphRequestError(status: number, body: string) {
+  const parsedBody = parseGraphErrorBody(body);
+  return new GraphRequestError({
+    body,
+    code: parsedBody.code,
+    message: parsedBody.message ?? body,
+    status,
+  });
+}
+
+function parseGraphErrorBody(body: string) {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: {
+        code?: unknown;
+        message?: unknown;
+      };
+    };
+
+    return {
+      code: typeof parsed.error?.code === 'string' ? parsed.error.code : undefined,
+      message:
+        typeof parsed.error?.message === 'string'
+          ? parsed.error.message
+          : undefined,
+    };
+  } catch {
+    return {};
   }
 }
 

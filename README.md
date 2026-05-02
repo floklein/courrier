@@ -22,7 +22,7 @@ triaging messages.
 
 - **Desktop shell:** Electron Forge
 - **Build tooling:** Vite and TypeScript
-- **UI:** React, Tailwind CSS, Radix UI primitives, lucide-react icons
+- **UI:** React, Tailwind CSS, shadcn/Base UI primitives, lucide-react icons
 - **Data:** TanStack Query and TanStack Router
 - **Auth and mail:** MSAL Node, MSAL Node Extensions, Microsoft Graph
 - **Testing:** Vitest and Testing Library
@@ -86,6 +86,7 @@ For the full setup flow, see [docs/oauth.md](docs/oauth.md).
 | Command | Description |
 | --- | --- |
 | `pnpm start` | Run Courrier desktop in development mode. |
+| `pnpm dev` | Run workspace development tasks after dependency builds. |
 | `pnpm package` | Package the Electron app locally. |
 | `pnpm make` | Create distributable installers/packages. |
 | `pnpm test` | Run workspace Vitest suites. |
@@ -113,9 +114,10 @@ while `apps/relay` receives Graph webhook POSTs and pushes compact invalidation
 events to the desktop app over WebSocket.
 
 The current relay is intended for a self-hosted, single-user deployment. It uses
-an in-memory store, so registrations and pending events are lost on process
-restart and are not shared across multiple relay instances. Add a durable
-`RelayStore` before running it as a production multi-instance service.
+an in-memory store with bounded event retention, so registrations and pending
+events are lost on process restart and are not shared across multiple relay
+instances. Add a durable `RelayStore` before running it as a production
+multi-instance service.
 
 Relay environment variables:
 
@@ -146,7 +148,10 @@ Courrier keeps Electron renderer privileges narrow:
 - `contextIsolation` is enabled and `nodeIntegration` is disabled.
 - The preload script exposes only the typed `window.courrier` API.
 - Main-process IPC handlers reject messages from untrusted pages.
+- Renderer windows trust only the packaged app file or the configured Vite
+  development origin, not arbitrary localhost pages.
 - External navigation opens in the system browser instead of inside the app.
+- Remote resources in HTML mail are stripped by default before iframe rendering.
 - Microsoft tokens are cached with MSAL Node Extensions where platform support
   is available.
 - Plaintext token cache fallback is disabled by default. Set

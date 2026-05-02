@@ -8,7 +8,7 @@ export async function invalidateRemoteMailUpdate(
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ['mail', 'folders'] }),
     queryClient.invalidateQueries({ queryKey: ['mail', 'messages'] }),
-    event.messageId
+    event.kind === 'lifecycle' || event.messageId
       ? queryClient.invalidateQueries({ queryKey: ['mail', 'message'] })
       : Promise.resolve(),
   ]);

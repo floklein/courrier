@@ -1,4 +1,4 @@
-import DOMPurify from 'dompurify';
+import DP from 'dompurify';
 import type { MailComposeRecipient } from '../mail-types';
 
 const outgoingMailTags = [
@@ -40,7 +40,7 @@ export function parseRecipients(value: string) {
 }
 
 export function sanitizeOutgoingMailHtml(html: string) {
-  return DOMPurify.sanitize(html, {
+  return DP.sanitize(html, {
     ALLOWED_TAGS: outgoingMailTags,
     ALLOWED_ATTR: outgoingMailAttributes,
     ALLOW_DATA_ATTR: false,

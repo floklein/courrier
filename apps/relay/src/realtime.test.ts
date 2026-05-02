@@ -10,9 +10,15 @@ const config = {
 };
 
 describe('RealtimeHub', () => {
+  it('can disable request logging for tests', () => {
+    const server = buildServer({ config, logger: false });
+
+    expect(server.log.level).toBeUndefined();
+  });
+
   it('accepts WebSocket registration after relay subscription registration', async () => {
     const store = new InMemoryRelayStore();
-    const server = buildServer({ config, store });
+    const server = buildServer({ config, store, logger: false });
 
     await store.upsertSubscription({
       clientId: 'desktop-1',
@@ -46,7 +52,7 @@ describe('RealtimeHub', () => {
 
   it('replays events after the last acknowledged event', async () => {
     const store = new InMemoryRelayStore();
-    const server = buildServer({ config, store });
+    const server = buildServer({ config, store, logger: false });
 
     await store.upsertSubscription({
       clientId: 'desktop-1',

@@ -8,5 +8,6 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   keytar: true
-nodeLinker: hoisted
+  unrs-resolver: true
 blockExoticSubdeps: false
+nodeLinker: hoisted

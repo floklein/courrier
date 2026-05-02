@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint --ext .ts src",
+    "lint": "eslint src",
     "test": "vitest run"
   },
   "dependencies": {
@@ -23,9 +23,9 @@
     "@courrier/tsconfig": "workspace:*",
     "@types/node": "^24.0.0",
     "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^5.62.0",
-    "@typescript-eslint/parser": "^5.62.0",
-    "eslint": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^10.2.1",
     "tsx": "^4.20.6",
     "typescript": "^5.4.5",
     "vitest": "^4.1.5"

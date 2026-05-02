@@ -1,4 +1,4 @@
-import React from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -21,11 +21,11 @@ api.mail.onRemoteChange((event) => {
 });
 
 createRoot(rootElement).render(
-  <React.StrictMode>
+  <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <RouterProvider router={router} />
       </ThemeProvider>
     </QueryClientProvider>
-  </React.StrictMode>,
+  </StrictMode>,
 );

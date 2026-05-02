@@ -2,16 +2,17 @@
   "name": "courrier",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.0.0+sha512.5bd187500e49cc6c3d891d973b432c02b844a5eb7209172c90a517a3ef4f579ed5c23d409b699e6a9dc418ff7b2b1890e63f6d74f1d3fc49848f37779c89c84c",
+  "packageManager": "pnpm@11.0.0",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
+    "start": "pnpm --filter @courrier/desktop start",
     "dev": "turbo run dev",
     "package": "turbo run package",
     "make": "turbo run make",
-    "publish": "pnpm --filter @courrier/desktop publish",
+    "publish": "pnpm --filter @courrier/desktop run publish",
     "build": "turbo run build",
     "test": "turbo run test",
     "test:coverage": "pnpm --filter @courrier/desktop test:coverage",

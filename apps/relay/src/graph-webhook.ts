@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import type { RelayConfig } from './config.js';
 import type { RelayStore } from './store.js';
 import type { RealtimeHub } from './realtime.js';
+import { secureTokenEquals } from './tokens.js';
 
 export function registerGraphWebhookRoutes({
   config,
@@ -114,7 +115,13 @@ function getValidationToken(url: string) {
 }
 
 function isAuthorized(authorization: string | undefined, token: string) {
-  return authorization === `Bearer ${token}`;
+  const prefix = 'Bearer ';
+
+  if (!authorization?.startsWith(prefix)) {
+    return false;
+  }
+
+  return secureTokenEquals(authorization.slice(prefix.length), token);
 }
 
 function getMessageIdFromResource(resource: string | undefined) {

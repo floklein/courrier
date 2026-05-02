@@ -48,6 +48,38 @@ describe('graph mail mappers', () => {
     });
   });
 
+  it('keeps child folders directly under their parent when sorting custom folders', () => {
+    const folders = sortMailFolders([
+      mapGraphFolder({
+        id: 'z-child',
+        displayName: 'Child',
+        parentFolderId: 'z-parent',
+      }, 1),
+      mapGraphFolder({
+        id: 'a-parent',
+        displayName: 'Alpha',
+        childFolderCount: 1,
+      }),
+      mapGraphFolder({
+        id: 'z-parent',
+        displayName: 'Zeta',
+        childFolderCount: 1,
+      }),
+      mapGraphFolder({
+        id: 'a-child',
+        displayName: 'Child',
+        parentFolderId: 'a-parent',
+      }, 1),
+    ]);
+
+    expect(folders.map((folder) => folder.id)).toEqual([
+      'a-parent',
+      'a-child',
+      'z-parent',
+      'z-child',
+    ]);
+  });
+
   it('maps a Graph message summary into renderer mail fields', () => {
     const message = mapGraphMessageSummary('inbox', {
       id: 'message-1',

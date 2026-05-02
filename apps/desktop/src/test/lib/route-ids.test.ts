@@ -15,4 +15,9 @@ describe('mail route ids', () => {
     expect(encodeRouteId('inbox')).toBe('inbox');
     expect(decodeRouteId('inbox')).toBe('inbox');
   });
+
+  it('returns undefined for malformed encoded route ids instead of throwing', () => {
+    expect(() => decodeRouteId('id_%%%%')).not.toThrow();
+    expect(decodeRouteId('id_%%%%')).toBeUndefined();
+  });
 });

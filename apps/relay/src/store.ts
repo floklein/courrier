@@ -54,6 +54,14 @@ export class InMemoryRelayStore implements RelayStore {
   }
 
   async acknowledgeEvent(clientId: string, eventId: string): Promise<void> {
+    const events = this.eventsByClientId.get(clientId) ?? [];
+    const eventIndex = events.findIndex((event) => event.id === eventId);
+
+    if (eventIndex === -1) {
+      return;
+    }
+
+    this.eventsByClientId.set(clientId, events.slice(eventIndex + 1));
     this.acknowledgedEventByClientId.set(clientId, eventId);
   }
 }
