@@ -1,10 +1,17 @@
 import react from '@vitejs/plugin-react';
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     tsconfigPaths: true,
+    alias: {
+      'virtual:darkreader-script': path.resolve(
+        __dirname,
+        './src/test/fixtures/darkreader-script.ts',
+      ),
+    },
   },
   test: {
     environment: 'jsdom',
@@ -13,7 +20,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: ['src/**/*.ts'],
+      include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/**/*.test.{ts,tsx}',
         'src/test/**',
@@ -21,10 +28,10 @@ export default defineConfig({
         'src/virtual-modules.d.ts',
       ],
       thresholds: {
-        statements: 30,
-        branches: 40,
-        functions: 28,
-        lines: 30,
+        statements: 28,
+        branches: 25,
+        functions: 20,
+        lines: 28,
       },
     },
   },

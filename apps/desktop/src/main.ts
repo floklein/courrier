@@ -1,14 +1,27 @@
 import 'dotenv/config';
-import { app, BrowserWindow, Menu, ipcMain, nativeTheme, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  ipcMain,
+  nativeTheme,
+  session,
+  shell,
+} from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import type { ComposeWindowDraft } from './lib/compose-window';
+import {
+  composeWindowDraftSchema,
+  type ComposeWindowDraft,
+} from './lib/compose-window';
 import { AuthRequiredError, AuthService } from './main/auth-service';
 import { GraphClient } from './main/graph-client';
 import { registerIpcHandlers } from './main/ipc';
 import { MailSubscriptionManager } from './main/mail-subscription-manager';
 import {
   assertTrustedSender,
+  createAppUrlTrustPolicy,
+  type AppUrlTrustPolicy,
   registerWindowNavigationGuards,
 } from './main/security';
 
@@ -19,7 +32,7 @@ if (started) {
 
 const composeDraftsByWebContentsId = new Map<number, ComposeWindowDraft>();
 
-const createWindow = () => {
+const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
   const titleBarOverlay = getTitleBarOverlayOptions();
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -34,10 +47,11 @@ const createWindow = () => {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  registerWindowNavigationGuards(mainWindow, shell.openExternal);
+  registerWindowNavigationGuards(mainWindow, shell.openExternal, trustPolicy);
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -53,7 +67,10 @@ const createWindow = () => {
   }
 };
 
-const createComposeWindow = (draft: ComposeWindowDraft) => {
+const createComposeWindow = (
+  draft: ComposeWindowDraft,
+  trustPolicy: AppUrlTrustPolicy,
+) => {
   const composeWindow = new BrowserWindow({
     width: 720,
     height: 720,
@@ -67,6 +84,7 @@ const createComposeWindow = (draft: ComposeWindowDraft) => {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
@@ -77,7 +95,7 @@ const createComposeWindow = (draft: ComposeWindowDraft) => {
   composeWindow.on('closed', () => {
     composeDraftsByWebContentsId.delete(composeWebContentsId);
   });
-  registerWindowNavigationGuards(composeWindow, shell.openExternal);
+  registerWindowNavigationGuards(composeWindow, shell.openExternal, trustPolicy);
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     composeWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#/compose`);
@@ -107,6 +125,10 @@ nativeTheme.on('updated', () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
+  const trustPolicy = createAppUrlTrustPolicy({
+    appFilePath: getRendererIndexPath(),
+    devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+  });
   const authService = new AuthService();
   const graphClient = new GraphClient(authService);
   const subscriptionManager = new MailSubscriptionManager({
@@ -116,32 +138,58 @@ app.on('ready', () => {
   });
 
   Menu.setApplicationMenu(null);
+  registerSessionPermissionGuards();
   registerIpcHandlers(authService, graphClient, {
+    trustPolicy,
     startMailSubscriptions: () => subscriptionManager.start(),
     stopMailSubscriptions: () =>
       subscriptionManager.stop({ deleteRemoteSubscription: true }),
   });
-  registerWindowIpcHandlers();
-  createWindow();
+  registerWindowIpcHandlers(trustPolicy);
+  createWindow(trustPolicy);
   void startMailSubscriptions(subscriptionManager);
   app.on('before-quit', () => {
     void subscriptionManager.stop();
   });
 });
 
-function registerWindowIpcHandlers() {
+function registerWindowIpcHandlers(trustPolicy: AppUrlTrustPolicy) {
   ipcMain.handle('window:open-compose', (event, draft: ComposeWindowDraft) => {
-    assertTrustedSender(event);
-    createComposeWindow(draft);
+    assertTrustedSender(event, trustPolicy);
+    createComposeWindow(parseIpcPayload(composeWindowDraftSchema, draft), trustPolicy);
   });
   ipcMain.handle('window:get-compose-draft', (event) => {
-    assertTrustedSender(event);
+    assertTrustedSender(event, trustPolicy);
     return composeDraftsByWebContentsId.get(event.sender.id);
   });
   ipcMain.handle('window:close-current', (event) => {
-    assertTrustedSender(event);
+    assertTrustedSender(event, trustPolicy);
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
+}
+
+function parseIpcPayload<T>(
+  schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
+  value: unknown,
+) {
+  const result = schema.safeParse(value);
+
+  if (!result.success) {
+    throw new Error('Invalid IPC payload');
+  }
+
+  return result.data;
+}
+
+function registerSessionPermissionGuards() {
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+  session.defaultSession.setPermissionCheckHandler(() => false);
+}
+
+function getRendererIndexPath() {
+  return path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
 }
 
 async function startMailSubscriptions(subscriptionManager: MailSubscriptionManager) {
@@ -169,7 +217,10 @@ app.on('activate', () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    createWindow(createAppUrlTrustPolicy({
+      appFilePath: getRendererIndexPath(),
+      devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+    }));
   }
 });
 

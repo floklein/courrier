@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthService } from '../../main/auth-service';
 import { GraphClient, getValidatedMessagePageUrl } from '../../main/graph-client';
+import {
+  GraphRequestError,
+  isGraphItemNotFoundError,
+} from '../../lib/graph-errors';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
 
@@ -207,6 +211,29 @@ describe('GraphClient write requests', () => {
     await expect(client.markMessageReadState('message-1', true)).rejects.toThrow(
       'Microsoft Graph request failed: 400 invalid request',
     );
+  });
+
+  it('throws structured Graph errors with Microsoft error codes', async () => {
+    mockFetch(
+      jsonResponse({
+        error: {
+          code: 'ErrorItemNotFound',
+          message: 'The specified object was not found in the store.',
+        },
+      }, 404),
+    );
+    const client = createGraphClient();
+
+    const error = await client
+      .markMessageReadState('message-1', true)
+      .catch((candidate: unknown) => candidate);
+
+    expect(error).toBeInstanceOf(GraphRequestError);
+    expect(error).toMatchObject({
+      status: 404,
+      code: 'ErrorItemNotFound',
+    });
+    expect(isGraphItemNotFoundError(error)).toBe(true);
   });
 });
 

@@ -27,4 +27,22 @@ describe('invalidateRemoteMailUpdate', () => {
       queryKey: ['mail', 'message'],
     });
   });
+
+  it('invalidates message detail queries for lifecycle updates without a message id', async () => {
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+
+    await invalidateRemoteMailUpdate(queryClient, {
+      id: 'event-2',
+      clientId: 'desktop-1',
+      subscriptionId: 'subscription-1',
+      kind: 'lifecycle',
+      changeType: 'subscriptionRemoved',
+      receivedAt: '2026-04-29T10:00:00.000Z',
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['mail', 'message'],
+    });
+  });
 });

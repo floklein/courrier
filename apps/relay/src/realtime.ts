@@ -7,11 +7,18 @@ import {
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import type { RelayStore } from './store.js';
+import { secureTokenEquals } from './tokens.js';
 
 export class RealtimeHub {
   private readonly socketsByClientId = new Map<string, Set<WebSocket>>();
+  private readonly maxMessageBytes: number;
 
-  constructor(private readonly store: RelayStore) {}
+  constructor(
+    private readonly store: RelayStore,
+    { maxMessageBytes = 64 * 1024 }: { maxMessageBytes?: number } = {},
+  ) {
+    this.maxMessageBytes = maxMessageBytes;
+  }
 
   registerRoutes(fastify: FastifyInstance) {
     fastify.get('/ws', { websocket: true }, (socket) => {
@@ -19,7 +26,7 @@ export class RealtimeHub {
 
       socket.on('message', async (rawMessage) => {
         const result = relayClientMessageSchema.safeParse(
-          parseSocketMessage(rawMessage),
+          parseSocketMessage(rawMessage, this.maxMessageBytes),
         );
 
         if (!result.success) {
@@ -35,7 +42,10 @@ export class RealtimeHub {
             result.data.clientId,
           );
 
-          if (!subscription || subscription.authToken !== result.data.token) {
+          if (
+            !subscription ||
+            !secureTokenEquals(subscription.authToken, result.data.token)
+          ) {
             sendSocketMessage(socket, {
               type: 'error',
               message: 'Relay registration failed',
@@ -111,7 +121,14 @@ export class RealtimeHub {
   }
 }
 
-function parseSocketMessage(rawMessage: Buffer | ArrayBuffer | Buffer[]) {
+function parseSocketMessage(
+  rawMessage: Buffer | ArrayBuffer | Buffer[],
+  maxMessageBytes: number,
+) {
+  if (getRawMessageByteLength(rawMessage) > maxMessageBytes) {
+    return undefined;
+  }
+
   const text = Array.isArray(rawMessage)
     ? Buffer.concat(rawMessage).toString('utf8')
     : rawMessage instanceof ArrayBuffer
@@ -123,6 +140,14 @@ function parseSocketMessage(rawMessage: Buffer | ArrayBuffer | Buffer[]) {
   } catch {
     return undefined;
   }
+}
+
+function getRawMessageByteLength(rawMessage: Buffer | ArrayBuffer | Buffer[]) {
+  if (Array.isArray(rawMessage)) {
+    return rawMessage.reduce((total, message) => total + message.byteLength, 0);
+  }
+
+  return rawMessage.byteLength;
 }
 
 function sendSocketMessage(

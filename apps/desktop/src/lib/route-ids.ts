@@ -25,9 +25,13 @@ export function decodeRouteId(routeId: string | undefined) {
     return routeId;
   }
 
-  return new TextDecoder().decode(
-    base64UrlToBytes(routeId.slice(encodedPrefix.length)),
-  );
+  try {
+    return new TextDecoder().decode(
+      base64UrlToBytes(routeId.slice(encodedPrefix.length)),
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 function bytesToBase64Url(bytes: Uint8Array) {
