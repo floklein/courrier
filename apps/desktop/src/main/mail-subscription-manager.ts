@@ -51,8 +51,11 @@ export class MailSubscriptionManager {
   private reconnectTimer: NodeJS.Timeout | undefined;
   private startPromise: Promise<void> | undefined;
   private readonly pendingSocketTasks = new Set<Promise<void>>();
+  private readonly stoppedStartsNeedingRemoteDelete = new Set<number>();
   private webSocket: WebSocket | undefined;
   private isStopped = true;
+  private shouldDeleteRemoteSubscriptionWhileStopping = false;
+  private lifecycleGeneration = 0;
 
   constructor(private readonly options: MailSubscriptionManagerOptions) {}
 
@@ -61,32 +64,63 @@ export class MailSubscriptionManager {
       return this.startPromise;
     }
 
-    this.startPromise = this.startOnce().finally(() => {
-      this.startPromise = undefined;
+    this.isStopped = false;
+    const generation = ++this.lifecycleGeneration;
+    this.stoppedStartsNeedingRemoteDelete.delete(generation);
+    const startPromise = this.startOnce(generation).finally(() => {
+      if (this.startPromise === startPromise) {
+        this.startPromise = undefined;
+      }
     });
 
+    this.startPromise = startPromise;
     return this.startPromise;
   }
 
-  private async startOnce() {
+  private async startOnce(generation: number) {
     if (!this.options.relayPublicUrl || !this.options.relayAdminToken) {
       return;
     }
 
-    this.isStopped = false;
     const state = await this.loadState();
+    if (!this.isLifecycleActive(generation)) {
+      return;
+    }
+
     const subscription = await this.ensureSubscription(state);
+    if (!this.isLifecycleActive(generation)) {
+      await this.deleteSubscriptionFromStoppedStart(generation, subscription.id);
+      return;
+    }
 
     state.subscriptionId = subscription.id;
     state.expirationDateTime = subscription.expirationDateTime;
     await this.saveState(state);
+    if (!this.isLifecycleActive(generation)) {
+      return;
+    }
+
     await this.registerWithRelay(state);
+    if (!this.isLifecycleActive(generation)) {
+      return;
+    }
+
     this.scheduleRenewal(state);
     this.connectWebSocket(state);
   }
 
   async stop(options: StopOptions = {}) {
+    const stoppedGeneration = this.lifecycleGeneration;
+    const pendingStart = this.startPromise;
+
+    if (options.deleteRemoteSubscription) {
+      this.shouldDeleteRemoteSubscriptionWhileStopping = true;
+      this.stoppedStartsNeedingRemoteDelete.add(stoppedGeneration);
+    }
+
+    this.lifecycleGeneration += 1;
     this.isStopped = true;
+    this.startPromise = undefined;
     if (this.renewalTimer) {
       clearTimeout(this.renewalTimer);
       this.renewalTimer = undefined;
@@ -100,11 +134,16 @@ export class MailSubscriptionManager {
     const socket = this.webSocket;
     this.webSocket = undefined;
     socket?.close();
+    await pendingStart?.catch((error: unknown) => {
+      console.warn('Mail subscription startup did not stop cleanly.', error);
+    });
     await Promise.allSettled([...this.pendingSocketTasks]);
 
     if (options.deleteRemoteSubscription) {
       await this.deleteRemoteSubscription();
     }
+
+    this.shouldDeleteRemoteSubscriptionWhileStopping = false;
   }
 
   private async ensureSubscription(state: MailSubscriptionState) {
@@ -136,7 +175,7 @@ export class MailSubscriptionManager {
   }
 
   private scheduleRenewal(state: MailSubscriptionState) {
-    if (!state.expirationDateTime) {
+    if (!state.expirationDateTime || this.isStopped) {
       return;
     }
 
@@ -176,6 +215,10 @@ export class MailSubscriptionManager {
   }
 
   private connectWebSocket(state: MailSubscriptionState) {
+    if (this.isStopped) {
+      return;
+    }
+
     const relayUrl = new URL('/ws', this.options.relayPublicUrl);
     relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     const previousSocket = this.webSocket;
@@ -244,6 +287,10 @@ export class MailSubscriptionManager {
     }
 
     await this.recoverFromLifecycleEvent(state, result.data.event);
+    if (this.isStopped) {
+      return;
+    }
+
     sendRemoteChangeToRenderers(result.data.event);
     state.lastEventId = result.data.event.id;
     await this.saveState(state);
@@ -322,7 +369,7 @@ export class MailSubscriptionManager {
     state: MailSubscriptionState,
     event: MailRemoteChangeEvent,
   ) {
-    if (event.kind !== 'lifecycle') {
+    if (event.kind !== 'lifecycle' || this.isStopped) {
       return;
     }
 
@@ -336,11 +383,46 @@ export class MailSubscriptionManager {
       event.changeType === 'reauthorizationRequired'
     ) {
       const subscription = await this.ensureSubscription(state);
+      if (this.isStopped) {
+        await this.deleteSubscriptionIfStopping(subscription.id);
+        return;
+      }
+
       state.subscriptionId = subscription.id;
       state.expirationDateTime = subscription.expirationDateTime;
       await this.saveState(state);
+      if (this.isStopped) {
+        return;
+      }
+
       await this.registerWithRelay(state);
       this.scheduleRenewal(state);
+    }
+  }
+
+  private isLifecycleActive(generation: number) {
+    return !this.isStopped && this.lifecycleGeneration === generation;
+  }
+
+  private async deleteSubscriptionFromStoppedStart(
+    generation: number,
+    subscriptionId: string | undefined,
+  ) {
+    if (!subscriptionId || !this.stoppedStartsNeedingRemoteDelete.has(generation)) {
+      return;
+    }
+
+    this.stoppedStartsNeedingRemoteDelete.delete(generation);
+    await this.deleteRemoteSubscriptionById(subscriptionId);
+  }
+
+  private async deleteSubscriptionIfStopping(subscriptionId: string | undefined) {
+    if (!subscriptionId || !this.isStopped) {
+      return;
+    }
+
+    if (this.shouldDeleteRemoteSubscriptionWhileStopping) {
+      await this.deleteRemoteSubscriptionById(subscriptionId);
     }
   }
 
@@ -358,15 +440,19 @@ export class MailSubscriptionManager {
       return;
     }
 
-    try {
-      await this.options.graphClient.deleteSubscription(state.subscriptionId);
-    } catch (error) {
-      console.warn('Could not delete Microsoft Graph mail subscription.', error);
-    }
+    await this.deleteRemoteSubscriptionById(state.subscriptionId);
 
     state.subscriptionId = undefined;
     state.expirationDateTime = undefined;
     await this.saveState(state);
+  }
+
+  private async deleteRemoteSubscriptionById(subscriptionId: string) {
+    try {
+      await this.options.graphClient.deleteSubscription(subscriptionId);
+    } catch (error) {
+      console.warn('Could not delete Microsoft Graph mail subscription.', error);
+    }
   }
 }
 

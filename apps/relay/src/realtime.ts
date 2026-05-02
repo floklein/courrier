@@ -125,21 +125,29 @@ function parseSocketMessage(
   rawMessage: Buffer | ArrayBuffer | Buffer[],
   maxMessageBytes: number,
 ) {
+  if (getRawMessageByteLength(rawMessage) > maxMessageBytes) {
+    return undefined;
+  }
+
   const text = Array.isArray(rawMessage)
     ? Buffer.concat(rawMessage).toString('utf8')
     : rawMessage instanceof ArrayBuffer
       ? Buffer.from(new Uint8Array(rawMessage)).toString('utf8')
       : Buffer.from(rawMessage).toString('utf8');
 
-  if (Buffer.byteLength(text, 'utf8') > maxMessageBytes) {
-    return undefined;
-  }
-
   try {
     return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   }
+}
+
+function getRawMessageByteLength(rawMessage: Buffer | ArrayBuffer | Buffer[]) {
+  if (Array.isArray(rawMessage)) {
+    return rawMessage.reduce((total, message) => total + message.byteLength, 0);
+  }
+
+  return rawMessage.byteLength;
 }
 
 function sendSocketMessage(

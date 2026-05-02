@@ -94,5 +94,13 @@ function isHttpUrl(rawUrl: string) {
 }
 
 function normalizeFilePath(filePath: string) {
-  return path.normalize(filePath).toLowerCase();
+  const normalizedPath = path.normalize(filePath);
+
+  return isCaseInsensitiveFileSystem()
+    ? normalizedPath.toLowerCase()
+    : normalizedPath;
+}
+
+function isCaseInsensitiveFileSystem() {
+  return process.platform === 'win32' || process.platform === 'darwin';
 }

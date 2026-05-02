@@ -28,5 +28,7 @@ describe('HtmlMessageBody', () => {
     expect(frame.srcdoc).toContain('href="https://example.com"');
     expect(frame.srcdoc).not.toContain('tracker.example');
     expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(frame.style.height).toBe('70vh');
+    expect(frame.style.minHeight).toBe('320px');
   });
 });

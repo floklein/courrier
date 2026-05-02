@@ -68,14 +68,14 @@ export function HtmlMessageBody({
   isMailDragActive: boolean;
   title: string;
 }) {
-  const [htmlFrameHeight, setHtmlFrameHeight] = useState(0);
+  const [htmlFrameHeight, setHtmlFrameHeight] = useState<number | undefined>();
   const iframeWindowRef = useRef<Window | null>(null);
   const frameId = useId();
   const { resolvedTheme } = useTheme();
   const sanitizedBody = sanitizeMailBodyHtml(bodyContent);
 
   useLayoutEffect(() => {
-    setHtmlFrameHeight(0);
+    setHtmlFrameHeight(undefined);
   }, [sanitizedBody]);
 
   useEffect(() => {
@@ -150,7 +150,8 @@ export function HtmlMessageBody({
         referrerPolicy="no-referrer"
         className="w-full border-0"
         style={{
-          height: htmlFrameHeight,
+          height: htmlFrameHeight ?? '70vh',
+          minHeight: 320,
         }}
         onLoad={(event) => {
           iframeWindowRef.current = event.currentTarget.contentWindow;
@@ -164,9 +165,17 @@ export function HtmlMessageBody({
 function sanitizeMailBodyHtml(html: string) {
   const sanitized = DP.sanitize(html, {
     USE_PROFILES: { html: true },
-    FORBID_ATTR: ['background', 'poster', 'src', 'srcset'],
+    FORBID_ATTR: ['background', 'poster', 'srcset'],
   });
   const document = new DOMParser().parseFromString(sanitized, 'text/html');
+
+  document.body.querySelectorAll('[src]').forEach((element) => {
+    const source = element.getAttribute('src');
+
+    if (element.tagName !== 'IMG' || !isInlineImageSource(source)) {
+      element.removeAttribute('src');
+    }
+  });
 
   document.body.querySelectorAll('[style]').forEach((element) => {
     const style = element.getAttribute('style');
@@ -177,4 +186,16 @@ function sanitizeMailBodyHtml(html: string) {
   });
 
   return document.body.innerHTML;
+}
+
+function isInlineImageSource(source: string | null) {
+  if (!source) {
+    return false;
+  }
+
+  const normalizedSource = source.trim().toLowerCase();
+  return (
+    normalizedSource.startsWith('cid:') ||
+    normalizedSource.startsWith('data:')
+  );
 }
