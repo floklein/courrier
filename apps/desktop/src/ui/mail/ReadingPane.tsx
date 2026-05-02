@@ -1,8 +1,7 @@
-import { Link } from '@tanstack/react-router';
-import { ArrowLeft, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Reply, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { Badge } from '../../components/ui/badge';
-import { Button, buttonVariants } from '../../components/ui/button';
+import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -20,7 +19,6 @@ import type {
   ReplyToMessageInput,
 } from '../../lib/mail-types';
 import { formatMailDate, getInitials } from '../../lib/mail/mail-utils';
-import { encodeRouteId } from '../../lib/route-ids';
 import { cn } from '../../lib/utils';
 import { PanelStatus } from '../app/StatusViews';
 import { MailComposer } from '../compose/MailComposer';
@@ -119,25 +117,6 @@ export function ReadingPane({
     >
       <header className="app-window-header app-window-controls-end app-window-controls-start-mobile flex h-16 shrink-0 items-center justify-between gap-4 border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Link
-                  to="/mail/$folderId"
-                  params={{ folderId: encodeRouteId(folderId) }}
-                  aria-label="Back to message list"
-                  className={buttonVariants({
-                    variant: 'ghost',
-                    size: 'icon-sm',
-                    className: 'hidden shrink-0 max-md:inline-flex',
-                  })}
-                >
-                  <ArrowLeft data-icon="inline-start" />
-                </Link>
-              }
-            />
-            <TooltipContent>Back to message list</TooltipContent>
-          </Tooltip>
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">
               {formatMailDate(message.receivedDateTime, 'long')}
