@@ -167,7 +167,7 @@ export function UserMenu({
           <DropdownMenuGroup>
             <DropdownMenuItem
               disabled={isSigningOut}
-              onSelect={onSignOut}
+              onClick={onSignOut}
               className="m-1 px-3 py-2"
             >
               {isSigningOut ? (

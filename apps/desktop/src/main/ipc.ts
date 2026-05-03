@@ -60,7 +60,12 @@ export function registerIpcHandlers(
   ipcMain.handle('auth:sign-out', async (event, accountId?: string) => {
     assertSender(event);
     const parsedAccountId = parseIpcPayload(ipcIdSchema.optional(), accountId);
-    await options.stopMailSubscriptions?.(parsedAccountId);
+    try {
+      await options.stopMailSubscriptions?.(parsedAccountId);
+    } catch (error) {
+      console.warn('Mail subscription cleanup failed during sign-out.', error);
+    }
+
     return authService.signOut(parsedAccountId);
   });
 

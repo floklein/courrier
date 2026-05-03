@@ -67,7 +67,7 @@ export function FolderRail({
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       queryClient.removeQueries({ queryKey: ['mail'] });
     },
-    onSuccess: async () => {
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
     },
   });

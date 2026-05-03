@@ -68,6 +68,33 @@ describe('IPC auth handlers', () => {
 
     expect(startMailSubscriptions).not.toHaveBeenCalled();
   });
+
+  it('signs out even when subscription cleanup fails', async () => {
+    const session = { status: 'unauthenticated' };
+    const authService = {
+      signIn: vi.fn(),
+      getSession: vi.fn(),
+      switchAccount: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(session),
+    };
+    const mailService = createMailService();
+    const stopMailSubscriptions = vi
+      .fn()
+      .mockRejectedValue(new Error('relay unavailable'));
+
+    registerIpcHandlers(authService as never, mailService as never, {
+      stopMailSubscriptions,
+      trustPolicy,
+    });
+    const result = await ipcHandlers.get('auth:sign-out')?.(
+      trustedEvent,
+      'microsoft:account-1',
+    );
+
+    expect(result).toBe(session);
+    expect(stopMailSubscriptions).toHaveBeenCalledWith('microsoft:account-1');
+    expect(authService.signOut).toHaveBeenCalledWith('microsoft:account-1');
+  });
 });
 
 describe('IPC mail handlers', () => {
