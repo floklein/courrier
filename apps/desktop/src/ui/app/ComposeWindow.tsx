@@ -11,7 +11,11 @@ export function ComposeWindow() {
     queryFn: api.window.getComposeDraft,
   });
   const sendMessageMutation = useMutation({
-    mutationFn: (input: SendMailInput) => api.mail.sendMessage(input),
+    mutationFn: (input: SendMailInput) =>
+      api.mail.sendMessage(
+        draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId,
+        input,
+      ),
     onSuccess: async () => {
       await api.window.closeCurrent();
     },
@@ -24,6 +28,7 @@ export function ComposeWindow() {
   return (
     <main className="h-full bg-background">
       <MailComposer
+        accountId={draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId}
         mode="new"
         initialDraft={draftQuery.data ?? emptyComposeWindowDraft}
         isSending={sendMessageMutation.isPending}

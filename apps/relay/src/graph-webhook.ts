@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
+  gmailNotificationDataSchema,
   graphNotificationCollectionSchema,
+  googlePubSubPushSchema,
   mailRemoteChangeEventSchema,
   relaySubscriptionRegistrationSchema,
   type MailRemoteChangeEvent,
@@ -82,6 +84,8 @@ export function registerGraphWebhookRoutes({
       const eventResult = mailRemoteChangeEventSchema.safeParse({
         id: randomUUID(),
         clientId: subscription.clientId,
+        accountId: subscription.accountId,
+        providerId: subscription.providerId ?? 'microsoft',
         subscriptionId: notification.subscriptionId,
         kind: notification.lifecycleEvent ? 'lifecycle' : 'message-change',
         changeType,
@@ -107,11 +111,82 @@ export function registerGraphWebhookRoutes({
 
     return reply.code(202).send({ ok: true });
   });
+
+  fastify.post('/google/pubsub', async (request, reply) => {
+    const verificationToken = getVerificationToken(request.url);
+
+    if (
+      config.GOOGLE_PUBSUB_VERIFICATION_TOKEN &&
+      verificationToken !== config.GOOGLE_PUBSUB_VERIFICATION_TOKEN
+    ) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
+    const result = googlePubSubPushSchema.safeParse(request.body);
+
+    if (!result.success) {
+      request.log.warn({ error: result.error }, 'Invalid Google Pub/Sub payload');
+      return reply.code(400).send({ error: 'Invalid notification payload' });
+    }
+
+    const notificationData = parseGmailNotificationData(result.data.message.data);
+
+    if (!notificationData) {
+      request.log.warn({ payload: result.data }, 'Invalid Gmail notification data');
+      return reply.code(400).send({ error: 'Invalid Gmail notification data' });
+    }
+
+    const subscription = await store.getSubscriptionByAccountEmail(
+      notificationData.emailAddress,
+    );
+
+    if (!subscription) {
+      request.log.warn(
+        { emailAddress: notificationData.emailAddress },
+        'Gmail notification did not match a registered account',
+      );
+      return reply.code(202).send({ ok: true });
+    }
+
+    const eventResult = mailRemoteChangeEventSchema.safeParse({
+      id: randomUUID(),
+      clientId: subscription.clientId,
+      accountId: subscription.accountId,
+      providerId: 'google',
+      subscriptionId:
+        result.data.message.messageId ??
+        result.data.message.message_id ??
+        notificationData.historyId,
+      kind: 'message-change',
+      changeType: 'updated',
+      resource: notificationData.emailAddress,
+      receivedAt: new Date().toISOString(),
+    });
+
+    if (!eventResult.success) {
+      request.log.warn(
+        { error: eventResult.error, payload: result.data },
+        'Gmail notification could not be converted to a relay event',
+      );
+      return reply.code(202).send({ ok: true });
+    }
+
+    const event: MailRemoteChangeEvent = eventResult.data;
+    await store.appendEvent(event);
+    realtime.sendMailChange(event);
+
+    return reply.code(204).send();
+  });
 }
 
 function getValidationToken(url: string) {
   const parsedUrl = new URL(url, 'http://relay.local');
   return parsedUrl.searchParams.get('validationToken');
+}
+
+function getVerificationToken(url: string) {
+  const parsedUrl = new URL(url, 'http://relay.local');
+  return parsedUrl.searchParams.get('token');
 }
 
 function isAuthorized(authorization: string | undefined, token: string) {
@@ -136,4 +211,15 @@ function getMessageIdFromResource(resource: string | undefined) {
   }
 
   return /\/messages\/([^/?#]+)/i.exec(resource)?.[1];
+}
+
+function parseGmailNotificationData(data: string) {
+  try {
+    const decoded = Buffer.from(data, 'base64').toString('utf8');
+    const result = gmailNotificationDataSchema.safeParse(JSON.parse(decoded));
+
+    return result.success ? result.data : undefined;
+  } catch {
+    return undefined;
+  }
 }

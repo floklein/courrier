@@ -68,22 +68,42 @@ export interface MailMessageDetail extends MailMessageSummary {
 
 export interface PagedMessages {
   messages: MailMessageSummary[];
-  nextPageUrl?: string;
+  nextPageToken?: string;
+}
+
+export type ProviderId = 'microsoft' | 'google';
+
+export interface MailAccount {
+  id: string;
+  providerId: ProviderId;
+  providerAccountId: string;
+  email: string;
+  name?: string;
+  label: string;
+}
+
+export interface ProviderConfigurationStatus {
+  providerId: ProviderId;
+  displayName: string;
+  isConfigured: boolean;
+  message?: string;
 }
 
 export type AuthSession =
   | {
       status: 'authenticated';
-      account: {
-        homeAccountId: string;
-        username: string;
-        name?: string;
-      };
+      activeAccount: MailAccount;
+      accounts: MailAccount[];
+      providers: ProviderConfigurationStatus[];
     }
   | {
       status: 'unauthenticated';
+      accounts: MailAccount[];
+      providers: ProviderConfigurationStatus[];
     }
   | {
       status: 'configuration-error';
       message: string;
+      accounts: MailAccount[];
+      providers: ProviderConfigurationStatus[];
     };

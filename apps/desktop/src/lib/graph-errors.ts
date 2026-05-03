@@ -38,5 +38,9 @@ export function isGraphItemNotFoundError(error: unknown) {
 export function isMicrosoftSignInRequiredError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
 
-  return message.includes('Microsoft sign-in is required.');
+  return (
+    message.includes('Microsoft sign-in is required.') ||
+    message.includes('Google sign-in is required.') ||
+    message.includes('Sign-in is required.')
+  );
 }

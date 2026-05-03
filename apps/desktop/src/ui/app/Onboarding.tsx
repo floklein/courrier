@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Mail } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api-client';
-import type { AuthSession } from '../../lib/mail-types';
+import type { AuthSession, ProviderId } from '../../lib/mail-types';
 
 export function Onboarding({
   session,
@@ -11,9 +11,9 @@ export function Onboarding({
 }) {
   const queryClient = useQueryClient();
   const signInMutation = useMutation({
-    mutationFn: api.auth.signIn,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+    mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
+    onSuccess: async (session) => {
+      queryClient.setQueryData(['auth', 'session'], session);
       await queryClient.invalidateQueries({ queryKey: ['mail'] });
     },
   });
@@ -29,8 +29,8 @@ export function Onboarding({
           Welcome to Courrier
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          Courrier needs Microsoft access before it can show your folders and
-          messages. Sign in opens Microsoft in your system browser.
+          Courrier needs access to a mail provider before it can show your
+          folders and messages. Sign in opens the provider in your system browser.
         </p>
         {isConfigError && (
           <div className="mt-5 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm leading-6 text-destructive">
@@ -42,16 +42,22 @@ export function Onboarding({
             {signInMutation.error.message}
           </div>
         )}
-        <Button
-          className="mt-6 w-full"
-          disabled={signInMutation.isPending || isConfigError}
-          onClick={() => signInMutation.mutate()}
-        >
-          {signInMutation.isPending && (
-            <Loader2 className="size-4 animate-spin" />
-          )}
-          Sign in with Microsoft
-        </Button>
+        <div className="mt-6 flex flex-col gap-2">
+          {session.providers.map((provider) => (
+            <Button
+              key={provider.providerId}
+              className="w-full"
+              variant={provider.providerId === 'microsoft' ? 'default' : 'outline'}
+              disabled={signInMutation.isPending || !provider.isConfigured}
+              onClick={() => signInMutation.mutate(provider.providerId)}
+            >
+              {signInMutation.isPending && (
+                <Loader2 className="size-4 animate-spin" />
+              )}
+              Sign in with {provider.displayName}
+            </Button>
+          ))}
+        </div>
       </section>
     </main>
   );

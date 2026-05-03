@@ -5,6 +5,7 @@ import type {
   MailMessageDetail,
   MailPersonSuggestion,
   PagedMessages,
+  ProviderId,
   ReplyToMessageInput,
   SendMailInput,
 } from './lib/mail-types';
@@ -18,51 +19,76 @@ const courrier = {
   platform: process.platform,
   auth: {
     getSession: () => ipcRenderer.invoke('auth:get-session') as Promise<AuthSession>,
-    signIn: () => ipcRenderer.invoke('auth:sign-in') as Promise<AuthSession>,
-    signOut: () => ipcRenderer.invoke('auth:sign-out') as Promise<AuthSession>,
+    signIn: (providerId: ProviderId) =>
+      ipcRenderer.invoke('auth:sign-in', providerId) as Promise<AuthSession>,
+    switchAccount: (accountId: string) =>
+      ipcRenderer.invoke('auth:switch-account', accountId) as Promise<AuthSession>,
+    signOut: (accountId?: string) =>
+      ipcRenderer.invoke('auth:sign-out', accountId) as Promise<AuthSession>,
   },
   mail: {
-    listFolders: () =>
-      ipcRenderer.invoke('mail:list-folders') as Promise<MailFolder[]>,
-    listMessages: (folderId: string, pageUrl?: string, searchQuery?: string) =>
+    listFolders: (accountId: string) =>
+      ipcRenderer.invoke('mail:list-folders', accountId) as Promise<MailFolder[]>,
+    listMessages: (
+      accountId: string,
+      folderId: string,
+      pageToken?: string,
+      searchQuery?: string,
+    ) =>
       ipcRenderer.invoke(
         'mail:list-messages',
+        accountId,
         folderId,
-        pageUrl,
+        pageToken,
         searchQuery,
       ) as Promise<PagedMessages>,
-    getMessage: (folderId: string, messageId: string) =>
+    getMessage: (accountId: string, folderId: string, messageId: string) =>
       ipcRenderer.invoke(
         'mail:get-message',
+        accountId,
         folderId,
         messageId,
       ) as Promise<MailMessageDetail | undefined>,
-    markMessageReadState: (messageId: string, isRead: boolean) =>
+    markMessageReadState: (
+      accountId: string,
+      messageId: string,
+      isRead: boolean,
+    ) =>
       ipcRenderer.invoke(
         'mail:mark-message-read-state',
+        accountId,
         messageId,
         isRead,
       ) as Promise<void>,
-    moveMessage: (messageId: string, destinationFolderId: string) =>
+    moveMessage: (
+      accountId: string,
+      messageId: string,
+      sourceFolderId: string,
+      destinationFolderId: string,
+    ) =>
       ipcRenderer.invoke(
         'mail:move-message',
+        accountId,
         messageId,
+        sourceFolderId,
         destinationFolderId,
       ) as Promise<MailMessageDetail>,
-    deleteMessage: (messageId: string) =>
+    deleteMessage: (accountId: string, messageId: string) =>
       ipcRenderer.invoke(
         'mail:delete-message',
+        accountId,
         messageId,
       ) as Promise<MailMessageDetail>,
-    listPeople: (query?: string) =>
+    listPeople: (accountId: string, query?: string) =>
       ipcRenderer.invoke(
         'mail:list-people',
+        accountId,
         query,
       ) as Promise<MailPersonSuggestion[]>,
-    sendMessage: (input: SendMailInput) =>
-      ipcRenderer.invoke('mail:send-message', input) as Promise<void>,
-    replyToMessage: (input: ReplyToMessageInput) =>
-      ipcRenderer.invoke('mail:reply-to-message', input) as Promise<void>,
+    sendMessage: (accountId: string, input: SendMailInput) =>
+      ipcRenderer.invoke('mail:send-message', accountId, input) as Promise<void>,
+    replyToMessage: (accountId: string, input: ReplyToMessageInput) =>
+      ipcRenderer.invoke('mail:reply-to-message', accountId, input) as Promise<void>,
     onRemoteChange: (listener: (event: MailRemoteChangeEvent) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, change: unknown) => {
         const result = mailRemoteChangeEventSchema.safeParse(change);

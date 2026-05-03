@@ -149,6 +149,47 @@ describe('Graph webhook routes', () => {
       },
     ]);
   });
+
+  it('stores matching Gmail Pub/Sub notifications as mail change events', async () => {
+    const store = new InMemoryRelayStore();
+    const server = buildServer({ config, store, logger: false });
+
+    await store.upsertSubscription({
+      clientId: 'desktop-1',
+      accountId: 'google:account-1',
+      providerId: 'google',
+      accountEmail: 'ada@example.com',
+      clientState: 'client-state-with-enough-length',
+      authToken: 'auth-token-with-enough-length',
+    });
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/google/pubsub',
+      payload: {
+        message: {
+          messageId: 'pubsub-message-1',
+          data: Buffer.from(
+            JSON.stringify({
+              emailAddress: 'ada@example.com',
+              historyId: '123',
+            }),
+          ).toString('base64'),
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(204);
+    await expect(store.listEventsAfter('desktop-1')).resolves.toMatchObject([
+      {
+        clientId: 'desktop-1',
+        accountId: 'google:account-1',
+        providerId: 'google',
+        subscriptionId: 'pubsub-message-1',
+        changeType: 'updated',
+      },
+    ]);
+  });
 });
 
 async function waitFor(predicate: () => boolean | Promise<boolean>) {

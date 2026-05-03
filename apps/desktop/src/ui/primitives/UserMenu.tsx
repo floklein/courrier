@@ -3,11 +3,13 @@ import {
   ChevronsUpDown,
   Loader2,
   LogOut,
+  MailPlus,
   Monitor,
   Moon,
   Sun,
   type LucideIcon,
 } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { Button } from '../../components/ui/button';
 import {
@@ -16,24 +18,47 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { getInitials } from '../../lib/mail/mail-utils';
+import { api } from '../../lib/api-client';
+import type { MailAccount, ProviderId } from '../../lib/mail-types';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export function UserMenu({
+  accounts,
+  activeAccountId,
   accountEmail,
   accountName,
   isSigningOut,
   onSignOut,
 }: {
+  accounts: MailAccount[];
+  activeAccountId: string;
   accountEmail: string;
   accountName: string;
   isSigningOut: boolean;
   onSignOut: () => void;
 }) {
   const { theme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
+  const switchAccountMutation = useMutation({
+    mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
+    onSuccess: async (session) => {
+      queryClient.setQueryData(['auth', 'session'], session);
+      await queryClient.invalidateQueries({ queryKey: ['mail'] });
+    },
+  });
+  const signInMutation = useMutation({
+    mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
+    onSuccess: async (session) => {
+      queryClient.setQueryData(['auth', 'session'], session);
+      await queryClient.invalidateQueries({ queryKey: ['mail'] });
+    },
+  });
 
   return (
     <div className="w-full">
@@ -79,6 +104,58 @@ export function UserMenu({
           <DropdownMenuSeparator className="m-0" />
           <DropdownMenuGroup>
             <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-muted-foreground">
+              Accounts
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={activeAccountId}
+              disabled={switchAccountMutation.isPending}
+              onValueChange={(accountId) => {
+                if (accountId === activeAccountId) {
+                  return;
+                }
+
+                switchAccountMutation.mutate(accountId);
+              }}
+            >
+              {accounts.map((account) => (
+                <DropdownMenuRadioItem
+                  key={account.id}
+                  value={account.id}
+                  closeOnClick
+                  label={account.email}
+                  className="mx-1 px-3 py-2"
+                >
+                  <Avatar className="size-5">
+                    <AvatarFallback className="text-[10px]">
+                      {getInitials(account.name ?? account.email)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="min-w-0 flex-1 truncate">
+                    {account.email}
+                  </span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuItem
+              disabled={signInMutation.isPending}
+              onClick={() => signInMutation.mutate('microsoft')}
+              className="mx-1 px-3 py-2"
+            >
+              <MailPlus data-icon="inline-start" />
+              Add Microsoft account
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={signInMutation.isPending}
+              onClick={() => signInMutation.mutate('google')}
+              className="mx-1 px-3 py-2"
+            >
+              <MailPlus data-icon="inline-start" />
+              Add Google account
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-muted-foreground">
               Theme
             </DropdownMenuLabel>
             <ThemeMenuItem
@@ -104,7 +181,7 @@ export function UserMenu({
           <DropdownMenuGroup>
             <DropdownMenuItem
               disabled={isSigningOut}
-              onSelect={onSignOut}
+              onClick={onSignOut}
               className="m-1 px-3 py-2"
             >
               {isSigningOut ? (
@@ -133,7 +210,7 @@ function ThemeMenuItem({
   onSelect: () => void;
 }) {
   return (
-    <DropdownMenuItem onSelect={onSelect} className="mx-1 px-3 py-2">
+    <DropdownMenuItem onClick={onSelect} className="mx-1 px-3 py-2">
       <Icon data-icon="inline-start" />
       {label}
       {isSelected && <Check data-icon="inline-end" className="ml-auto" />}

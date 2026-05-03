@@ -12,46 +12,52 @@ export function authSessionQueryOptions() {
   });
 }
 
-export function mailFoldersQueryOptions() {
+export function mailFoldersQueryOptions(accountId: string) {
   return queryOptions({
-    queryKey: ['mail', 'folders'] as const,
-    queryFn: api.mail.listFolders,
+    queryKey: ['mail', accountId, 'folders'] as const,
+    queryFn: () => api.mail.listFolders(accountId),
     staleTime: mailPreloadStaleTimeMs,
   });
 }
 
-export function mailMessagesQueryOptions(folderId: string, searchQuery = '') {
+export function mailMessagesQueryOptions(
+  accountId: string,
+  folderId: string,
+  searchQuery = '',
+) {
   return infiniteQueryOptions({
-    queryKey: ['mail', 'messages', folderId, searchQuery] as const,
+    queryKey: ['mail', accountId, 'messages', folderId, searchQuery] as const,
     queryFn: ({ pageParam }) =>
       api.mail.listMessages(
+        accountId,
         folderId,
         pageParam,
         searchQuery || undefined,
       ),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: PagedMessages) => lastPage.nextPageUrl,
+    getNextPageParam: (lastPage: PagedMessages) => lastPage.nextPageToken,
     staleTime: mailPreloadStaleTimeMs,
   });
 }
 
 export function mailMessageQueryOptions(
+  accountId: string,
   folderId: string,
   messageId: string | undefined,
 ) {
   return queryOptions({
-    queryKey: ['mail', 'message', folderId, messageId] as const,
-    queryFn: () => api.mail.getMessage(folderId, messageId ?? ''),
+    queryKey: ['mail', accountId, 'message', folderId, messageId] as const,
+    queryFn: () => api.mail.getMessage(accountId, folderId, messageId ?? ''),
     staleTime: mailPreloadStaleTimeMs,
   });
 }
 
-export function mailPeopleQueryOptions(query: string) {
+export function mailPeopleQueryOptions(accountId: string, query: string) {
   const normalizedQuery = query.trim();
 
   return queryOptions({
-    queryKey: ['mail', 'people', normalizedQuery] as const,
-    queryFn: () => api.mail.listPeople(normalizedQuery || undefined),
+    queryKey: ['mail', accountId, 'people', normalizedQuery] as const,
+    queryFn: () => api.mail.listPeople(accountId, normalizedQuery || undefined),
     staleTime: 5 * 60 * 1000,
   });
 }

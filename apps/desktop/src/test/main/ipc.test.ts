@@ -26,23 +26,29 @@ beforeEach(() => {
 
 describe('IPC auth handlers', () => {
   it('starts mail subscriptions after successful sign-in', async () => {
-    const session = { status: 'authenticated', accountName: 'Ada' };
+    const session = {
+      status: 'authenticated',
+      activeAccount: { id: 'microsoft:account-1' },
+    };
     const authService = {
       signIn: vi.fn().mockResolvedValue(session),
       getSession: vi.fn(),
       signOut: vi.fn(),
     };
-    const graphClient = createGraphClient();
+    const mailService = createMailService();
     const startMailSubscriptions = vi.fn().mockResolvedValue(undefined);
 
-    registerIpcHandlers(authService as never, graphClient as never, {
+    registerIpcHandlers(authService as never, mailService as never, {
       startMailSubscriptions,
       trustPolicy,
     });
-    const result = await ipcHandlers.get('auth:sign-in')?.(trustedEvent);
+    const result = await ipcHandlers.get('auth:sign-in')?.(
+      trustedEvent,
+      'microsoft',
+    );
 
     expect(result).toBe(session);
-    expect(startMailSubscriptions).toHaveBeenCalledTimes(1);
+    expect(startMailSubscriptions).toHaveBeenCalledWith('microsoft:account-1');
   });
 
   it('does not start mail subscriptions after unauthenticated sign-in', async () => {
@@ -51,16 +57,43 @@ describe('IPC auth handlers', () => {
       getSession: vi.fn(),
       signOut: vi.fn(),
     };
-    const graphClient = createGraphClient();
+    const mailService = createMailService();
     const startMailSubscriptions = vi.fn().mockResolvedValue(undefined);
 
-    registerIpcHandlers(authService as never, graphClient as never, {
+    registerIpcHandlers(authService as never, mailService as never, {
       startMailSubscriptions,
       trustPolicy,
     });
-    await ipcHandlers.get('auth:sign-in')?.(trustedEvent);
+    await ipcHandlers.get('auth:sign-in')?.(trustedEvent, 'microsoft');
 
     expect(startMailSubscriptions).not.toHaveBeenCalled();
+  });
+
+  it('signs out even when subscription cleanup fails', async () => {
+    const session = { status: 'unauthenticated' };
+    const authService = {
+      signIn: vi.fn(),
+      getSession: vi.fn(),
+      switchAccount: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(session),
+    };
+    const mailService = createMailService();
+    const stopMailSubscriptions = vi
+      .fn()
+      .mockRejectedValue(new Error('relay unavailable'));
+
+    registerIpcHandlers(authService as never, mailService as never, {
+      stopMailSubscriptions,
+      trustPolicy,
+    });
+    const result = await ipcHandlers.get('auth:sign-out')?.(
+      trustedEvent,
+      'microsoft:account-1',
+    );
+
+    expect(result).toBe(session);
+    expect(stopMailSubscriptions).toHaveBeenCalledWith('microsoft:account-1');
+    expect(authService.signOut).toHaveBeenCalledWith('microsoft:account-1');
   });
 });
 
@@ -71,14 +104,20 @@ describe('IPC mail handlers', () => {
       getSession: vi.fn(),
       signOut: vi.fn(),
     };
-    const graphClient = createGraphClient();
+    const mailService = createMailService();
 
-    registerIpcHandlers(authService as never, graphClient as never, { trustPolicy });
+    registerIpcHandlers(authService as never, mailService as never, { trustPolicy });
 
     await expect(
-      invokeIpc('mail:mark-message-read-state', trustedEvent, '', true),
+      invokeIpc(
+        'mail:mark-message-read-state',
+        trustedEvent,
+        'microsoft:account-1',
+        '',
+        true,
+      ),
     ).rejects.toThrow('Invalid IPC payload');
-    expect(graphClient.markMessageReadState).not.toHaveBeenCalled();
+    expect(mailService.markMessageReadState).not.toHaveBeenCalled();
   });
 
   it('rejects malformed send-message payloads before calling Graph', async () => {
@@ -87,22 +126,27 @@ describe('IPC mail handlers', () => {
       getSession: vi.fn(),
       signOut: vi.fn(),
     };
-    const graphClient = createGraphClient();
+    const mailService = createMailService();
 
-    registerIpcHandlers(authService as never, graphClient as never, { trustPolicy });
+    registerIpcHandlers(authService as never, mailService as never, { trustPolicy });
 
     await expect(
-      invokeIpc('mail:send-message', trustedEvent, {
-        toRecipients: [],
-        subject: 'Hello',
-        bodyHtml: '<p>Hi</p>',
-      }),
+      invokeIpc(
+        'mail:send-message',
+        trustedEvent,
+        'microsoft:account-1',
+        {
+          toRecipients: [],
+          subject: 'Hello',
+          bodyHtml: '<p>Hi</p>',
+        },
+      ),
     ).rejects.toThrow('Invalid IPC payload');
-    expect(graphClient.sendMessage).not.toHaveBeenCalled();
+    expect(mailService.sendMessage).not.toHaveBeenCalled();
   });
 });
 
-function createGraphClient() {
+function createMailService() {
   return {
     listFolders: vi.fn(),
     listMessages: vi.fn(),

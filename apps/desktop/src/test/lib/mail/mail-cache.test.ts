@@ -15,21 +15,24 @@ import {
   updateCachedMessageReadState,
 } from '../../../lib/mail/mail-cache';
 
+const accountId = 'microsoft:account-1';
+
 describe('mail cache helpers', () => {
   it('updates message read state in list and detail caches', () => {
     const queryClient = createQueryClient();
     seedMessages(queryClient, [message({ id: 'message-1', isRead: false })]);
     queryClient.setQueryData(
-      ['mail', 'message', 'inbox', 'message-1'],
+      ['mail', accountId, 'message', 'inbox', 'message-1'],
       messageDetail({ id: 'message-1', isRead: false }),
     );
 
-    updateCachedMessageReadState(queryClient, 'message-1', true);
+    updateCachedMessageReadState(queryClient, accountId, 'message-1', true);
 
     expect(getCachedMessages(queryClient)[0].isRead).toBe(true);
     expect(
       queryClient.getQueryData<MailMessageDetail>([
         'mail',
+        accountId,
         'message',
         'inbox',
         'message-1',
@@ -44,34 +47,34 @@ describe('mail cache helpers', () => {
       message({ id: 'message-2' }),
     ]);
     queryClient.setQueryData(
-      ['mail', 'message', 'inbox', 'message-1'],
+      ['mail', accountId, 'message', 'inbox', 'message-1'],
       messageDetail({ id: 'message-1' }),
     );
 
-    removeCachedMessage(queryClient, 'message-1');
+    removeCachedMessage(queryClient, accountId, 'message-1');
 
     expect(getCachedMessages(queryClient).map((cached) => cached.id)).toEqual([
       'message-2',
     ]);
     expect(
-      queryClient.getQueryData(['mail', 'message', 'inbox', 'message-1']),
+      queryClient.getQueryData(['mail', accountId, 'message', 'inbox', 'message-1']),
     ).toBeUndefined();
   });
 
   it('updates folder counts without dropping below zero', () => {
     const queryClient = createQueryClient();
-    queryClient.setQueryData<MailFolder[]>(['mail', 'folders'], [
+    queryClient.setQueryData<MailFolder[]>(['mail', accountId, 'folders'], [
       folder({ id: 'inbox', totalCount: 1, unreadCount: 0 }),
       folder({ id: 'archive', totalCount: 5, unreadCount: 2 }),
     ]);
 
-    updateCachedFolderCounts(queryClient, {
+    updateCachedFolderCounts(queryClient, accountId, {
       folderId: 'inbox',
       totalDelta: -5,
       unreadDelta: -2,
     });
 
-    expect(queryClient.getQueryData<MailFolder[]>(['mail', 'folders'])).toEqual([
+    expect(queryClient.getQueryData<MailFolder[]>(['mail', accountId, 'folders'])).toEqual([
       folder({ id: 'inbox', totalCount: 0, unreadCount: 0 }),
       folder({ id: 'archive', totalCount: 5, unreadCount: 2 }),
     ]);
@@ -94,11 +97,11 @@ describe('mail cache helpers', () => {
     const originalMessages = [message({ id: 'message-1', isRead: false })];
     const originalFolders = [folder({ id: 'inbox', totalCount: 2, unreadCount: 1 })];
     seedMessages(queryClient, originalMessages);
-    queryClient.setQueryData<MailFolder[]>(['mail', 'folders'], originalFolders);
+    queryClient.setQueryData<MailFolder[]>(['mail', accountId, 'folders'], originalFolders);
 
     const snapshot = createMailCacheSnapshot(queryClient);
-    updateCachedMessageReadState(queryClient, 'message-1', true);
-    updateCachedFolderCounts(queryClient, {
+    updateCachedMessageReadState(queryClient, accountId, 'message-1', true);
+    updateCachedFolderCounts(queryClient, accountId, {
       folderId: 'inbox',
       unreadDelta: -1,
     });
@@ -106,7 +109,7 @@ describe('mail cache helpers', () => {
     restoreMailCacheSnapshot(queryClient, snapshot);
 
     expect(getCachedMessages(queryClient)).toEqual(originalMessages);
-    expect(queryClient.getQueryData<MailFolder[]>(['mail', 'folders'])).toEqual(
+    expect(queryClient.getQueryData<MailFolder[]>(['mail', accountId, 'folders'])).toEqual(
       originalFolders,
     );
   });
@@ -127,7 +130,7 @@ function seedMessages(
   messages: MailMessageSummary[],
 ) {
   queryClient.setQueryData<InfiniteData<PagedMessages>>(
-    ['mail', 'messages', 'inbox'],
+    ['mail', accountId, 'messages', 'inbox'],
     {
       pages: [{ messages }],
       pageParams: [undefined],
@@ -139,6 +142,7 @@ function getCachedMessages(queryClient: QueryClient) {
   return (
     queryClient.getQueryData<InfiniteData<PagedMessages>>([
       'mail',
+      accountId,
       'messages',
       'inbox',
     ])?.pages[0].messages ?? []

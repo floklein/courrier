@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AuthService } from '../../main/auth-service';
 import { GraphClient, getValidatedMessagePageUrl } from '../../main/graph-client';
+import type { MailAccount } from '../../lib/mail-types';
 import {
   GraphRequestError,
   isGraphItemNotFoundError,
 } from '../../lib/graph-errors';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
+const account: MailAccount = {
+  id: 'microsoft:account-1',
+  providerId: 'microsoft',
+  providerAccountId: 'account-1',
+  email: 'ada@example.com',
+  label: 'Ada',
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -52,6 +59,7 @@ describe('GraphClient write requests', () => {
     const client = createGraphClient();
 
     const subscription = await client.createMailSubscription({
+      account,
       clientState: 'client-state',
       expirationDateTime: '2026-04-29T12:00:00.000Z',
       notificationUrl: 'https://relay.example.com/graph/notifications',
@@ -90,6 +98,7 @@ describe('GraphClient write requests', () => {
     const client = createGraphClient();
 
     await client.renewSubscription({
+      account,
       subscriptionId: 'subscription-1',
       expirationDateTime: '2026-04-29T12:00:00.000Z',
     });
@@ -113,7 +122,7 @@ describe('GraphClient write requests', () => {
     const fetchMock = mockFetch(new Response('', { status: 202 }));
     const client = createGraphClient();
 
-    await client.sendMessage({
+    await client.sendMessage(account.id, {
       subject: 'Hello',
       bodyHtml: '<p>Hi</p>',
       toRecipients: [
@@ -165,7 +174,7 @@ describe('GraphClient write requests', () => {
     );
     const client = createGraphClient();
 
-    await client.replyToMessage({
+    await client.replyToMessage(account.id, {
       messageId: 'message-1',
       bodyHtml: '<p>Reply</p>',
     });
@@ -196,7 +205,7 @@ describe('GraphClient write requests', () => {
     const client = createGraphClient();
 
     await expect(
-      client.replyToMessage({
+      client.replyToMessage(account.id, {
         messageId: 'message-1',
         bodyHtml: '<p>Reply</p>',
       }),
@@ -208,7 +217,9 @@ describe('GraphClient write requests', () => {
     mockFetch(new Response('invalid request', { status: 400 }));
     const client = createGraphClient();
 
-    await expect(client.markMessageReadState('message-1', true)).rejects.toThrow(
+    await expect(
+      client.markMessageReadState(account.id, 'message-1', true),
+    ).rejects.toThrow(
       'Microsoft Graph request failed: 400 invalid request',
     );
   });
@@ -225,7 +236,7 @@ describe('GraphClient write requests', () => {
     const client = createGraphClient();
 
     const error = await client
-      .markMessageReadState('message-1', true)
+      .markMessageReadState(account.id, 'message-1', true)
       .catch((candidate: unknown) => candidate);
 
     expect(error).toBeInstanceOf(GraphRequestError);
@@ -239,8 +250,14 @@ describe('GraphClient write requests', () => {
 
 function createGraphClient() {
   return new GraphClient({
+    id: 'microsoft',
+    displayName: 'Microsoft',
+    getConfigurationError: vi.fn(),
+    getAccounts: vi.fn(),
+    signIn: vi.fn(),
+    signOut: vi.fn(),
     getAccessToken: vi.fn().mockResolvedValue('test-token'),
-  } as unknown as AuthService);
+  });
 }
 
 function mockFetch(...responses: Response[]) {

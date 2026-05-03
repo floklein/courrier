@@ -1,28 +1,29 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { z, type ZodType } from 'zod';
-import type { GraphClient } from './graph-client';
 import type { AuthService } from './auth-service';
+import type { MailService } from './mail-service';
 import { assertTrustedSender, type AppUrlTrustPolicy } from './security';
 import type {
   ReplyToMessageInput,
   SendMailInput,
 } from '../lib/mail-types';
 import {
-  graphPageUrlSchema,
   ipcIdSchema,
+  mailPageTokenSchema,
   mailPeopleQuerySchema,
   mailSearchQuerySchema,
+  providerIdSchema,
   replyToMessageInputSchema,
   sendMailInputSchema,
 } from '../lib/mail-schemas';
 
 export function registerIpcHandlers(
   authService: AuthService,
-  graphClient: GraphClient,
+  mailService: MailService,
   options: {
     trustPolicy: AppUrlTrustPolicy;
-    startMailSubscriptions?: () => Promise<void>;
-    stopMailSubscriptions?: () => Promise<void>;
+    startMailSubscriptions?: (accountId?: string) => Promise<void>;
+    stopMailSubscriptions?: (accountId?: string) => Promise<void>;
   },
 ) {
   const assertSender = (event: IpcMainInvokeEvent) =>
@@ -32,49 +33,78 @@ export function registerIpcHandlers(
     assertSender(event);
     return authService.getSession();
   });
-  ipcMain.handle('auth:sign-in', async (event) => {
+  ipcMain.handle('auth:sign-in', async (event, providerId: unknown) => {
     assertSender(event);
-    const session = await authService.signIn();
+    const session = await authService.signIn(
+      parseIpcPayload(providerIdSchema, providerId),
+    );
 
     if (session.status === 'authenticated') {
-      await options.startMailSubscriptions?.();
+      await options.startMailSubscriptions?.(session.activeAccount.id);
     }
 
     return session;
   });
-  ipcMain.handle('auth:sign-out', async (event) => {
+  ipcMain.handle('auth:switch-account', async (event, accountId: string) => {
     assertSender(event);
-    await options.stopMailSubscriptions?.();
-    return authService.signOut();
+    const session = await authService.switchAccount(
+      parseIpcPayload(ipcIdSchema, accountId),
+    );
+
+    if (session.status === 'authenticated') {
+      await options.startMailSubscriptions?.(session.activeAccount.id);
+    }
+
+    return session;
+  });
+  ipcMain.handle('auth:sign-out', async (event, accountId?: string) => {
+    assertSender(event);
+    const parsedAccountId = parseIpcPayload(ipcIdSchema.optional(), accountId);
+    try {
+      await options.stopMailSubscriptions?.(parsedAccountId);
+    } catch (error) {
+      console.warn('Mail subscription cleanup failed during sign-out.', error);
+    }
+
+    return authService.signOut(parsedAccountId);
   });
 
-  ipcMain.handle('mail:list-folders', (event) => {
+  ipcMain.handle('mail:list-folders', (event, accountId: string) => {
     assertSender(event);
-    return graphClient.listFolders();
+    return mailService.listFolders(parseIpcPayload(ipcIdSchema, accountId));
   });
   ipcMain.handle(
     'mail:list-messages',
-    (event, folderId: string, pageUrl?: string, searchQuery?: string) => {
+    (
+      event,
+      accountId: string,
+      folderId: string,
+      pageToken?: string,
+      searchQuery?: string,
+    ) => {
       assertSender(event);
-      return graphClient.listMessages(
+      return mailService.listMessages(
+        parseIpcPayload(ipcIdSchema, accountId),
         parseIpcPayload(ipcIdSchema, folderId),
-        parseIpcPayload(graphPageUrlSchema, pageUrl),
+        parseIpcPayload(mailPageTokenSchema, pageToken),
         parseIpcPayload(mailSearchQuerySchema, searchQuery),
       );
     },
   );
-  ipcMain.handle('mail:get-message', (event, folderId: string, messageId: string) => {
+  ipcMain.handle('mail:get-message', (event, accountId: string, folderId: string, messageId: string) => {
     assertSender(event);
-    return graphClient.getMessage(
+    return mailService.getMessage(
+      parseIpcPayload(ipcIdSchema, accountId),
       parseIpcPayload(ipcIdSchema, folderId),
       parseIpcPayload(ipcIdSchema, messageId),
     );
   });
   ipcMain.handle(
     'mail:mark-message-read-state',
-    (event, messageId: string, isRead: boolean) => {
+    (event, accountId: string, messageId: string, isRead: boolean) => {
       assertSender(event);
-      return graphClient.markMessageReadState(
+      return mailService.markMessageReadState(
+        parseIpcPayload(ipcIdSchema, accountId),
         parseIpcPayload(ipcIdSchema, messageId),
         parseIpcPayload(booleanSchema, isRead),
       );
@@ -82,31 +112,48 @@ export function registerIpcHandlers(
   );
   ipcMain.handle(
     'mail:move-message',
-    (event, messageId: string, destinationFolderId: string) => {
+    (
+      event,
+      accountId: string,
+      messageId: string,
+      sourceFolderId: string,
+      destinationFolderId: string,
+    ) => {
       assertSender(event);
-      return graphClient.moveMessage(
-        parseIpcPayload(ipcIdSchema, messageId),
-        parseIpcPayload(ipcIdSchema, destinationFolderId),
-      );
+      return mailService.moveMessage(parseIpcPayload(ipcIdSchema, accountId), {
+        messageId: parseIpcPayload(ipcIdSchema, messageId),
+        sourceFolderId: parseIpcPayload(ipcIdSchema, sourceFolderId),
+        destinationFolderId: parseIpcPayload(ipcIdSchema, destinationFolderId),
+      });
     },
   );
-  ipcMain.handle('mail:delete-message', (event, messageId: string) => {
+  ipcMain.handle('mail:delete-message', (event, accountId: string, messageId: string) => {
     assertSender(event);
-    return graphClient.deleteMessage(parseIpcPayload(ipcIdSchema, messageId));
+    return mailService.deleteMessage(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(ipcIdSchema, messageId),
+    );
   });
-  ipcMain.handle('mail:list-people', (event, query?: string) => {
+  ipcMain.handle('mail:list-people', (event, accountId: string, query?: string) => {
     assertSender(event);
-    return graphClient.listPeople(parseIpcPayload(mailPeopleQuerySchema, query));
+    return mailService.listPeople(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(mailPeopleQuerySchema, query),
+    );
   });
-  ipcMain.handle('mail:send-message', (event, input: SendMailInput) => {
+  ipcMain.handle('mail:send-message', (event, accountId: string, input: SendMailInput) => {
     assertSender(event);
-    return graphClient.sendMessage(parseIpcPayload(sendMailInputSchema, input));
+    return mailService.sendMessage(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(sendMailInputSchema, input),
+    );
   });
   ipcMain.handle(
     'mail:reply-to-message',
-    (event, input: ReplyToMessageInput) => {
+    (event, accountId: string, input: ReplyToMessageInput) => {
       assertSender(event);
-      return graphClient.replyToMessage(
+      return mailService.replyToMessage(
+        parseIpcPayload(ipcIdSchema, accountId),
         parseIpcPayload(replyToMessageInputSchema, input),
       );
     },
