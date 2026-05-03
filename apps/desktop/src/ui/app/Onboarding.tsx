@@ -12,8 +12,8 @@ export function Onboarding({
   const queryClient = useQueryClient();
   const signInMutation = useMutation({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+    onSuccess: async (session) => {
+      queryClient.setQueryData(['auth', 'session'], session);
       await queryClient.invalidateQueries({ queryKey: ['mail'] });
     },
   });

@@ -18,6 +18,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
@@ -45,14 +47,16 @@ export function UserMenu({
   const queryClient = useQueryClient();
   const switchAccountMutation = useMutation({
     mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+    onSuccess: async (session) => {
+      queryClient.setQueryData(['auth', 'session'], session);
+      await queryClient.invalidateQueries({ queryKey: ['mail'] });
     },
   });
   const signInMutation = useMutation({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+    onSuccess: async (session) => {
+      queryClient.setQueryData(['auth', 'session'], session);
+      await queryClient.invalidateQueries({ queryKey: ['mail'] });
     },
   });
 
@@ -102,26 +106,36 @@ export function UserMenu({
             <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-muted-foreground">
               Accounts
             </DropdownMenuLabel>
-            {accounts.map((account) => (
-              <DropdownMenuItem
-                key={account.id}
-                disabled={
-                  account.id === activeAccountId || switchAccountMutation.isPending
+            <DropdownMenuRadioGroup
+              value={activeAccountId}
+              disabled={switchAccountMutation.isPending}
+              onValueChange={(accountId) => {
+                if (accountId === activeAccountId) {
+                  return;
                 }
-                onClick={() => switchAccountMutation.mutate(account.id)}
-                className="mx-1 px-3 py-2"
-              >
-                <Avatar className="size-5">
-                  <AvatarFallback className="text-[10px]">
-                    {getInitials(account.name ?? account.email)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="min-w-0 flex-1 truncate">
-                  {account.email}
-                </span>
-                {account.id === activeAccountId && <Check data-icon="inline-end" />}
-              </DropdownMenuItem>
-            ))}
+
+                switchAccountMutation.mutate(accountId);
+              }}
+            >
+              {accounts.map((account) => (
+                <DropdownMenuRadioItem
+                  key={account.id}
+                  value={account.id}
+                  closeOnClick
+                  label={account.email}
+                  className="mx-1 px-3 py-2"
+                >
+                  <Avatar className="size-5">
+                    <AvatarFallback className="text-[10px]">
+                      {getInitials(account.name ?? account.email)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="min-w-0 flex-1 truncate">
+                    {account.email}
+                  </span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
             <DropdownMenuItem
               disabled={signInMutation.isPending}
               onClick={() => signInMutation.mutate('microsoft')}
