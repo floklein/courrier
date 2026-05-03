@@ -19,7 +19,13 @@ import type { AuthSession } from '../lib/mail-types';
 import { createAuthCallbackTemplate } from './auth-callback-template';
 
 const authority = 'https://login.microsoftonline.com/common';
-const scopes = ['User.Read', 'Mail.ReadWrite', 'Mail.Send', 'offline_access'];
+const scopes = [
+  'User.Read',
+  'People.Read',
+  'Mail.ReadWrite',
+  'Mail.Send',
+  'offline_access',
+];
 
 export class AuthConfigurationError extends Error {
   constructor(message: string) {

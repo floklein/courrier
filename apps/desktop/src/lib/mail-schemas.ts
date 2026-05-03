@@ -10,6 +10,8 @@ export const graphPageUrlSchema = z
 
 export const mailSearchQuerySchema = z.string().max(512).optional();
 
+export const mailPeopleQuerySchema = z.string().trim().max(128).optional();
+
 export const mailComposeRecipientSchema = z.object({
   name: z.string().trim().min(1).max(256).optional(),
   email: z.string().trim().email().max(320),

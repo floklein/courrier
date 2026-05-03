@@ -10,6 +10,7 @@ import {
 import type {
   MailFolder,
   MailMessageDetail,
+  MailPersonSuggestion,
   PagedMessages,
   ReplyToMessageInput,
   SendMailInput,
@@ -32,6 +33,17 @@ const wellKnownFolderNames = [
 interface GraphCollection<T> {
   value?: T[];
   '@odata.nextLink'?: string;
+}
+
+interface GraphScoredEmailAddress {
+  address?: string | null;
+}
+
+interface GraphPerson {
+  id?: string | null;
+  displayName?: string | null;
+  scoredEmailAddresses?: GraphScoredEmailAddress[] | null;
+  userPrincipalName?: string | null;
 }
 
 export interface GraphSubscription {
@@ -134,6 +146,24 @@ export class GraphClient {
 
   async deleteMessage(messageId: string): Promise<MailMessageDetail> {
     return this.moveMessage(messageId, 'deleteditems');
+  }
+
+  async listPeople(query?: string): Promise<MailPersonSuggestion[]> {
+    const search = query?.trim();
+    const params = new URLSearchParams({
+      $top: '10',
+      $select: 'id,displayName,scoredEmailAddresses,userPrincipalName',
+    });
+
+    if (search) {
+      params.set('$search', `"${search.replaceAll('"', '\\"')}"`);
+    }
+
+    const data = await this.fetchGraph<GraphCollection<GraphPerson>>(
+      `${graphBaseUrl}/me/people?${params.toString()}`,
+    );
+
+    return mapPeopleSuggestions(data.value ?? []);
   }
 
   async sendMessage(input: SendMailInput): Promise<void> {
@@ -504,4 +534,42 @@ function formatGraphRecipient(recipient: SendMailInput['toRecipients'][number]) 
       address: recipient.email,
     },
   };
+}
+
+function mapPeopleSuggestions(people: GraphPerson[]): MailPersonSuggestion[] {
+  const suggestions: MailPersonSuggestion[] = [];
+  const seenEmails = new Set<string>();
+
+  for (const person of people) {
+    const email =
+      person.scoredEmailAddresses?.find((candidate) =>
+        isValidEmail(candidate.address),
+      )?.address ?? person.userPrincipalName;
+
+    if (!isValidEmail(email)) {
+      continue;
+    }
+
+    const normalizedEmail = email.toLowerCase();
+
+    if (seenEmails.has(normalizedEmail)) {
+      continue;
+    }
+
+    seenEmails.add(normalizedEmail);
+    suggestions.push({
+      id: person.id || normalizedEmail,
+      name: person.displayName?.trim() || email,
+      email,
+    });
+  }
+
+  return suggestions;
+}
+
+function isValidEmail(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value)
+  );
 }

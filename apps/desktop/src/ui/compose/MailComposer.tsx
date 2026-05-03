@@ -7,13 +7,19 @@ import {
   type ComposeWindowDraft,
 } from '../../lib/compose-window';
 import type {
+  MailComposeRecipient,
   MailMessageDetail,
   ReplyToMessageInput,
   SendMailInput,
 } from '../../lib/mail-types';
-import { parseRecipients, sanitizeOutgoingMailHtml } from '../../lib/mail/mail-compose-utils';
+import {
+  parseRecipients,
+  sanitizeOutgoingMailHtml,
+  serializeRecipients,
+} from '../../lib/mail/mail-compose-utils';
 import { cn } from '../../lib/utils';
 import { MailComposerHeader } from './MailComposerHeader';
+import { RecipientPicker } from './RecipientPicker';
 import { RichTextMailEditor, type RichTextMailEditorValue } from './RichTextMailEditor';
 
 export function MailComposer({
@@ -47,7 +53,17 @@ export function MailComposer({
 }) {
   const toInputId = useId();
   const subjectInputId = useId();
-  const [toValue, setToValue] = useState(initialDraft?.toValue ?? '');
+  const bodyInputId = useId();
+  const initialRecipients = useMemo(
+    () => parseRecipients(initialDraft?.toValue ?? ''),
+    [initialDraft?.toValue],
+  );
+  const [toRecipients, setToRecipients] = useState<MailComposeRecipient[]>(
+    initialRecipients.valid,
+  );
+  const [toInputValue, setToInputValue] = useState(
+    initialRecipients.invalid.join(', '),
+  );
   const [subject, setSubject] = useState(initialDraft?.subject ?? '');
   const [editorValue, setEditorValue] = useState<RichTextMailEditorValue>({
     ...(initialDraft?.editorValue ?? emptyComposeWindowDraft.editorValue),
@@ -56,15 +72,15 @@ export function MailComposer({
   const isReply = mode === 'reply';
   const currentDraft = useMemo<ComposeWindowDraft>(
     () => ({
-      toValue,
+      toValue: serializeRecipients(toRecipients, toInputValue),
       subject,
       editorValue,
     }),
-    [editorValue, subject, toValue],
+    [editorValue, subject, toInputValue, toRecipients],
   );
   const hasBody = editorValue.text.trim().length > 0 && !editorValue.isEmpty;
   const isDirty =
-    toValue.trim().length > 0 ||
+    currentDraft.toValue.trim().length > 0 ||
     subject.trim().length > 0 ||
     editorValue.text.trim().length > 0;
 
@@ -100,20 +116,25 @@ export function MailComposer({
       return;
     }
 
-    const recipients = parseRecipients(toValue);
+    const pendingRecipients = parseRecipients(toInputValue);
 
-    if (recipients.invalid.length > 0) {
-      setValidationMessage(`Check recipient: ${recipients.invalid[0]}`);
+    if (pendingRecipients.invalid.length > 0) {
+      setValidationMessage(`Check recipient: ${pendingRecipients.invalid[0]}`);
       return;
     }
 
-    if (recipients.valid.length === 0) {
+    const recipients = dedupeRecipients([
+      ...toRecipients,
+      ...pendingRecipients.valid,
+    ]);
+
+    if (recipients.length === 0) {
       setValidationMessage('Add at least one recipient.');
       return;
     }
 
     onSend({
-      toRecipients: recipients.valid,
+      toRecipients: recipients,
       subject: subject.trim(),
       bodyHtml,
     });
@@ -156,13 +177,14 @@ export function MailComposer({
               >
                 To
               </label>
-              <Input
+              <RecipientPicker
                 id={toInputId}
-                value={toValue}
-                onChange={(event) => setToValue(event.target.value)}
-                placeholder="name@example.com"
+                value={toRecipients}
+                inputValue={toInputValue}
                 disabled={isSending}
-                aria-invalid={validationMessage.startsWith('Check recipient')}
+                invalid={validationMessage.startsWith('Check recipient')}
+                onChange={setToRecipients}
+                onInputChange={setToInputValue}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -183,13 +205,22 @@ export function MailComposer({
           </>
         )}
 
-        <RichTextMailEditor
-          className={cn(!isReply && 'flex-1')}
-          disabled={isSending}
-          initialValue={initialDraft?.editorValue}
-          placeholder={isReply ? 'Write a reply' : 'Write a message'}
-          onChange={setEditorValue}
-        />
+        <div className={cn('flex min-h-0 flex-col gap-1.5', !isReply && 'flex-1')}>
+          <label
+            htmlFor={bodyInputId}
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Message
+          </label>
+          <RichTextMailEditor
+            id={bodyInputId}
+            className="flex-1"
+            disabled={isSending}
+            initialValue={initialDraft?.editorValue}
+            placeholder={isReply ? 'Write a reply' : 'Write a message'}
+            onChange={setEditorValue}
+          />
+        </div>
 
         {(validationMessage || error) && (
           <p className="text-sm text-destructive">
@@ -214,4 +245,22 @@ export function MailComposer({
       </div>
     </form>
   );
+}
+
+function dedupeRecipients(recipients: MailComposeRecipient[]) {
+  const deduped: MailComposeRecipient[] = [];
+  const seenEmails = new Set<string>();
+
+  for (const recipient of recipients) {
+    const email = recipient.email.toLowerCase();
+
+    if (seenEmails.has(email)) {
+      continue;
+    }
+
+    seenEmails.add(email);
+    deduped.push(recipient);
+  }
+
+  return deduped;
 }

@@ -13,9 +13,13 @@ export function parseMailPath(pathname: string) {
 }
 
 export function getInitials(name: string) {
-  return name
-    .split(' ')
-    .map((part) => part[0])
+  const initials = name
+    .split(/[\s-]+/)
+    .map((part) => part.match(/\p{L}/u)?.[0])
+    .filter(Boolean);
+
+  return [initials[0], initials.length > 1 ? initials.at(-1) : undefined]
+    .filter(Boolean)
     .join('')
     .slice(0, 2)
     .toUpperCase();
