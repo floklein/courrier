@@ -13,12 +13,14 @@ export type RichTextMailEditorValue = ComposeEditorValue;
 export function RichTextMailEditor({
   className,
   disabled,
+  id,
   initialValue,
   placeholder = 'Write a message',
   onChange,
 }: {
   className?: string;
   disabled?: boolean;
+  id?: string;
   initialValue?: RichTextMailEditorValue;
   placeholder?: string;
   onChange: (value: RichTextMailEditorValue) => void;
@@ -73,6 +75,20 @@ export function RichTextMailEditor({
       return;
     }
 
+    editor.setOptions({
+      editorProps: {
+        attributes: {
+          'aria-label': placeholder,
+        },
+      },
+    });
+  }, [editor, id, placeholder]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
     const handleTransaction = () => {
       setEditorVersion((version) => version + 1);
     };
@@ -87,21 +103,34 @@ export function RichTextMailEditor({
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-col gap-2',
+        'border-input focus-within:border-ring focus-within:ring-ring/50 flex min-h-36 w-full flex-col rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] md:text-sm dark:bg-input/30',
+        disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
     >
-      <RichTextMailEditorToolbar
-        editor={editor}
-        disabled={disabled}
-      />
+      {id && (
+        <textarea
+          id={id}
+          tabIndex={-1}
+          className="sr-only"
+          readOnly
+          value={editor?.getText() ?? ''}
+          aria-label={placeholder}
+          onFocus={() => editor?.chain().focus().run()}
+        />
+      )}
+      <div className="shrink-0 border-b px-2 py-2">
+        <RichTextMailEditorToolbar
+          editor={editor}
+          disabled={disabled}
+        />
+      </div>
       <EditorContent
         editor={editor}
         className={cn(
-          'border-input focus-within:border-ring focus-within:ring-ring/50 flex min-h-36 w-full flex-1 flex-col rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] md:text-sm',
+          'flex min-h-0 flex-1 flex-col px-3 py-2',
           '[&>.ProseMirror]:flex-1 [&>.ProseMirror]:overflow-y-auto [&>.ProseMirror]:outline-none',
           'prose-mail-editor',
-          disabled && 'cursor-not-allowed opacity-50',
         )}
       />
     </div>

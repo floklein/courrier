@@ -30,6 +30,7 @@ In the app registration, open **API permissions** and add delegated Microsoft
 Graph permissions:
 
 - `User.Read`
+- `People.Read`
 - `Mail.ReadWrite`
 - `Mail.Send`
 
@@ -86,6 +87,8 @@ service.
   supports only organizational accounts.
 - **Missing redirect URI:** Microsoft rejects the callback unless
   `http://localhost` is configured as a public client redirect URI.
+- **Missing `People.Read`:** sign-in can succeed, but the composer cannot show
+  recipient autocomplete suggestions from Microsoft people and contacts.
 - **Missing `Mail.ReadWrite`:** sign-in can succeed, but Graph read/write
   requests fail.
 - **Missing `Mail.Send`:** reading mail can work, but sending new messages and

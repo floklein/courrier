@@ -10,6 +10,7 @@ import type {
 import {
   graphPageUrlSchema,
   ipcIdSchema,
+  mailPeopleQuerySchema,
   mailSearchQuerySchema,
   replyToMessageInputSchema,
   sendMailInputSchema,
@@ -92,6 +93,10 @@ export function registerIpcHandlers(
   ipcMain.handle('mail:delete-message', (event, messageId: string) => {
     assertSender(event);
     return graphClient.deleteMessage(parseIpcPayload(ipcIdSchema, messageId));
+  });
+  ipcMain.handle('mail:list-people', (event, query?: string) => {
+    assertSender(event);
+    return graphClient.listPeople(parseIpcPayload(mailPeopleQuerySchema, query));
   });
   ipcMain.handle('mail:send-message', (event, input: SendMailInput) => {
     assertSender(event);

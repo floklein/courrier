@@ -22,7 +22,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '../../components/ui/popover';
-import { Separator } from '../../components/ui/separator';
 import { Toggle } from '../../components/ui/toggle';
 
 export function RichTextMailEditorToolbar({
@@ -91,8 +90,6 @@ export function RichTextMailEditorToolbar({
         />
       </ButtonGroup>
 
-      <Separator orientation="vertical" className="h-8" />
-
       <ButtonGroup aria-label="Paragraph formatting">
         <ToolbarToggle
           pressed={Boolean(editor?.isActive('bulletList'))}
@@ -116,8 +113,6 @@ export function RichTextMailEditorToolbar({
           icon={Quote}
         />
       </ButtonGroup>
-
-      <Separator orientation="vertical" className="h-8" />
 
       <ButtonGroup aria-label="Link formatting">
         <Popover open={isLinkOpen} onOpenChange={setIsLinkOpen}>
@@ -174,8 +169,6 @@ export function RichTextMailEditorToolbar({
         />
       </ButtonGroup>
 
-      <Separator orientation="vertical" className="h-8" />
-
       <ButtonGroup aria-label="History">
         <ToolbarButton
           label="Undo"
@@ -205,7 +198,7 @@ function ToolbarToggle({
   return (
     <Toggle
       variant="outline"
-      size="sm"
+      size="icon-sm"
       aria-label={label}
       title={label}
       {...props}
