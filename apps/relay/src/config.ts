@@ -6,6 +6,7 @@ const configSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
   RELAY_PUBLIC_URL: z.string().url(),
   RELAY_ADMIN_TOKEN: z.string().min(24),
+  GOOGLE_PUBSUB_VERIFICATION_TOKEN: z.string().min(16).optional(),
 });
 
 export type RelayConfig = z.infer<typeof configSchema>;

@@ -3,11 +3,13 @@ import {
   ChevronsUpDown,
   Loader2,
   LogOut,
+  MailPlus,
   Monitor,
   Moon,
   Sun,
   type LucideIcon,
 } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { Button } from '../../components/ui/button';
 import {
@@ -20,20 +22,39 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { getInitials } from '../../lib/mail/mail-utils';
+import { api } from '../../lib/api-client';
+import type { MailAccount, ProviderId } from '../../lib/mail-types';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export function UserMenu({
+  accounts,
+  activeAccountId,
   accountEmail,
   accountName,
   isSigningOut,
   onSignOut,
 }: {
+  accounts: MailAccount[];
+  activeAccountId: string;
   accountEmail: string;
   accountName: string;
   isSigningOut: boolean;
   onSignOut: () => void;
 }) {
   const { theme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
+  const switchAccountMutation = useMutation({
+    mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+    },
+  });
+  const signInMutation = useMutation({
+    mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
+    },
+  });
 
   return (
     <div className="w-full">
@@ -77,6 +98,48 @@ export function UserMenu({
             </span>
           </div>
           <DropdownMenuSeparator className="m-0" />
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-muted-foreground">
+              Accounts
+            </DropdownMenuLabel>
+            {accounts.map((account) => (
+              <DropdownMenuItem
+                key={account.id}
+                disabled={
+                  account.id === activeAccountId || switchAccountMutation.isPending
+                }
+                onSelect={() => switchAccountMutation.mutate(account.id)}
+                className="mx-1 px-3 py-2"
+              >
+                <Avatar className="size-5">
+                  <AvatarFallback className="text-[10px]">
+                    {getInitials(account.name ?? account.email)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="min-w-0 flex-1 truncate">
+                  {account.email}
+                </span>
+                {account.id === activeAccountId && <Check data-icon="inline-end" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem
+              disabled={signInMutation.isPending}
+              onSelect={() => signInMutation.mutate('microsoft')}
+              className="mx-1 px-3 py-2"
+            >
+              <MailPlus data-icon="inline-start" />
+              Add Microsoft account
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={signInMutation.isPending}
+              onSelect={() => signInMutation.mutate('google')}
+              className="mx-1 px-3 py-2"
+            >
+              <MailPlus data-icon="inline-start" />
+              Add Google account
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-muted-foreground">
               Theme

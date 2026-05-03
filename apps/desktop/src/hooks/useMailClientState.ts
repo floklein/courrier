@@ -16,13 +16,13 @@ import {
 } from '../lib/mail/mail-query-options';
 import { parseMailPath } from '../lib/mail/mail-utils';
 
-export function useMailClientState() {
+export function useMailClientState(accountId: string) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
   const { folderId, messageId } = parseMailPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
-  const foldersQuery = useQuery(mailFoldersQueryOptions());
+  const foldersQuery = useQuery(mailFoldersQueryOptions(accountId));
   const folders = (foldersQuery.data ?? []) as MailFolder[];
   const currentFolder =
     folders.find((folder) => folder.id === folderId) ??
@@ -30,14 +30,14 @@ export function useMailClientState() {
     folders[0];
   const resolvedFolderId = currentFolder?.id ?? folderId;
   const messagesQuery = useInfiniteQuery({
-    ...mailMessagesQueryOptions(resolvedFolderId, searchQuery),
+    ...mailMessagesQueryOptions(accountId, resolvedFolderId, searchQuery),
     enabled: Boolean(currentFolder),
   });
   const messages =
     messagesQuery.data?.pages.flatMap((page: PagedMessages) => page.messages) ??
     [];
   const messageQuery = useQuery({
-    ...mailMessageQueryOptions(resolvedFolderId, messageId),
+    ...mailMessageQueryOptions(accountId, resolvedFolderId, messageId),
     enabled: Boolean(currentFolder && messageId),
   });
   const selectedMessage = messageQuery.data as MailMessageDetail | undefined;

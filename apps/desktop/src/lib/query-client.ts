@@ -7,7 +7,8 @@ export const queryClient = new QueryClient({
         if (
           error instanceof Error &&
           (error.message.includes('MICROSOFT_CLIENT_ID') ||
-            error.message.includes('Microsoft sign-in is required'))
+            error.message.includes('GOOGLE_CLIENT_ID') ||
+            error.message.includes('sign-in is required'))
         ) {
           return false;
         }

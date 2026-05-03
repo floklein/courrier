@@ -18,12 +18,8 @@ import {
   updateCachedMessageReadState,
 } from '../lib/mail/mail-cache';
 
-const actionInvalidationKeys = {
-  folders: ['mail', 'folders'] as const,
-  messages: ['mail', 'messages'] as const,
-};
-
 export function useMailActions({
+  accountId,
   folders,
   messages,
   messageId,
@@ -31,6 +27,7 @@ export function useMailActions({
   closeCompose,
   onReplyMessageIdChange,
 }: {
+  accountId: string;
   folders: MailFolder[];
   messages: MailMessageSummary[];
   messageId: string | undefined;
@@ -44,7 +41,7 @@ export function useMailActions({
   const queryClient = useQueryClient();
 
   function handleMessageRemoved(message: MailMessageSummary) {
-    removeCachedMessage(queryClient, message.id);
+    removeCachedMessage(queryClient, accountId, message.id);
     onReplyMessageIdChange((current) =>
       current === message.id ? undefined : current,
     );
@@ -76,8 +73,8 @@ export function useMailActions({
 
   async function invalidateMailLists() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: actionInvalidationKeys.folders }),
-      queryClient.invalidateQueries({ queryKey: actionInvalidationKeys.messages }),
+      queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'folders'] }),
+      queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'messages'] }),
     ]);
   }
 
@@ -88,12 +85,12 @@ export function useMailActions({
     }: {
       message: MailMessageSummary;
       isRead: boolean;
-    }) => api.mail.markMessageReadState(message.id, isRead),
+    }) => api.mail.markMessageReadState(accountId, message.id, isRead),
     onMutate: async ({ message, isRead }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
-      updateCachedMessageReadState(queryClient, message.id, isRead);
-      updateCachedFolderCounts(queryClient, {
+      updateCachedMessageReadState(queryClient, accountId, message.id, isRead);
+      updateCachedFolderCounts(queryClient, accountId, {
         folderId: message.folderId,
         unreadDelta: getReadStateUnreadDelta(message.isRead, isRead),
       });
@@ -105,10 +102,10 @@ export function useMailActions({
     },
     onSettled: async (_data, _error, { message }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: actionInvalidationKeys.folders }),
-        queryClient.invalidateQueries({ queryKey: actionInvalidationKeys.messages }),
+        queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'folders'] }),
+        queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'messages'] }),
         queryClient.invalidateQueries({
-          queryKey: ['mail', 'message', resolvedFolderId, message.id],
+          queryKey: ['mail', accountId, 'message', resolvedFolderId, message.id],
         }),
       ]);
     },
@@ -120,18 +117,24 @@ export function useMailActions({
     }: {
       message: MailMessageSummary;
       destinationFolderId: string;
-    }) => api.mail.moveMessage(message.id, destinationFolderId),
+    }) =>
+      api.mail.moveMessage(
+        accountId,
+        message.id,
+        message.folderId,
+        destinationFolderId,
+      ),
     onMutate: async ({ message, destinationFolderId }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
 
       handleMessageRemoved(message);
-      updateCachedFolderCounts(queryClient, {
+      updateCachedFolderCounts(queryClient, accountId, {
         folderId: message.folderId,
         totalDelta: -1,
         unreadDelta: message.isRead ? 0 : -1,
       });
-      updateCachedFolderCounts(queryClient, {
+      updateCachedFolderCounts(queryClient, accountId, {
         folderId: destinationFolderId,
         totalDelta: 1,
         unreadDelta: message.isRead ? 0 : 1,
@@ -156,7 +159,7 @@ export function useMailActions({
   });
   const deleteMutation = useMutation({
     mutationFn: ({ message }: { message: MailMessageSummary }) =>
-      api.mail.deleteMessage(message.id),
+      api.mail.deleteMessage(accountId, message.id),
     onMutate: async ({ message }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
@@ -165,14 +168,14 @@ export function useMailActions({
       );
 
       handleMessageRemoved(message);
-      updateCachedFolderCounts(queryClient, {
+      updateCachedFolderCounts(queryClient, accountId, {
         folderId: message.folderId,
         totalDelta: -1,
         unreadDelta: message.isRead ? 0 : -1,
       });
 
       if (trashFolder && trashFolder.id !== message.folderId) {
-        updateCachedFolderCounts(queryClient, {
+        updateCachedFolderCounts(queryClient, accountId, {
           folderId: trashFolder.id,
           totalDelta: 1,
           unreadDelta: message.isRead ? 0 : 1,
@@ -189,14 +192,15 @@ export function useMailActions({
     },
   });
   const sendMessageMutation = useMutation({
-    mutationFn: (input: SendMailInput) => api.mail.sendMessage(input),
+    mutationFn: (input: SendMailInput) => api.mail.sendMessage(accountId, input),
     onSuccess: async () => {
       closeCompose();
       await invalidateMailLists();
     },
   });
   const replyToMessageMutation = useMutation({
-    mutationFn: (input: ReplyToMessageInput) => api.mail.replyToMessage(input),
+    mutationFn: (input: ReplyToMessageInput) =>
+      api.mail.replyToMessage(accountId, input),
     onSuccess: async () => {
       onReplyMessageIdChange(() => undefined);
       await invalidateMailLists();

@@ -36,6 +36,28 @@ export const graphNotificationCollectionSchema = z
   })
   .passthrough();
 
+export const googlePubSubPushSchema = z
+  .object({
+    message: z
+      .object({
+        data: z.string().min(1),
+        messageId: z.string().optional(),
+        message_id: z.string().optional(),
+        publishTime: z.string().optional(),
+        publish_time: z.string().optional(),
+      })
+      .passthrough(),
+    subscription: z.string().optional(),
+  })
+  .passthrough();
+
+export const gmailNotificationDataSchema = z
+  .object({
+    emailAddress: z.string().email(),
+    historyId: z.string().min(1),
+  })
+  .passthrough();
+
 export const relayClientRegistrationSchema = z.object({
   type: z.literal('register'),
   clientId: z.string().min(1),
@@ -55,6 +77,9 @@ export const relayClientMessageSchema = z.discriminatedUnion('type', [
 
 export const relaySubscriptionRegistrationSchema = z.object({
   clientId: z.string().min(1),
+  accountId: z.string().min(1).optional(),
+  providerId: z.enum(['microsoft', 'google']).optional(),
+  accountEmail: z.string().email().optional(),
   clientState: z.string().min(24),
   authToken: z.string().min(24),
   subscriptionId: z.string().min(1).optional(),
@@ -64,6 +89,8 @@ export const relaySubscriptionRegistrationSchema = z.object({
 const mailRemoteChangeEventBaseSchema = z.object({
   id: z.string().min(1),
   clientId: z.string().min(1),
+  accountId: z.string().min(1).optional(),
+  providerId: z.enum(['microsoft', 'google']).optional(),
   subscriptionId: z.string().min(1),
   resource: z.string().optional(),
   receivedAt: z.string().datetime(),
@@ -111,6 +138,8 @@ export type GraphChangeNotification = z.infer<
 export type GraphNotificationCollection = z.infer<
   typeof graphNotificationCollectionSchema
 >;
+export type GooglePubSubPush = z.infer<typeof googlePubSubPushSchema>;
+export type GmailNotificationData = z.infer<typeof gmailNotificationDataSchema>;
 export type RelayClientMessage = z.infer<typeof relayClientMessageSchema>;
 export type RelayClientRegistration = z.infer<
   typeof relayClientRegistrationSchema

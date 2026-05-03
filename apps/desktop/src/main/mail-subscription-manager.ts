@@ -8,7 +8,9 @@ import {
   type MailRemoteChangeEvent,
 } from '@courrier/mail-contracts';
 import { z } from 'zod';
-import type { GraphClient } from './graph-client';
+import type { MailAccount, ProviderId } from '../lib/mail-types';
+import type { AuthService } from './auth-service';
+import type { MailService } from './mail-service';
 
 const subscriptionStateFileName = 'mail-subscription.json';
 const subscriptionDurationMs = 24 * 60 * 60 * 1000;
@@ -17,6 +19,9 @@ const minimumRenewalDelayMs = 60 * 1000;
 const reconnectDelayMs = 1000;
 
 interface MailSubscriptionState {
+  accountId?: string;
+  providerId?: ProviderId;
+  accountEmail?: string;
   clientId: string;
   clientState: string;
   authToken: string;
@@ -26,7 +31,8 @@ interface MailSubscriptionState {
 }
 
 interface MailSubscriptionManagerOptions {
-  graphClient: GraphClient;
+  authService: AuthService;
+  mailService: MailService;
   relayAdminToken?: string;
   relayPublicUrl?: string;
   reconnectDelayMs?: number;
@@ -34,6 +40,9 @@ interface MailSubscriptionManagerOptions {
 }
 
 const mailSubscriptionStateSchema = z.object({
+  accountId: z.string().min(1).optional(),
+  providerId: z.enum(['microsoft', 'google']).optional(),
+  accountEmail: z.string().email().optional(),
   clientId: z.string().min(1),
   clientState: z.string().min(24),
   authToken: z.string().min(24),
@@ -59,7 +68,7 @@ export class MailSubscriptionManager {
 
   constructor(private readonly options: MailSubscriptionManagerOptions) {}
 
-  async start() {
+  async start(accountId?: string) {
     if (this.startPromise) {
       return this.startPromise;
     }
@@ -67,7 +76,7 @@ export class MailSubscriptionManager {
     this.isStopped = false;
     const generation = ++this.lifecycleGeneration;
     this.stoppedStartsNeedingRemoteDelete.delete(generation);
-    const startPromise = this.startOnce(generation).finally(() => {
+    const startPromise = this.startOnce(generation, accountId).finally(() => {
       if (this.startPromise === startPromise) {
         this.startPromise = undefined;
       }
@@ -77,19 +86,31 @@ export class MailSubscriptionManager {
     return this.startPromise;
   }
 
-  private async startOnce(generation: number) {
+  private async startOnce(generation: number, accountId?: string) {
     if (!this.options.relayPublicUrl || !this.options.relayAdminToken) {
       return;
     }
 
+    const account = await this.getSubscriptionAccount(accountId);
+    if (!account) {
+      return;
+    }
+
     const state = await this.loadState();
+    state.accountId = account.id;
+    state.providerId = account.providerId;
+    state.accountEmail = account.email;
     if (!this.isLifecycleActive(generation)) {
       return;
     }
 
-    const subscription = await this.ensureSubscription(state);
+    const subscription = await this.ensureSubscription(state, account);
     if (!this.isLifecycleActive(generation)) {
-      await this.deleteSubscriptionFromStoppedStart(generation, subscription.id);
+      await this.deleteSubscriptionFromStoppedStart(
+        generation,
+        account,
+        subscription.id,
+      );
       return;
     }
 
@@ -146,14 +167,20 @@ export class MailSubscriptionManager {
     this.shouldDeleteRemoteSubscriptionWhileStopping = false;
   }
 
-  private async ensureSubscription(state: MailSubscriptionState) {
+  private async ensureSubscription(
+    state: MailSubscriptionState,
+    account: MailAccount,
+  ) {
+    const provider = this.options.mailService.getProvider(account.id);
+
     if (
       state.subscriptionId &&
       state.expirationDateTime &&
       !isExpired(state.expirationDateTime)
     ) {
       try {
-        return await this.options.graphClient.renewSubscription({
+        return await provider.renewSubscription({
+          account,
           subscriptionId: state.subscriptionId,
           expirationDateTime: createSubscriptionExpiration(),
         });
@@ -167,10 +194,11 @@ export class MailSubscriptionManager {
       }
     }
 
-    return this.options.graphClient.createMailSubscription({
+    return provider.createMailSubscription({
+      account,
       clientState: state.clientState,
       expirationDateTime: createSubscriptionExpiration(),
-      notificationUrl: createGraphNotificationUrl(this.options.relayPublicUrl ?? ''),
+      notificationUrl: provider.getNotificationUrl(this.options.relayPublicUrl ?? ''),
     });
   }
 
@@ -195,6 +223,9 @@ export class MailSubscriptionManager {
     const relayUrl = new URL('/relay/subscriptions', this.options.relayPublicUrl);
     const body = relaySubscriptionRegistrationSchema.parse({
       clientId: state.clientId,
+      accountId: state.accountId,
+      providerId: state.providerId,
+      accountEmail: state.accountEmail,
       clientState: state.clientState,
       authToken: state.authToken,
       subscriptionId: state.subscriptionId,
@@ -382,9 +413,13 @@ export class MailSubscriptionManager {
       event.changeType === 'subscriptionRemoved' ||
       event.changeType === 'reauthorizationRequired'
     ) {
-      const subscription = await this.ensureSubscription(state);
+      const account = await this.getSubscriptionAccount(state.accountId);
+      if (!account) {
+        return;
+      }
+      const subscription = await this.ensureSubscription(state, account);
       if (this.isStopped) {
-        await this.deleteSubscriptionIfStopping(subscription.id);
+        await this.deleteSubscriptionIfStopping(account, subscription.id);
         return;
       }
 
@@ -406,6 +441,7 @@ export class MailSubscriptionManager {
 
   private async deleteSubscriptionFromStoppedStart(
     generation: number,
+    account: MailAccount,
     subscriptionId: string | undefined,
   ) {
     if (!subscriptionId || !this.stoppedStartsNeedingRemoteDelete.has(generation)) {
@@ -413,16 +449,19 @@ export class MailSubscriptionManager {
     }
 
     this.stoppedStartsNeedingRemoteDelete.delete(generation);
-    await this.deleteRemoteSubscriptionById(subscriptionId);
+    await this.deleteRemoteSubscriptionById(account, subscriptionId);
   }
 
-  private async deleteSubscriptionIfStopping(subscriptionId: string | undefined) {
+  private async deleteSubscriptionIfStopping(
+    account: MailAccount,
+    subscriptionId: string | undefined,
+  ) {
     if (!subscriptionId || !this.isStopped) {
       return;
     }
 
     if (this.shouldDeleteRemoteSubscriptionWhileStopping) {
-      await this.deleteRemoteSubscriptionById(subscriptionId);
+      await this.deleteRemoteSubscriptionById(account, subscriptionId);
     }
   }
 
@@ -436,23 +475,44 @@ export class MailSubscriptionManager {
       return;
     }
 
-    if (!state.subscriptionId) {
+    if (!state.subscriptionId || !state.accountId) {
       return;
     }
 
-    await this.deleteRemoteSubscriptionById(state.subscriptionId);
+    const account = await this.getSubscriptionAccount(state.accountId);
+
+    if (!account) {
+      return;
+    }
+
+    await this.deleteRemoteSubscriptionById(account, state.subscriptionId);
 
     state.subscriptionId = undefined;
     state.expirationDateTime = undefined;
     await this.saveState(state);
   }
 
-  private async deleteRemoteSubscriptionById(subscriptionId: string) {
+  private async deleteRemoteSubscriptionById(
+    account: MailAccount,
+    subscriptionId: string,
+  ) {
     try {
-      await this.options.graphClient.deleteSubscription(subscriptionId);
+      await this.options.mailService
+        .getProvider(account.id)
+        .deleteSubscription(account, subscriptionId);
     } catch (error) {
-      console.warn('Could not delete Microsoft Graph mail subscription.', error);
+      console.warn('Could not delete remote mail subscription.', error);
     }
+  }
+
+  private async getSubscriptionAccount(accountId?: string) {
+    const accounts = await this.options.authService.getAccounts();
+    const activeAccountId = accountId ?? this.options.authService.getActiveAccountId();
+
+    return (
+      accounts.find((account) => account.id === activeAccountId) ??
+      accounts[0]
+    );
   }
 }
 

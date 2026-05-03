@@ -7,12 +7,14 @@ import { cn } from '../../lib/utils';
 import { MailComposer } from './MailComposer';
 
 export function NewMessageComposerOverlay({
+  accountId,
   isSending,
   error,
   onClose,
   onMoveToWindow,
   onSend,
 }: {
+  accountId: string;
   isSending: boolean;
   error: Error | null;
   onClose: () => void;
@@ -36,6 +38,7 @@ export function NewMessageComposerOverlay({
         )}
       >
         <MailComposer
+          accountId={accountId}
           mode="new"
           initialDraft={useComposeStore.getState().draft}
           isSending={isSending}

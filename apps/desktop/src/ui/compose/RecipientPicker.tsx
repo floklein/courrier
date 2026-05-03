@@ -22,6 +22,7 @@ import { cn } from '../../lib/utils';
 const recipientSeparators = new Set([',', ';']);
 
 export function RecipientPicker({
+  accountId,
   id,
   value,
   inputValue,
@@ -30,6 +31,7 @@ export function RecipientPicker({
   onChange,
   onInputChange,
 }: {
+  accountId: string;
   id: string;
   value: MailComposeRecipient[];
   inputValue: string;
@@ -44,7 +46,7 @@ export function RecipientPicker({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const debouncedInputValue = useDebouncedValue(inputValue, 250);
   const peopleQuery = useQuery({
-    ...mailPeopleQueryOptions(debouncedInputValue),
+    ...mailPeopleQueryOptions(accountId, debouncedInputValue),
     enabled: isFocused && !disabled,
   });
   const selectedEmails = useMemo(

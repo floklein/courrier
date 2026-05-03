@@ -5,11 +5,13 @@ export async function invalidateRemoteMailUpdate(
   queryClient: QueryClient,
   event: MailRemoteChangeEvent,
 ) {
+  const mailQueryKey = event.accountId ? ['mail', event.accountId] : ['mail'];
+
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ['mail', 'folders'] }),
-    queryClient.invalidateQueries({ queryKey: ['mail', 'messages'] }),
+    queryClient.invalidateQueries({ queryKey: [...mailQueryKey, 'folders'] }),
+    queryClient.invalidateQueries({ queryKey: [...mailQueryKey, 'messages'] }),
     event.kind === 'lifecycle' || event.messageId
-      ? queryClient.invalidateQueries({ queryKey: ['mail', 'message'] })
+      ? queryClient.invalidateQueries({ queryKey: [...mailQueryKey, 'message'] })
       : Promise.resolve(),
   ]);
 }

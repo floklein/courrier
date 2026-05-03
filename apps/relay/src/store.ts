@@ -11,6 +11,9 @@ export interface RelayStore {
     clientState: string,
   ): Promise<RelaySubscription | undefined>;
   getSubscriptionByClientId(clientId: string): Promise<RelaySubscription | undefined>;
+  getSubscriptionByAccountEmail(
+    accountEmail: string,
+  ): Promise<RelaySubscription | undefined>;
   appendEvent(event: MailRemoteChangeEvent): Promise<void>;
   listEventsAfter(clientId: string, eventId?: string): Promise<MailRemoteChangeEvent[]>;
   acknowledgeEvent(clientId: string, eventId: string): Promise<void>;
@@ -33,6 +36,15 @@ export class InMemoryRelayStore implements RelayStore {
 
   async getSubscriptionByClientId(clientId: string) {
     return this.subscriptionsByClientId.get(clientId);
+  }
+
+  async getSubscriptionByAccountEmail(accountEmail: string) {
+    const normalizedEmail = accountEmail.toLowerCase();
+
+    return [...this.subscriptionsByClientId.values()].find(
+      (subscription) =>
+        subscription.accountEmail?.toLowerCase() === normalizedEmail,
+    );
   }
 
   async appendEvent(event: MailRemoteChangeEvent): Promise<void> {

@@ -8,6 +8,7 @@ import {
   type GraphMessageDetail,
 } from '../lib/graph-mappers';
 import type {
+  MailAccount,
   MailFolder,
   MailMessageDetail,
   MailPersonSuggestion,
@@ -16,7 +17,14 @@ import type {
   SendMailInput,
 } from '../lib/mail-types';
 import { GraphRequestError } from '../lib/graph-errors';
-import type { AuthService } from './auth-service';
+import type {
+  CreateMailSubscriptionInput,
+  MailAuthProvider,
+  MailProvider,
+  MailSubscription,
+  MoveMessageInput,
+  RenewSubscriptionInput,
+} from './mail-provider';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
 const folderSelect =
@@ -46,60 +54,52 @@ interface GraphPerson {
   userPrincipalName?: string | null;
 }
 
-export interface GraphSubscription {
-  id: string;
-  expirationDateTime: string;
-  resource: string;
-}
+export class GraphClient implements MailProvider {
+  readonly id = 'microsoft' as const;
 
-export interface CreateMailSubscriptionInput {
-  clientState: string;
-  expirationDateTime: string;
-  notificationUrl: string;
-}
+  constructor(private readonly authProvider: MailAuthProvider) {}
 
-export interface RenewSubscriptionInput {
-  subscriptionId: string;
-  expirationDateTime: string;
-}
-
-export class GraphClient {
-  constructor(private readonly authService: AuthService) {}
-
-  async listFolders(): Promise<MailFolder[]> {
+  async listFolders(accountId: string): Promise<MailFolder[]> {
     const folders = await this.fetchFolders(
+      accountId,
       `${graphBaseUrl}/me/mailFolders?$top=100&${folderSelect}`,
       0,
     );
 
-    return sortMailFolders(await this.tagWellKnownFolders(folders));
+    return sortMailFolders(await this.tagWellKnownFolders(accountId, folders));
   }
 
   async listMessages(
+    accountId: string,
     folderId: string,
-    nextPageUrl?: string,
+    nextPageToken?: string,
     searchQuery?: string,
   ): Promise<PagedMessages> {
     const search = searchQuery?.trim();
     const url =
-      getValidatedMessagePageUrl(folderId, nextPageUrl) ??
+      getValidatedMessagePageUrl(folderId, nextPageToken) ??
       createMessagesUrl(folderId, search);
 
-    const data = await this.fetchGraph<GraphCollection<GraphMessage>>(url);
+    const data = await this.fetchGraph<GraphCollection<GraphMessage>>(
+      accountId,
+      url,
+    );
 
     return {
       messages: (data.value ?? [])
         .filter((message) => Boolean(message.id))
         .map((message) => mapGraphMessageSummary(folderId, message)),
-      nextPageUrl: data['@odata.nextLink'],
+      nextPageToken: data['@odata.nextLink'],
     };
   }
 
   async getMessage(
+    accountId: string,
     folderId: string,
     messageId: string,
   ): Promise<MailMessageDetail> {
     const data = await this.fetchGraph<GraphMessageDetail>(
+      accountId,
       `${graphBaseUrl}/me/mailFolders/${encodeURIComponent(
         folderId,
       )}/messages/${encodeURIComponent(
@@ -111,10 +111,12 @@ export class GraphClient {
   }
 
   async markMessageReadState(
+    accountId: string,
     messageId: string,
     isRead: boolean,
   ): Promise<void> {
     await this.fetchGraph(
+      accountId,
       `${graphBaseUrl}/me/messages/${encodeURIComponent(messageId)}`,
       {
         method: 'PATCH',
@@ -127,10 +129,11 @@ export class GraphClient {
   }
 
   async moveMessage(
-    messageId: string,
-    destinationFolderId: string,
+    accountId: string,
+    { messageId, destinationFolderId }: MoveMessageInput,
   ): Promise<MailMessageDetail> {
     const data = await this.fetchGraph<GraphMessageDetail>(
+      accountId,
       `${graphBaseUrl}/me/messages/${encodeURIComponent(messageId)}/move`,
       {
         method: 'POST',
@@ -144,11 +147,21 @@ export class GraphClient {
     return mapGraphMessageDetail(destinationFolderId, data);
   }
 
-  async deleteMessage(messageId: string): Promise<MailMessageDetail> {
-    return this.moveMessage(messageId, 'deleteditems');
+  async deleteMessage(
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessageDetail> {
+    return this.moveMessage(accountId, {
+      messageId,
+      sourceFolderId: '',
+      destinationFolderId: 'deleteditems',
+    });
   }
 
-  async listPeople(query?: string): Promise<MailPersonSuggestion[]> {
+  async listPeople(
+    accountId: string,
+    query?: string,
+  ): Promise<MailPersonSuggestion[]> {
     const search = query?.trim();
     const params = new URLSearchParams({
       $top: '10',
@@ -160,14 +173,15 @@ export class GraphClient {
     }
 
     const data = await this.fetchGraph<GraphCollection<GraphPerson>>(
+      accountId,
       `${graphBaseUrl}/me/people?${params.toString()}`,
     );
 
     return mapPeopleSuggestions(data.value ?? []);
   }
 
-  async sendMessage(input: SendMailInput): Promise<void> {
-    await this.fetchGraph(`${graphBaseUrl}/me/sendMail`, {
+  async sendMessage(accountId: string, input: SendMailInput): Promise<void> {
+    await this.fetchGraph(accountId, `${graphBaseUrl}/me/sendMail`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -186,8 +200,12 @@ export class GraphClient {
     });
   }
 
-  async replyToMessage(input: ReplyToMessageInput): Promise<void> {
+  async replyToMessage(
+    accountId: string,
+    input: ReplyToMessageInput,
+  ): Promise<void> {
     const draft = await this.fetchGraph<GraphMessageDetail>(
+      accountId,
       `${graphBaseUrl}/me/messages/${encodeURIComponent(
         input.messageId,
       )}/createReply`,
@@ -204,6 +222,7 @@ export class GraphClient {
     }
 
     await this.fetchGraph(
+      accountId,
       `${graphBaseUrl}/me/messages/${encodeURIComponent(draft.id)}`,
       {
         method: 'PATCH',
@@ -220,6 +239,7 @@ export class GraphClient {
     );
 
     await this.fetchGraph(
+      accountId,
       `${graphBaseUrl}/me/messages/${encodeURIComponent(draft.id)}/send`,
       {
         method: 'POST',
@@ -229,8 +249,11 @@ export class GraphClient {
 
   async createMailSubscription(
     input: CreateMailSubscriptionInput,
-  ): Promise<GraphSubscription> {
-    return this.fetchGraph<GraphSubscription>(`${graphBaseUrl}/subscriptions`, {
+  ): Promise<MailSubscription> {
+    return this.fetchGraph<MailSubscription>(
+      input.account.id,
+      `${graphBaseUrl}/subscriptions`,
+      {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -243,13 +266,15 @@ export class GraphClient {
         expirationDateTime: input.expirationDateTime,
         clientState: input.clientState,
       }),
-    });
+      },
+    );
   }
 
   async renewSubscription(
     input: RenewSubscriptionInput,
-  ): Promise<GraphSubscription> {
-    return this.fetchGraph<GraphSubscription>(
+  ): Promise<MailSubscription> {
+    return this.fetchGraph<MailSubscription>(
+      input.account.id,
       `${graphBaseUrl}/subscriptions/${encodeURIComponent(input.subscriptionId)}`,
       {
         method: 'PATCH',
@@ -263,8 +288,12 @@ export class GraphClient {
     );
   }
 
-  async deleteSubscription(subscriptionId: string): Promise<void> {
+  async deleteSubscription(
+    account: MailAccount,
+    subscriptionId: string,
+  ): Promise<void> {
     await this.fetchGraph(
+      account.id,
       `${graphBaseUrl}/subscriptions/${encodeURIComponent(subscriptionId)}`,
       {
         method: 'DELETE',
@@ -272,8 +301,19 @@ export class GraphClient {
     );
   }
 
-  private async fetchFolders(url: string, depth: number): Promise<MailFolder[]> {
-    const data = await this.fetchGraph<GraphCollection<GraphMailFolder>>(url);
+  getNotificationUrl(relayPublicUrl: string) {
+    return new URL('/graph/notifications', relayPublicUrl).toString();
+  }
+
+  private async fetchFolders(
+    accountId: string,
+    url: string,
+    depth: number,
+  ): Promise<MailFolder[]> {
+    const data = await this.fetchGraph<GraphCollection<GraphMailFolder>>(
+      accountId,
+      url,
+    );
     const folders: MailFolder[] = [];
 
     for (const folder of data.value ?? []) {
@@ -286,6 +326,7 @@ export class GraphClient {
       if ((folder.childFolderCount ?? 0) > 0) {
         folders.push(
           ...(await this.fetchFolders(
+            accountId,
             `${graphBaseUrl}/me/mailFolders/${encodeURIComponent(
               folder.id,
             )}/childFolders?$top=100&${folderSelect}`,
@@ -296,17 +337,20 @@ export class GraphClient {
     }
 
     if (data['@odata.nextLink']) {
-      folders.push(...(await this.fetchFolders(data['@odata.nextLink'], depth)));
+      folders.push(
+        ...(await this.fetchFolders(accountId, data['@odata.nextLink'], depth)),
+      );
     }
 
     return folders;
   }
 
-  private async tagWellKnownFolders(folders: MailFolder[]) {
+  private async tagWellKnownFolders(accountId: string, folders: MailFolder[]) {
     const knownFolderResults = await Promise.allSettled(
       wellKnownFolderNames.map(async (wellKnownName) => ({
         wellKnownName,
         folder: await this.fetchGraph<GraphMailFolder>(
+          accountId,
           `${graphBaseUrl}/me/mailFolders/${wellKnownName}?${folderSelect}`,
         ),
       })),
@@ -344,6 +388,7 @@ export class GraphClient {
   }
 
   private async fetchGraph<T>(
+    accountId: string,
     url: string,
     init: RequestInit = {},
   ): Promise<T> {
@@ -351,7 +396,7 @@ export class GraphClient {
       throw new Error('Refusing to fetch a non-Microsoft Graph URL.');
     }
 
-    const token = await this.authService.getAccessToken();
+    const token = await this.authProvider.getAccessToken(accountId);
     const response = await fetch(url, {
       ...init,
       headers: {

@@ -16,7 +16,7 @@ import { api } from '../../lib/api-client';
 import { isMailMessageDragData } from '../../lib/mail/mail-drag';
 import { folderIcons } from '../../lib/mail/mail-icons';
 import { mailMessagesQueryOptions } from '../../lib/mail/mail-query-options';
-import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
+import type { MailAccount, MailFolder, MailMessageSummary } from '../../lib/mail-types';
 import { encodeRouteId } from '../../lib/route-ids';
 import { cn } from '../../lib/utils';
 import { RailStatus } from '../app/StatusViews';
@@ -25,6 +25,8 @@ import { UserMenu } from '../primitives/UserMenu';
 export function FolderRail({
   accountEmail,
   accountName,
+  accounts,
+  activeAccountId,
   currentFolderId,
   folders,
   isLoading,
@@ -36,6 +38,8 @@ export function FolderRail({
 }: {
   accountEmail: string;
   accountName: string;
+  accounts: MailAccount[];
+  activeAccountId: string;
   currentFolderId: string;
   folders: MailFolder[];
   isLoading: boolean;
@@ -52,13 +56,13 @@ export function FolderRail({
   const prefetchFolderMessages = useCallback(
     (folderId: string) => {
       void queryClient
-        .prefetchInfiniteQuery(mailMessagesQueryOptions(folderId))
+        .prefetchInfiniteQuery(mailMessagesQueryOptions(activeAccountId, folderId))
         .catch(() => undefined);
     },
-    [queryClient],
+    [activeAccountId, queryClient],
   );
   const signOutMutation = useMutation({
-    mutationFn: api.auth.signOut,
+    mutationFn: () => api.auth.signOut(activeAccountId),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       queryClient.removeQueries({ queryKey: ['mail'] });
@@ -118,6 +122,8 @@ export function FolderRail({
       </ScrollArea>
       <div className="shrink-0 border-t p-2">
         <UserMenu
+          accounts={accounts}
+          activeAccountId={activeAccountId}
           accountEmail={accountEmail}
           accountName={accountName}
           isSigningOut={signOutMutation.isPending}

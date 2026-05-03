@@ -27,6 +27,7 @@ import { HtmlMessageBody } from './HtmlMessageBody';
 import { MailActionDropdownContent } from './MailActionMenu';
 
 export function ReadingPane({
+  accountId,
   folderId,
   folders,
   isActionPending,
@@ -45,6 +46,7 @@ export function ReadingPane({
   onReplyToMessageBody,
   className,
 }: {
+  accountId: string;
   folderId: string;
   folders: MailFolder[];
   isActionPending: boolean;
@@ -212,8 +214,9 @@ export function ReadingPane({
         </div>
       </ScrollArea>
       {replyMessageId === message.id && (
-        <MailComposer
-          mode="reply"
+          <MailComposer
+            accountId={accountId}
+            mode="reply"
           replyMessage={message}
           isSending={isSendingMessage}
           error={replyError}
