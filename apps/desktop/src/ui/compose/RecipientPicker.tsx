@@ -190,7 +190,11 @@ export function RecipientPicker({
       return;
     }
 
-    const parsed = parseRecipients(text);
+    const input = event.currentTarget;
+    const selectionStart = input.selectionStart ?? input.value.length;
+    const selectionEnd = input.selectionEnd ?? selectionStart;
+    const nextInputValue = `${input.value.slice(0, selectionStart)}${text}${input.value.slice(selectionEnd)}`;
+    const parsed = parseRecipients(nextInputValue);
 
     if (parsed.valid.length === 0 || parsed.invalid.length > 0) {
       return;
