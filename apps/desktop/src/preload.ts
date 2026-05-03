@@ -3,6 +3,7 @@ import type {
   AuthSession,
   MailFolder,
   MailMessageDetail,
+  MailPersonSuggestion,
   PagedMessages,
   ReplyToMessageInput,
   SendMailInput,
@@ -53,6 +54,11 @@ const courrier = {
         'mail:delete-message',
         messageId,
       ) as Promise<MailMessageDetail>,
+    listPeople: (query?: string) =>
+      ipcRenderer.invoke(
+        'mail:list-people',
+        query,
+      ) as Promise<MailPersonSuggestion[]>,
     sendMessage: (input: SendMailInput) =>
       ipcRenderer.invoke('mail:send-message', input) as Promise<void>,
     replyToMessage: (input: ReplyToMessageInput) =>

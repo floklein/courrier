@@ -45,3 +45,13 @@ export function mailMessageQueryOptions(
     staleTime: mailPreloadStaleTimeMs,
   });
 }
+
+export function mailPeopleQueryOptions(query: string) {
+  const normalizedQuery = query.trim();
+
+  return queryOptions({
+    queryKey: ['mail', 'people', normalizedQuery] as const,
+    queryFn: () => api.mail.listPeople(normalizedQuery || undefined),
+    staleTime: 5 * 60 * 1000,
+  });
+}

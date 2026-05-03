@@ -31,6 +31,12 @@ export interface MailComposeRecipient {
   email: string;
 }
 
+export interface MailPersonSuggestion {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface SendMailInput {
   toRecipients: MailComposeRecipient[];
   subject: string;

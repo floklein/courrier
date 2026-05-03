@@ -16,6 +16,7 @@ export const api = {
       window.courrier.mail.moveMessage(messageId, destinationFolderId),
     deleteMessage: (messageId: string) =>
       window.courrier.mail.deleteMessage(messageId),
+    listPeople: (query?: string) => window.courrier.mail.listPeople(query),
     sendMessage: window.courrier.mail.sendMessage,
     replyToMessage: window.courrier.mail.replyToMessage,
     onRemoteChange: window.courrier.mail.onRemoteChange,
