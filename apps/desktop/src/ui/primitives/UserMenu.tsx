@@ -108,7 +108,7 @@ export function UserMenu({
                 disabled={
                   account.id === activeAccountId || switchAccountMutation.isPending
                 }
-                onSelect={() => switchAccountMutation.mutate(account.id)}
+                onClick={() => switchAccountMutation.mutate(account.id)}
                 className="mx-1 px-3 py-2"
               >
                 <Avatar className="size-5">
@@ -124,7 +124,7 @@ export function UserMenu({
             ))}
             <DropdownMenuItem
               disabled={signInMutation.isPending}
-              onSelect={() => signInMutation.mutate('microsoft')}
+              onClick={() => signInMutation.mutate('microsoft')}
               className="mx-1 px-3 py-2"
             >
               <MailPlus data-icon="inline-start" />
@@ -132,7 +132,7 @@ export function UserMenu({
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={signInMutation.isPending}
-              onSelect={() => signInMutation.mutate('google')}
+              onClick={() => signInMutation.mutate('google')}
               className="mx-1 px-3 py-2"
             >
               <MailPlus data-icon="inline-start" />
@@ -196,7 +196,7 @@ function ThemeMenuItem({
   onSelect: () => void;
 }) {
   return (
-    <DropdownMenuItem onSelect={onSelect} className="mx-1 px-3 py-2">
+    <DropdownMenuItem onClick={onSelect} className="mx-1 px-3 py-2">
       <Icon data-icon="inline-start" />
       {label}
       {isSelected && <Check data-icon="inline-end" className="ml-auto" />}
