@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
-import type { CSSProperties } from 'react';
+import { useCallback, type CSSProperties } from 'react';
 import googleIconUrl from '../../assets/providers/google.svg';
 import microsoftIconUrl from '../../assets/providers/microsoft.svg';
 import { Button } from '../../components/ui/button';
@@ -31,6 +31,7 @@ import {
 import { useActiveMailAccountChange } from '../../hooks/useActiveMailAccountChange';
 import { api } from '../../lib/api-client';
 import type {
+  AuthSession,
   MailAccount,
   ProviderConfigurationStatus,
   ProviderId,
@@ -57,18 +58,22 @@ export function UserMenu({
   const { theme, setTheme } = useTheme();
   const {
     applyActiveMailAccountSession,
+    prepareActiveMailAccountChange,
   } = useActiveMailAccountChange();
-  const switchAccountMutation = useMutation({
-    mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
-    onSuccess: (session) => {
+  const handleAccountSessionChange = useCallback(
+    async (session: AuthSession) => {
+      await prepareActiveMailAccountChange();
       applyActiveMailAccountSession(session);
     },
+    [applyActiveMailAccountSession, prepareActiveMailAccountChange],
+  );
+  const switchAccountMutation = useMutation({
+    mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
+    onSuccess: handleAccountSessionChange,
   });
   const signInMutation = useMutation({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
-    onSuccess: (session) => {
-      applyActiveMailAccountSession(session);
-    },
+    onSuccess: handleAccountSessionChange,
   });
   const microsoftProvider = getProviderStatus(providers, 'microsoft');
   const googleProvider = getProviderStatus(providers, 'google');
