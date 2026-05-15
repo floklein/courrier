@@ -41,14 +41,14 @@ export function MailActionDropdownContent(props: MailActionMenuProps) {
     <DropdownMenuContent align="end" className="w-56">
       <DropdownMenuItem
         disabled={props.isBusy}
-        onSelect={() => props.onReply(props.message)}
+        onClick={() => props.onReply(props.message)}
       >
         <Reply />
         Reply
       </DropdownMenuItem>
       <DropdownMenuItem
         disabled={props.isBusy}
-        onSelect={() => props.onMarkReadState(props.message, !props.message.isRead)}
+        onClick={() => props.onMarkReadState(props.message, !props.message.isRead)}
       >
         <MarkIcon />
         {markLabel}
@@ -58,7 +58,7 @@ export function MailActionDropdownContent(props: MailActionMenuProps) {
       <DropdownMenuItem
         disabled={props.isBusy}
         variant="destructive"
-        onSelect={() => props.onDelete(props.message)}
+        onClick={() => props.onDelete(props.message)}
       >
         <Trash2 />
         Move to trash
@@ -74,14 +74,14 @@ export function MailActionContextContent(props: MailActionMenuProps) {
     <ContextMenuContent className="w-56">
       <ContextMenuItem
         disabled={props.isBusy}
-        onSelect={() => props.onReply(props.message)}
+        onClick={() => props.onReply(props.message)}
       >
         <Reply />
         Reply
       </ContextMenuItem>
       <ContextMenuItem
         disabled={props.isBusy}
-        onSelect={() => props.onMarkReadState(props.message, !props.message.isRead)}
+        onClick={() => props.onMarkReadState(props.message, !props.message.isRead)}
       >
         <MarkIcon />
         {markLabel}
@@ -91,7 +91,7 @@ export function MailActionContextContent(props: MailActionMenuProps) {
       <ContextMenuItem
         disabled={props.isBusy}
         variant="destructive"
-        onSelect={() => props.onDelete(props.message)}
+        onClick={() => props.onDelete(props.message)}
       >
         <Trash2 />
         Move to trash
@@ -116,7 +116,7 @@ function DropdownMoveSubmenu(props: MailActionMenuProps) {
         {destinationFolders.map((folder) => (
           <DropdownMenuItem
             key={folder.id}
-            onSelect={() => props.onMove(props.message, folder.id)}
+            onClick={() => props.onMove(props.message, folder.id)}
           >
             <span className="truncate">{folder.label}</span>
           </DropdownMenuItem>
@@ -142,7 +142,7 @@ function ContextMoveSubmenu(props: MailActionMenuProps) {
         {destinationFolders.map((folder) => (
           <ContextMenuItem
             key={folder.id}
-            onSelect={() => props.onMove(props.message, folder.id)}
+            onClick={() => props.onMove(props.message, folder.id)}
           >
             <span className="truncate">{folder.label}</span>
           </ContextMenuItem>
