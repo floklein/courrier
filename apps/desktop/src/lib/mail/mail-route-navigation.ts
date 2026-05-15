@@ -1,5 +1,4 @@
 import type { NavigateOptions } from '@tanstack/react-router';
-import { parseMailPath } from './mail-utils';
 
 function currentPathnameFromHash(): string {
   const raw = window.location.hash.replace(/^#/, '');
@@ -15,9 +14,9 @@ function currentPathnameFromHash(): string {
 export function resetMailRouteAfterActiveAccountChanged(
   navigate: (opts: NavigateOptions) => void,
 ) {
-  const { messageId } = parseMailPath(currentPathnameFromHash());
+  const pathname = currentPathnameFromHash();
 
-  if (!messageId) {
+  if (!pathname.startsWith('/mail')) {
     return;
   }
 

@@ -9,8 +9,7 @@ import {
   Sun,
   type LucideIcon,
 } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useMutation } from '@tanstack/react-query';
 import googleIconUrl from '../../assets/providers/google.svg';
 import microsoftIconUrl from '../../assets/providers/microsoft.svg';
 import { Button } from '../../components/ui/button';
@@ -28,9 +27,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
-import { useComposeStore } from '../../hooks/compose-store';
+import { useActiveMailAccountChange } from '../../hooks/useActiveMailAccountChange';
 import { api } from '../../lib/api-client';
-import { resetMailRouteAfterActiveAccountChanged } from '../../lib/mail/mail-route-navigation';
 import type {
   MailAccount,
   ProviderConfigurationStatus,
@@ -55,25 +53,25 @@ export function UserMenu({
   isSigningOut: boolean;
   onSignOut: () => void;
 }) {
-  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const queryClient = useQueryClient();
+  const {
+    applyActiveMailAccountSession,
+    invalidateMailState,
+    prepareActiveMailAccountChange,
+  } = useActiveMailAccountChange();
   const switchAccountMutation = useMutation({
     mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
+    onMutate: prepareActiveMailAccountChange,
     onSuccess: async (session) => {
-      queryClient.setQueryData(['auth', 'session'], session);
-      useComposeStore.getState().close();
-      resetMailRouteAfterActiveAccountChanged(navigate);
-      await queryClient.invalidateQueries({ queryKey: ['mail'] });
+      applyActiveMailAccountSession(session);
+      await invalidateMailState();
     },
   });
   const signInMutation = useMutation({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
     onSuccess: async (session) => {
-      queryClient.setQueryData(['auth', 'session'], session);
-      useComposeStore.getState().close();
-      resetMailRouteAfterActiveAccountChanged(navigate);
-      await queryClient.invalidateQueries({ queryKey: ['mail'] });
+      applyActiveMailAccountSession(session);
+      await invalidateMailState();
     },
   });
   const microsoftProvider = getProviderStatus(providers, 'microsoft');

@@ -97,6 +97,7 @@ export class MailSubscriptionManager {
     }
 
     const state = await this.loadState();
+    resetSubscriptionStateForDifferentAccount(state, account);
     state.accountId = account.id;
     state.providerId = account.providerId;
     state.accountEmail = account.email;
@@ -571,10 +572,45 @@ function isExpired(expirationDateTime: string, now = new Date()) {
 function isSubscriptionGoneError(error: unknown) {
   return (
     error instanceof Error &&
-    /Microsoft Graph request failed: (404|410)\b/.test(error.message)
+    (/Microsoft Graph request failed: (404|410)\b/.test(error.message) ||
+      error.message.includes('SubscriptionId Guid format is invalid'))
   );
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
+}
+
+function resetSubscriptionStateForDifferentAccount(
+  state: MailSubscriptionState,
+  account: MailAccount,
+) {
+  if (!isDifferentSubscriptionAccount(state, account)) {
+    return;
+  }
+
+  state.clientId = randomUUID();
+  state.clientState = randomSecret();
+  state.authToken = randomSecret();
+  state.subscriptionId = undefined;
+  state.expirationDateTime = undefined;
+  state.lastEventId = undefined;
+}
+
+function isDifferentSubscriptionAccount(
+  state: MailSubscriptionState,
+  account: MailAccount,
+) {
+  if (state.accountId && state.accountId !== account.id) {
+    return true;
+  }
+
+  if (state.providerId && state.providerId !== account.providerId) {
+    return true;
+  }
+
+  return (
+    Boolean(state.accountEmail) &&
+    state.accountEmail?.toLowerCase() !== account.email.toLowerCase()
+  );
 }

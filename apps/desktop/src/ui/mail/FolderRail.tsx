@@ -1,5 +1,5 @@
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { PenLine } from 'lucide-react';
 import type { CSSProperties } from 'react';
@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '../../components/ui/tooltip';
+import { useActiveMailAccountChange } from '../../hooks/useActiveMailAccountChange';
 import { api } from '../../lib/api-client';
 import { isMailMessageDragData } from '../../lib/mail/mail-drag';
 import { folderIcons } from '../../lib/mail/mail-icons';
@@ -59,7 +60,11 @@ export function FolderRail({
   ) => void;
   className?: string;
 }) {
-  const queryClient = useQueryClient();
+  const {
+    applyActiveMailAccountSession,
+    prepareActiveMailAccountChange,
+    queryClient,
+  } = useActiveMailAccountChange();
   const prefetchFolderMessages = useCallback(
     (folderId: string) => {
       void queryClient
@@ -70,12 +75,9 @@ export function FolderRail({
   );
   const signOutMutation = useMutation({
     mutationFn: () => api.auth.signOut(activeAccountId),
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ['mail'] });
-      queryClient.removeQueries({ queryKey: ['mail'] });
-    },
+    onMutate: prepareActiveMailAccountChange,
     onSuccess: (session) => {
-      queryClient.setQueryData(['auth', 'session'], session);
+      applyActiveMailAccountSession(session);
     },
   });
 
