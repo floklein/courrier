@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Mail } from 'lucide-react';
+import googleIconUrl from '../../assets/providers/google.svg';
+import microsoftIconUrl from '../../assets/providers/microsoft.svg';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api-client';
 import type { AuthSession, ProviderId } from '../../lib/mail-types';
@@ -21,7 +23,7 @@ export function Onboarding({
 
   return (
     <main className="flex h-full items-center justify-center bg-background p-6">
-      <section className="w-full max-w-md rounded-lg border bg-card p-8 shadow-sm">
+      <section className="w-full max-w-md">
         <div className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Mail className="size-5" />
         </div>
@@ -46,13 +48,15 @@ export function Onboarding({
           {session.providers.map((provider) => (
             <Button
               key={provider.providerId}
-              className="w-full"
-              variant={provider.providerId === 'microsoft' ? 'default' : 'outline'}
+              className="w-full border-border bg-background text-foreground shadow-xs hover:bg-muted"
+              variant="outline"
               disabled={signInMutation.isPending || !provider.isConfigured}
               onClick={() => signInMutation.mutate(provider.providerId)}
             >
-              {signInMutation.isPending && (
+              {signInMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ProviderIcon providerId={provider.providerId} />
               )}
               Sign in with {provider.displayName}
             </Button>
@@ -60,5 +64,19 @@ export function Onboarding({
         </div>
       </section>
     </main>
+  );
+}
+
+function ProviderIcon({ providerId }: { providerId: ProviderId }) {
+  const src = providerId === 'google' ? googleIconUrl : microsoftIconUrl;
+
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      data-icon="inline-start"
+      className="size-4"
+    />
   );
 }
