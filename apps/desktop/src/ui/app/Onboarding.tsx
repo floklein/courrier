@@ -20,6 +20,9 @@ export function Onboarding({
     },
   });
   const isConfigError = session.status === 'configuration-error';
+  const signingInProviderId = signInMutation.isPending
+    ? signInMutation.variables
+    : undefined;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -58,7 +61,7 @@ export function Onboarding({
                 disabled={signInMutation.isPending || !provider.isConfigured}
                 onClick={() => signInMutation.mutate(provider.providerId)}
               >
-                {signInMutation.isPending ? (
+                {signingInProviderId === provider.providerId ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <ProviderIcon providerId={provider.providerId} />

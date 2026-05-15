@@ -78,6 +78,9 @@ export function UserMenu({
   const microsoftProvider = getProviderStatus(providers, 'microsoft');
   const googleProvider = getProviderStatus(providers, 'google');
   const activeAccount = accounts.find((account) => account.id === activeAccountId);
+  const signingInProviderId = signInMutation.isPending
+    ? signInMutation.variables
+    : undefined;
 
   return (
     <div className="w-full">
@@ -163,11 +166,7 @@ export function UserMenu({
                 disabled={signInMutation.isPending}
                 className="mx-1 px-3 py-2"
               >
-                {signInMutation.isPending ? (
-                  <Loader2 data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <MailPlus data-icon="inline-start" />
-                )}
+                <MailPlus data-icon="inline-start" />
                 Add account
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-56 p-1">
@@ -181,7 +180,11 @@ export function UserMenu({
                   onClick={() => signInMutation.mutate('microsoft')}
                   className="px-2 py-2"
                 >
-                  <ProviderIcon providerId="microsoft" />
+                  {signingInProviderId === 'microsoft' ? (
+                    <Loader2 data-icon="inline-start" className="animate-spin" />
+                  ) : (
+                    <ProviderIcon providerId="microsoft" />
+                  )}
                   Microsoft account
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -193,7 +196,11 @@ export function UserMenu({
                   onClick={() => signInMutation.mutate('google')}
                   className="px-2 py-2"
                 >
-                  <ProviderIcon providerId="google" />
+                  {signingInProviderId === 'google' ? (
+                    <Loader2 data-icon="inline-start" className="animate-spin" />
+                  ) : (
+                    <ProviderIcon providerId="google" />
+                  )}
                   Google account
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
