@@ -458,7 +458,7 @@ function mapGmailLabel(label: GmailLabel): MailFolder {
 
   return {
     id,
-    label: label.name ?? id,
+    label: getGmailDisplayName(id, label.name),
     icon: getGmailFolderIcon(id),
     unreadCount: label.messagesUnread ?? 0,
     totalCount: label.messagesTotal ?? 0,
@@ -503,8 +503,40 @@ function mapGmailMessageDetail(
   };
 }
 
+function getGmailDisplayName(id: string, name: string | undefined) {
+  const map: Record<string, string> = {
+    INBOX: 'Inbox',
+    DRAFT: 'Drafts',
+    SENT: 'Sent',
+    TRASH: 'Trash',
+    SPAM: 'Spam',
+    STARRED: 'Starred',
+    IMPORTANT: 'Important',
+    CATEGORY_PERSONAL: 'Primary',
+    CATEGORY_SOCIAL: 'Social',
+    CATEGORY_PROMOTIONS: 'Promotions',
+    CATEGORY_UPDATES: 'Updates',
+    CATEGORY_FORUMS: 'Forums',
+  };
+
+  return map[id] ?? name ?? id;
+}
+
 function sortGmailFolders(folders: MailFolder[]) {
-  const order = ['INBOX', 'DRAFT', 'SENT', 'CATEGORY_PERSONAL', 'TRASH', 'SPAM'];
+  const order = [
+    'INBOX',
+    'DRAFT',
+    'SENT',
+    'CATEGORY_PERSONAL',
+    'TRASH',
+    'SPAM',
+    'CATEGORY_FORUMS',
+    'CATEGORY_PROMOTIONS',
+    'CATEGORY_SOCIAL',
+    'CATEGORY_UPDATES',
+    'IMPORTANT',
+    'STARRED',
+  ];
 
   return [...folders].sort((left, right) => {
     const leftOrder = order.includes(left.id) ? order.indexOf(left.id) : order.length;
