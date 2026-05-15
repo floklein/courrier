@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Avatar, AvatarFallback } from '../../components/ui/avatar';
+import googleIconUrl from '../../assets/providers/google.svg';
+import microsoftIconUrl from '../../assets/providers/microsoft.svg';
 import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
@@ -30,7 +31,6 @@ import {
 import { useComposeStore } from '../../hooks/compose-store';
 import { api } from '../../lib/api-client';
 import { resetMailRouteAfterActiveAccountChanged } from '../../lib/mail/mail-route-navigation';
-import { getInitials } from '../../lib/mail/mail-utils';
 import type {
   MailAccount,
   ProviderConfigurationStatus,
@@ -78,6 +78,7 @@ export function UserMenu({
   });
   const microsoftProvider = getProviderStatus(providers, 'microsoft');
   const googleProvider = getProviderStatus(providers, 'google');
+  const activeAccount = accounts.find((account) => account.id === activeAccountId);
 
   return (
     <div className="w-full">
@@ -89,9 +90,10 @@ export function UserMenu({
               className="h-12 w-full justify-start gap-2 px-2 max-lg:h-12 max-lg:justify-center max-lg:px-0"
               aria-label="User menu"
             >
-              <Avatar className="size-8">
-                <AvatarFallback>{getInitials(accountName)}</AvatarFallback>
-              </Avatar>
+              <ProviderIcon
+                providerId={activeAccount?.providerId}
+                className="size-8"
+              />
               <span className="flex min-w-0 flex-1 flex-col items-start max-lg:hidden">
                 <span className="truncate text-sm font-semibold leading-5">
                   {accountName}
@@ -108,9 +110,10 @@ export function UserMenu({
         />
         <DropdownMenuContent side="right" align="end" className="w-72 p-0">
           <div className="flex items-center gap-3 p-3">
-            <Avatar className="size-9">
-              <AvatarFallback>{getInitials(accountName)}</AvatarFallback>
-            </Avatar>
+            <ProviderIcon
+              providerId={activeAccount?.providerId}
+              className="size-9"
+            />
             <span className="flex min-w-0 flex-col">
               <span className="truncate text-sm font-semibold">
                 {accountName}
@@ -145,11 +148,10 @@ export function UserMenu({
                   className="mx-1 px-3 py-2"
                 >
                   <span className="flex size-4 shrink-0 items-center justify-center">
-                    <Avatar className="size-5">
-                      <AvatarFallback className="text-[10px]">
-                        {getInitials(account.name ?? account.email)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <ProviderIcon
+                      providerId={account.providerId}
+                      className="size-5"
+                    />
                   </span>
                   <span className="min-w-0 flex-1 truncate">
                     {account.email}
@@ -180,6 +182,7 @@ export function UserMenu({
                   onClick={() => signInMutation.mutate('microsoft')}
                   className="px-2 py-2"
                 >
+                  <ProviderIcon providerId="microsoft" />
                   Microsoft account
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -191,6 +194,7 @@ export function UserMenu({
                   onClick={() => signInMutation.mutate('google')}
                   className="px-2 py-2"
                 >
+                  <ProviderIcon providerId="google" />
                   Google account
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
@@ -270,5 +274,25 @@ function ThemeMenuItem({
       {label}
       {isSelected && <Check data-icon="inline-end" className="ml-auto" />}
     </DropdownMenuItem>
+  );
+}
+
+function ProviderIcon({
+  providerId,
+  className = 'size-4',
+}: {
+  providerId: ProviderId | undefined;
+  className?: string;
+}) {
+  const src = providerId === 'google' ? googleIconUrl : microsoftIconUrl;
+
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      data-icon="inline-start"
+      className={className}
+    />
   );
 }
