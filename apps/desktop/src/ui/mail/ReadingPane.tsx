@@ -1,5 +1,4 @@
 import { MoreHorizontal, Reply, Trash2 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -18,13 +17,14 @@ import type {
   MailMessageSummary,
   ReplyToMessageInput,
 } from '../../lib/mail-types';
-import { formatMailDate, getInitials } from '../../lib/mail/mail-utils';
+import { formatMailDate } from '../../lib/mail/mail-utils';
 import { cn } from '../../lib/utils';
 import { PanelStatus } from '../app/StatusViews';
 import { MailComposer } from '../compose/MailComposer';
 import { ToolbarButton } from '../primitives/ToolbarButton';
 import { HtmlMessageBody } from './HtmlMessageBody';
 import { MailActionDropdownContent } from './MailActionMenu';
+import { MailAvatar } from './MailAvatar';
 
 export function ReadingPane({
   accountId,
@@ -177,9 +177,11 @@ export function ReadingPane({
       <ScrollArea className="min-h-0 flex-1 overflow-hidden">
         <div className="flex w-full flex-col">
           <div className="flex items-start gap-4 border-b px-4 py-4">
-            <Avatar className="size-11">
-              <AvatarFallback>{getInitials(message.sender.name)}</AvatarFallback>
-            </Avatar>
+            <MailAvatar
+              name={message.sender.name}
+              email={message.sender.email}
+              className="size-11"
+            />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold">{message.sender.name}</p>
