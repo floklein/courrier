@@ -87,7 +87,7 @@ export function useMailActions({
       isRead: boolean;
     }) => api.mail.markMessageReadState(accountId, message.id, isRead),
     onMutate: async ({ message, isRead }) => {
-      await queryClient.cancelQueries({ queryKey: ['mail'] });
+      await queryClient.cancelQueries({ queryKey: ['mail', accountId] });
       const snapshot = createMailCacheSnapshot(queryClient);
       updateCachedMessageReadState(queryClient, accountId, message.id, isRead);
       updateCachedFolderCounts(queryClient, accountId, {
@@ -100,12 +100,19 @@ export function useMailActions({
     onError: (_error, _variables, context) => {
       restoreMailCacheSnapshot(queryClient, context?.snapshot);
     },
-    onSettled: async (_data, _error, { message }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'folders'] }),
-        queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'messages'] }),
+    onSuccess: (_data, { message }) => {
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'folders'],
+          refetchType: 'none',
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'messages'],
+          refetchType: 'none',
+        }),
         queryClient.invalidateQueries({
           queryKey: ['mail', accountId, 'message', resolvedFolderId, message.id],
+          refetchType: 'none',
         }),
       ]);
     },
