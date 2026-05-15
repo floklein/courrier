@@ -16,7 +16,12 @@ import { api } from '../../lib/api-client';
 import { isMailMessageDragData } from '../../lib/mail/mail-drag';
 import { folderIcons } from '../../lib/mail/mail-icons';
 import { mailMessagesQueryOptions } from '../../lib/mail/mail-query-options';
-import type { MailAccount, MailFolder, MailMessageSummary } from '../../lib/mail-types';
+import type {
+  MailAccount,
+  MailFolder,
+  MailMessageSummary,
+  ProviderConfigurationStatus,
+} from '../../lib/mail-types';
 import { encodeRouteId } from '../../lib/route-ids';
 import { cn } from '../../lib/utils';
 import { RailStatus } from '../app/StatusViews';
@@ -26,6 +31,7 @@ export function FolderRail({
   accountEmail,
   accountName,
   accounts,
+  providers,
   activeAccountId,
   currentFolderId,
   folders,
@@ -39,6 +45,7 @@ export function FolderRail({
   accountEmail: string;
   accountName: string;
   accounts: MailAccount[];
+  providers: ProviderConfigurationStatus[];
   activeAccountId: string;
   currentFolderId: string;
   folders: MailFolder[];
@@ -123,6 +130,7 @@ export function FolderRail({
       <div className="shrink-0 border-t p-2">
         <UserMenu
           accounts={accounts}
+          providers={providers}
           activeAccountId={activeAccountId}
           accountEmail={accountEmail}
           accountName={accountName}

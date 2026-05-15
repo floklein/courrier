@@ -244,6 +244,7 @@ export function AuthenticatedMailClient({
           accountEmail={activeAccount.email}
           accountName={activeAccount.name ?? activeAccount.email}
           accounts={session.accounts}
+          providers={session.providers}
           activeAccountId={activeAccount.id}
           currentFolderId={resolvedFolderId}
           folders={folders}

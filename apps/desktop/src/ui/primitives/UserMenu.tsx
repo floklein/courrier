@@ -22,17 +22,25 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { useComposeStore } from '../../hooks/compose-store';
 import { api } from '../../lib/api-client';
 import { resetMailRouteAfterActiveAccountChanged } from '../../lib/mail/mail-route-navigation';
 import { getInitials } from '../../lib/mail/mail-utils';
-import type { MailAccount, ProviderId } from '../../lib/mail-types';
+import type {
+  MailAccount,
+  ProviderConfigurationStatus,
+  ProviderId,
+} from '../../lib/mail-types';
 import { useTheme } from '../../theme/ThemeProvider';
 
 export function UserMenu({
   accounts,
+  providers,
   activeAccountId,
   accountEmail,
   accountName,
@@ -40,6 +48,7 @@ export function UserMenu({
   onSignOut,
 }: {
   accounts: MailAccount[];
+  providers: ProviderConfigurationStatus[];
   activeAccountId: string;
   accountEmail: string;
   accountName: string;
@@ -67,6 +76,8 @@ export function UserMenu({
       await queryClient.invalidateQueries({ queryKey: ['mail'] });
     },
   });
+  const microsoftProvider = getProviderStatus(providers, 'microsoft');
+  const googleProvider = getProviderStatus(providers, 'google');
 
   return (
     <div className="w-full">
@@ -133,33 +144,62 @@ export function UserMenu({
                   label={account.email}
                   className="mx-1 px-3 py-2"
                 >
-                  <Avatar className="size-5">
-                    <AvatarFallback className="text-[10px]">
-                      {getInitials(account.name ?? account.email)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    <Avatar className="size-5">
+                      <AvatarFallback className="text-[10px]">
+                        {getInitials(account.name ?? account.email)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </span>
                   <span className="min-w-0 flex-1 truncate">
                     {account.email}
                   </span>
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
-            <DropdownMenuItem
-              disabled={signInMutation.isPending}
-              onClick={() => signInMutation.mutate('microsoft')}
-              className="mx-1 px-3 py-2"
-            >
-              <MailPlus data-icon="inline-start" />
-              Add Microsoft account
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={signInMutation.isPending}
-              onClick={() => signInMutation.mutate('google')}
-              className="mx-1 px-3 py-2"
-            >
-              <MailPlus data-icon="inline-start" />
-              Add Google account
-            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger
+                disabled={signInMutation.isPending}
+                className="mx-1 px-3 py-2"
+              >
+                {signInMutation.isPending ? (
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <MailPlus data-icon="inline-start" />
+                )}
+                Add account
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56 p-1">
+                <DropdownMenuItem
+                  closeOnClick={false}
+                  disabled={
+                    signInMutation.isPending ||
+                    !microsoftProvider?.isConfigured
+                  }
+                  title={microsoftProvider?.message}
+                  onClick={() => signInMutation.mutate('microsoft')}
+                  className="px-2 py-2"
+                >
+                  Microsoft account
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  closeOnClick={false}
+                  disabled={
+                    signInMutation.isPending || !googleProvider?.isConfigured
+                  }
+                  title={googleProvider?.message}
+                  onClick={() => signInMutation.mutate('google')}
+                  className="px-2 py-2"
+                >
+                  Google account
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            {signInMutation.error && (
+              <div className="mx-1 mt-1 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
+                {signInMutation.error.message}
+              </div>
+            )}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
@@ -204,6 +244,13 @@ export function UserMenu({
       </DropdownMenu>
     </div>
   );
+}
+
+function getProviderStatus(
+  providers: ProviderConfigurationStatus[],
+  providerId: ProviderId,
+) {
+  return providers.find((provider) => provider.providerId === providerId);
 }
 
 function ThemeMenuItem({
