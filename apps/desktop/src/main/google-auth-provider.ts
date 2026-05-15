@@ -67,8 +67,28 @@ export class GoogleAuthProvider implements MailAuthProvider {
   }
 
   async getAccounts(): Promise<MailAccount[]> {
+    if (!this.clientId) {
+      return [];
+    }
+
     const accounts = await readStoredAccounts();
-    return accounts.map(googleAccountFromStored);
+    const validAccounts: MailAccount[] = [];
+
+    for (const account of accounts) {
+      try {
+        const accessToken = await this.getAccessToken(
+          createGoogleAccountId(account.providerAccountId),
+        );
+        await fetchGoogleJson<GoogleUserInfo>(googleUserInfoUrl, accessToken);
+        validAccounts.push(googleAccountFromStored(account));
+      } catch (error) {
+        if (!shouldPromptForGoogleSignIn(error)) {
+          throw error;
+        }
+      }
+    }
+
+    return validAccounts;
   }
 
   async signIn(): Promise<MailAccount | undefined> {
@@ -140,7 +160,17 @@ export class GoogleAuthProvider implements MailAuthProvider {
       throw new AuthRequiredError('Google sign-in is required.');
     }
 
-    const token = await this.refreshToken(account.refreshToken);
+    let token: GoogleTokenResponse;
+
+    try {
+      token = await this.refreshToken(account.refreshToken);
+    } catch (error) {
+      if (shouldPromptForGoogleSignIn(error)) {
+        throw new AuthRequiredError('Google sign-in is required.');
+      }
+
+      throw error;
+    }
 
     if (!token.access_token) {
       throw new AuthRequiredError('Google sign-in is required.');
@@ -340,6 +370,23 @@ function getGoogleTokenErrorMessage(
   }
 
   return `Google token request failed: ${data.error_description ?? data.error ?? status}`;
+}
+
+function shouldPromptForGoogleSignIn(error: unknown) {
+  if (error instanceof AuthRequiredError) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+
+  return (
+    message.includes('invalid_grant') ||
+    message.includes('invalid_request') ||
+    message.includes('Token has been expired or revoked') ||
+    message.includes('Google profile request failed: 401') ||
+    message.includes('Google profile request failed: 403') ||
+    message.includes('Google sign-in is required.')
+  );
 }
 
 async function fetchGoogleJson<T>(url: string, accessToken: string) {

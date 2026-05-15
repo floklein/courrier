@@ -32,7 +32,8 @@ describe('IPC auth handlers', () => {
     };
     const authService = {
       signIn: vi.fn().mockResolvedValue(session),
-      getSession: vi.fn(),
+      getActiveAccountId: vi.fn(),
+      getSession: vi.fn().mockResolvedValue({ status: 'unauthenticated' }),
       signOut: vi.fn(),
     };
     const mailService = createMailService();
@@ -54,7 +55,8 @@ describe('IPC auth handlers', () => {
   it('does not start mail subscriptions after unauthenticated sign-in', async () => {
     const authService = {
       signIn: vi.fn().mockResolvedValue({ status: 'unauthenticated' }),
-      getSession: vi.fn(),
+      getActiveAccountId: vi.fn(),
+      getSession: vi.fn().mockResolvedValue({ status: 'unauthenticated' }),
       signOut: vi.fn(),
     };
     const mailService = createMailService();

@@ -1,12 +1,17 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().min(16).optional(),
+);
+
 const configSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   HOST: z.string().default('0.0.0.0'),
   RELAY_PUBLIC_URL: z.string().url(),
   RELAY_ADMIN_TOKEN: z.string().min(24),
-  GOOGLE_PUBSUB_VERIFICATION_TOKEN: z.string().min(16).optional(),
+  GOOGLE_PUBSUB_VERIFICATION_TOKEN: optionalNonEmptyString,
 });
 
 export type RelayConfig = z.infer<typeof configSchema>;
