@@ -163,6 +163,9 @@ function FolderRailItem({
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const Icon = folderIcons[folder.icon];
   const isActive = folder.id === currentFolderId;
+  const isInboxFolder =
+    folder.wellKnownName === 'inbox' || folder.id.toLowerCase() === 'inbox';
+  const shouldHighlightUnreadCount = isActive && isInboxFolder;
   const indentStyle = {
     '--folder-rail-item-indent': folder.depth
       ? `${8 + folder.depth * 14}px`
@@ -223,7 +226,11 @@ function FolderRailItem({
             {folder.unreadCount > 0 && (
               <Badge
                 variant={isActive ? 'default' : 'secondary'}
-                className="ml-auto max-lg:hidden"
+                className={cn(
+                  'ml-auto max-lg:hidden',
+                  shouldHighlightUnreadCount &&
+                    'bg-destructive text-destructive-foreground [a]:hover:bg-destructive/90',
+                )}
               >
                 {folder.unreadCount}
               </Badge>
