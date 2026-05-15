@@ -138,6 +138,7 @@ export function registerGraphWebhookRoutes({
 
     const subscription = await store.getSubscriptionByAccountEmail(
       notificationData.emailAddress,
+      'google',
     );
 
     if (!subscription) {

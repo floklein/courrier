@@ -53,7 +53,17 @@ export class MicrosoftAuthProvider implements MailAuthProvider {
 
     const pca = await this.pcaPromise;
     const accounts = await this.getCachedAccounts(pca);
-    return accounts.map(microsoftAccountFromMsal);
+    const validAccounts: MailAccount[] = [];
+
+    for (const account of accounts) {
+      const validAccount = await this.getValidCachedAccount(pca, account);
+
+      if (validAccount) {
+        validAccounts.push(microsoftAccountFromMsal(validAccount));
+      }
+    }
+
+    return validAccounts;
   }
 
   async signIn(): Promise<MailAccount | undefined> {
@@ -145,6 +155,29 @@ export class MicrosoftAuthProvider implements MailAuthProvider {
       console.warn('Resetting unreadable Microsoft auth cache.', error);
       await resetAuthCache();
       return [];
+    }
+  }
+
+  private async getValidCachedAccount(
+    pca: PublicClientApplication,
+    account: AccountInfo,
+  ) {
+    try {
+      const result = await pca.acquireTokenSilent({
+        account,
+        scopes,
+      });
+
+      return result.accessToken ? (result.account ?? account) : undefined;
+    } catch (error) {
+      if (
+        error instanceof InteractionRequiredAuthError ||
+        shouldPromptForInteractiveSignIn(error)
+      ) {
+        return undefined;
+      }
+
+      throw error;
     }
   }
 }

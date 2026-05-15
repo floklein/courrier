@@ -24,6 +24,7 @@ const gmailPageSize = '25';
 const messageMetadataHeaders = ['From', 'To', 'Subject', 'Date'];
 const detailHeaders = [
   'From',
+  'Reply-To',
   'To',
   'Subject',
   'Date',
@@ -254,14 +255,16 @@ export class GmailClient implements MailProvider {
   ): Promise<void> {
     const original = await this.getRawMessage(accountId, input.messageId);
     const headers = getHeaderMap(original.payload?.headers);
-    const from = parseMailbox(headers.get('from') ?? '');
+    const replyTarget =
+      parseMailboxList(headers.get('reply-to') ?? '')[0] ??
+      parseMailbox(headers.get('from') ?? '');
     const subject = createReplySubject(headers.get('subject') ?? '');
     const messageId = headers.get('message-id');
     const references = [headers.get('references'), messageId]
       .filter(Boolean)
       .join(' ');
 
-    if (!from.email) {
+    if (!replyTarget.email) {
       throw new Error('Gmail reply target is missing a sender address.');
     }
 
@@ -272,7 +275,7 @@ export class GmailClient implements MailProvider {
         raw: createRawMail({
           bodyHtml: input.bodyHtml,
           subject,
-          toRecipients: [{ name: from.name, email: from.email }],
+          toRecipients: [{ name: replyTarget.name, email: replyTarget.email }],
           extraHeaders: {
             ...(messageId ? { 'In-Reply-To': messageId } : {}),
             ...(references ? { References: references } : {}),

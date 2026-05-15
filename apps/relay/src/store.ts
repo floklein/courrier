@@ -13,6 +13,7 @@ export interface RelayStore {
   getSubscriptionByClientId(clientId: string): Promise<RelaySubscription | undefined>;
   getSubscriptionByAccountEmail(
     accountEmail: string,
+    providerId?: RelaySubscription['providerId'],
   ): Promise<RelaySubscription | undefined>;
   appendEvent(event: MailRemoteChangeEvent): Promise<void>;
   listEventsAfter(clientId: string, eventId?: string): Promise<MailRemoteChangeEvent[]>;
@@ -25,6 +26,10 @@ export class InMemoryRelayStore implements RelayStore {
   private readonly acknowledgedEventByClientId = new Map<string, string>();
 
   async upsertSubscription(subscription: RelaySubscription): Promise<void> {
+    if (subscription.accountEmail) {
+      this.removeStaleSubscriptionsForAccount(subscription);
+    }
+
     this.subscriptionsByClientId.set(subscription.clientId, subscription);
   }
 
@@ -38,12 +43,16 @@ export class InMemoryRelayStore implements RelayStore {
     return this.subscriptionsByClientId.get(clientId);
   }
 
-  async getSubscriptionByAccountEmail(accountEmail: string) {
+  async getSubscriptionByAccountEmail(
+    accountEmail: string,
+    providerId?: RelaySubscription['providerId'],
+  ) {
     const normalizedEmail = accountEmail.toLowerCase();
 
     return [...this.subscriptionsByClientId.values()].find(
       (subscription) =>
-        subscription.accountEmail?.toLowerCase() === normalizedEmail,
+        subscription.accountEmail?.toLowerCase() === normalizedEmail &&
+        (!providerId || subscription.providerId === providerId),
     );
   }
 
@@ -75,5 +84,23 @@ export class InMemoryRelayStore implements RelayStore {
 
     this.eventsByClientId.set(clientId, events.slice(eventIndex + 1));
     this.acknowledgedEventByClientId.set(clientId, eventId);
+  }
+
+  private removeStaleSubscriptionsForAccount(subscription: RelaySubscription) {
+    const normalizedEmail = subscription.accountEmail?.toLowerCase();
+
+    if (!normalizedEmail) {
+      return;
+    }
+
+    for (const [clientId, candidate] of this.subscriptionsByClientId) {
+      if (
+        clientId !== subscription.clientId &&
+        candidate.providerId === subscription.providerId &&
+        candidate.accountEmail?.toLowerCase() === normalizedEmail
+      ) {
+        this.subscriptionsByClientId.delete(clientId);
+      }
+    }
   }
 }
