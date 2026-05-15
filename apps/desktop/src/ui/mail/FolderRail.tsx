@@ -97,7 +97,6 @@ export function FolderRail({
               <Button
                 size="icon-sm"
                 aria-label="Compose mail"
-                disabled={isActionPending}
                 onClick={onComposeMessage}
               >
                 <PenLine data-icon="inline-start" />
