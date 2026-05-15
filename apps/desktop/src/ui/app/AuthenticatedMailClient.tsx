@@ -8,6 +8,7 @@ import { useMailClientState } from '../../hooks/useMailClientState';
 import { api } from '../../lib/api-client';
 import type { ComposeWindowDraft } from '../../lib/compose-window';
 import {
+  isGoogleInvalidMessageIdError,
   isGraphItemNotFoundError,
   isMicrosoftSignInRequiredError,
 } from '../../lib/graph-errors';
@@ -114,7 +115,22 @@ export function AuthenticatedMailClient({
   }, [closeCompose, resolvedFolderId]);
 
   useEffect(() => {
-    if (!messageId || !isGraphItemNotFoundError(messageQuery.error)) {
+    if (!messageId || !messageQuery.error) {
+      return;
+    }
+
+    const error = messageQuery.error;
+
+    if (isGoogleInvalidMessageIdError(error)) {
+      void navigate({
+        to: '/mail/$folderId',
+        params: { folderId: 'inbox' },
+        replace: true,
+      });
+      return;
+    }
+
+    if (!isGraphItemNotFoundError(error)) {
       return;
     }
 

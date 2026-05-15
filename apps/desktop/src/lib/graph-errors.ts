@@ -44,3 +44,12 @@ export function isMicrosoftSignInRequiredError(error: unknown) {
     message.includes('Sign-in is required.')
   );
 }
+
+export function isGoogleInvalidMessageIdError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return (
+    message.includes('Google API request failed:') &&
+    message.includes('Invalid id value')
+  );
+}

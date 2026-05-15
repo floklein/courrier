@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { Button } from '../../components/ui/button';
 import {
@@ -23,8 +24,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
-import { getInitials } from '../../lib/mail/mail-utils';
+import { useComposeStore } from '../../hooks/compose-store';
 import { api } from '../../lib/api-client';
+import { resetMailRouteAfterActiveAccountChanged } from '../../lib/mail/mail-route-navigation';
+import { getInitials } from '../../lib/mail/mail-utils';
 import type { MailAccount, ProviderId } from '../../lib/mail-types';
 import { useTheme } from '../../theme/ThemeProvider';
 
@@ -43,12 +46,15 @@ export function UserMenu({
   isSigningOut: boolean;
   onSignOut: () => void;
 }) {
+  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
   const switchAccountMutation = useMutation({
     mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
     onSuccess: async (session) => {
       queryClient.setQueryData(['auth', 'session'], session);
+      useComposeStore.getState().close();
+      resetMailRouteAfterActiveAccountChanged(navigate);
       await queryClient.invalidateQueries({ queryKey: ['mail'] });
     },
   });
@@ -56,6 +62,8 @@ export function UserMenu({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
     onSuccess: async (session) => {
       queryClient.setQueryData(['auth', 'session'], session);
+      useComposeStore.getState().close();
+      resetMailRouteAfterActiveAccountChanged(navigate);
       await queryClient.invalidateQueries({ queryKey: ['mail'] });
     },
   });

@@ -28,5 +28,10 @@ export function MailClient() {
     return <Onboarding session={sessionQuery.data} />;
   }
 
-  return <AuthenticatedMailClient session={sessionQuery.data} />;
+  return (
+    <AuthenticatedMailClient
+      key={sessionQuery.data.activeAccount.id}
+      session={sessionQuery.data}
+    />
+  );
 }
