@@ -702,10 +702,50 @@ function createReplySubject(subject: string) {
 }
 
 function parseMailboxList(value: string) {
-  return value
-    .split(',')
+  return splitMailboxList(value)
     .map(parseMailbox)
     .filter((address) => address.name || address.email);
+}
+
+function splitMailboxList(value: string) {
+  const items: string[] = [];
+  let current = '';
+  let isQuoted = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    const previousCharacter = value[index - 1];
+
+    if (character === '"' && previousCharacter !== '\\') {
+      isQuoted = !isQuoted;
+      current += character;
+      continue;
+    }
+
+    if (!isQuoted && character === '<') {
+      angleDepth += 1;
+      current += character;
+      continue;
+    }
+
+    if (!isQuoted && character === '>' && angleDepth > 0) {
+      angleDepth -= 1;
+      current += character;
+      continue;
+    }
+
+    if (!isQuoted && angleDepth === 0 && character === ',') {
+      items.push(current);
+      current = '';
+      continue;
+    }
+
+    current += character;
+  }
+
+  items.push(current);
+  return items;
 }
 
 function parseMailbox(value: string): MailAddress {

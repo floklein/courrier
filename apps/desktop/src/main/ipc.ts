@@ -78,7 +78,13 @@ export function registerIpcHandlers(
       console.warn('Mail subscription cleanup failed during sign-out.', error);
     }
 
-    return authService.signOut(parsedAccountId);
+    const session = await authService.signOut(parsedAccountId);
+
+    if (session.status === 'authenticated') {
+      await options.startMailSubscriptions?.(session.activeAccount.id);
+    }
+
+    return session;
   });
 
   ipcMain.handle('mail:list-folders', (event, accountId: string) => {
