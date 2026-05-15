@@ -291,7 +291,7 @@ async function receiveAuthorizationCode({
         return;
       }
 
-      redirectUri = `http://127.0.0.1:${address.port}`;
+      redirectUri = `http://127.0.0.1:${address.port}/`;
       const authUrl = new URL(googleAuthUrl);
       authUrl.search = new URLSearchParams({
         access_type: 'offline',
@@ -325,12 +325,21 @@ async function postGoogleToken(body: URLSearchParams) {
   const data = (await response.json()) as GoogleTokenResponse;
 
   if (!response.ok) {
-    throw new Error(
-      `Google token request failed: ${data.error_description ?? data.error ?? response.status}`,
-    );
+    throw new Error(getGoogleTokenErrorMessage(data, response.status));
   }
 
   return data;
+}
+
+function getGoogleTokenErrorMessage(
+  data: GoogleTokenResponse,
+  status: number,
+) {
+  if (data.error === 'internal_failure') {
+    return 'Google token request failed: internal_failure. Check that GOOGLE_CLIENT_ID comes from an OAuth Desktop app client, not a Web application client.';
+  }
+
+  return `Google token request failed: ${data.error_description ?? data.error ?? status}`;
 }
 
 async function fetchGoogleJson<T>(url: string, accessToken: string) {
