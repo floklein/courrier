@@ -9,11 +9,15 @@ export function useActiveMailAccountChange() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const resetActiveMailState = useCallback(() => {
+  const resetActiveMailView = useCallback(() => {
     useComposeStore.getState().close();
     resetMailRouteAfterActiveAccountChanged(navigate);
+  }, [navigate]);
+
+  const resetActiveMailState = useCallback(() => {
+    resetActiveMailView();
     queryClient.removeQueries({ queryKey: ['mail'] });
-  }, [navigate, queryClient]);
+  }, [queryClient, resetActiveMailView]);
 
   const prepareActiveMailAccountChange = useCallback(async () => {
     await queryClient.cancelQueries({ queryKey: ['mail'] });
@@ -22,10 +26,10 @@ export function useActiveMailAccountChange() {
 
   const applyActiveMailAccountSession = useCallback(
     (session: AuthSession) => {
-      resetActiveMailState();
       queryClient.setQueryData(['auth', 'session'], session);
+      resetActiveMailView();
     },
-    [queryClient, resetActiveMailState],
+    [queryClient, resetActiveMailView],
   );
 
   const invalidateMailState = useCallback(

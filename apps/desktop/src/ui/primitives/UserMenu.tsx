@@ -57,22 +57,17 @@ export function UserMenu({
   const { theme, setTheme } = useTheme();
   const {
     applyActiveMailAccountSession,
-    invalidateMailState,
-    prepareActiveMailAccountChange,
   } = useActiveMailAccountChange();
   const switchAccountMutation = useMutation({
     mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
-    onMutate: prepareActiveMailAccountChange,
-    onSuccess: async (session) => {
+    onSuccess: (session) => {
       applyActiveMailAccountSession(session);
-      await invalidateMailState();
     },
   });
   const signInMutation = useMutation({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
-    onSuccess: async (session) => {
+    onSuccess: (session) => {
       applyActiveMailAccountSession(session);
-      await invalidateMailState();
     },
   });
   const microsoftProvider = getProviderStatus(providers, 'microsoft');
