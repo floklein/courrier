@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
+import type { CSSProperties } from 'react';
 import googleIconUrl from '../../assets/providers/google.svg';
 import microsoftIconUrl from '../../assets/providers/microsoft.svg';
 import { Button } from '../../components/ui/button';
@@ -283,14 +284,16 @@ function ProviderIcon({
   className?: string;
 }) {
   const src = providerId === 'google' ? googleIconUrl : microsoftIconUrl;
+  const maskStyle = {
+    '--provider-icon-url': `url("${src}")`,
+  } as CSSProperties;
 
   return (
-    <img
-      src={src}
-      alt=""
+    <span
       aria-hidden="true"
       data-icon="inline-start"
-      className={className}
+      className={`${className} inline-block shrink-0 bg-current [mask:var(--provider-icon-url)_center/contain_no-repeat]`}
+      style={maskStyle}
     />
   );
 }
