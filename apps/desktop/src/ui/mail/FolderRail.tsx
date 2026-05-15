@@ -62,8 +62,8 @@ export function FolderRail({
 }) {
   const {
     applyActiveMailAccountSession,
-    prepareActiveMailAccountChange,
     queryClient,
+    resetSignedOutMailAccountState,
   } = useActiveMailAccountChange();
   const prefetchFolderMessages = useCallback(
     (folderId: string) => {
@@ -75,9 +75,9 @@ export function FolderRail({
   );
   const signOutMutation = useMutation({
     mutationFn: () => api.auth.signOut(activeAccountId),
-    onMutate: prepareActiveMailAccountChange,
-    onSuccess: (session) => {
-      applyActiveMailAccountSession(session);
+    onMutate: () => resetSignedOutMailAccountState(activeAccountId),
+    onSuccess: async (session) => {
+      await applyActiveMailAccountSession(session);
     },
   });
 

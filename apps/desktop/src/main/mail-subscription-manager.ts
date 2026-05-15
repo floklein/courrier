@@ -56,6 +56,69 @@ type StopOptions = {
 };
 
 export class MailSubscriptionManager {
+  private readonly subscriptionsByAccountId = new Map<string, MailAccountSubscription>();
+
+  constructor(private readonly options: MailSubscriptionManagerOptions) {}
+
+  async start(accountId?: string) {
+    if (accountId) {
+      await this.startAccount(accountId);
+      return;
+    }
+
+    await this.startAll();
+  }
+
+  async startAll() {
+    if (!this.options.relayPublicUrl || !this.options.relayAdminToken) {
+      return;
+    }
+
+    const accounts = await this.options.authService.getAccounts();
+
+    await Promise.all(accounts.map((account) => this.startAccount(account.id)));
+  }
+
+  async startAccount(accountId: string) {
+    await this.getSubscription(accountId).start(accountId);
+  }
+
+  async stop(options: StopOptions = {}) {
+    await Promise.all(
+      [...this.subscriptionsByAccountId.values()].map((subscription) =>
+        subscription.stop(options),
+      ),
+    );
+  }
+
+  async stopAccount(accountId: string | undefined, options: StopOptions = {}) {
+    if (!accountId) {
+      await this.stop(options);
+      return;
+    }
+
+    await this.subscriptionsByAccountId.get(accountId)?.stop(options);
+  }
+
+  private getSubscription(accountId: string) {
+    const existing = this.subscriptionsByAccountId.get(accountId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const subscription = new MailAccountSubscription(accountId, {
+      ...this.options,
+      statePath:
+        this.options.statePath ?? getAccountSubscriptionStatePath(accountId),
+    });
+
+    this.subscriptionsByAccountId.set(accountId, subscription);
+    return subscription;
+  }
+}
+
+class MailAccountSubscription {
   private renewalTimer: NodeJS.Timeout | undefined;
   private reconnectTimer: NodeJS.Timeout | undefined;
   private startPromise: Promise<void> | undefined;
@@ -66,9 +129,12 @@ export class MailSubscriptionManager {
   private shouldDeleteRemoteSubscriptionWhileStopping = false;
   private lifecycleGeneration = 0;
 
-  constructor(private readonly options: MailSubscriptionManagerOptions) {}
+  constructor(
+    private readonly accountId: string,
+    private readonly options: MailSubscriptionManagerOptions,
+  ) {}
 
-  async start(accountId?: string) {
+  async start(accountId = this.accountId) {
     if (this.startPromise) {
       return this.startPromise;
     }
@@ -345,16 +411,49 @@ export class MailSubscriptionManager {
       console.warn('Stored mail subscription state is invalid; resetting it.', result.error);
       return createInitialState();
     } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        const migratedState = await this.loadLegacyState();
+
+        if (migratedState) {
+          return migratedState;
+        }
+
+        return createInitialState();
+      }
+
       if (error instanceof SyntaxError) {
         console.warn('Stored mail subscription state is corrupt; resetting it.', error);
         return createInitialState();
       }
 
-      if (!isNodeError(error) || error.code !== 'ENOENT') {
-        throw error;
+      throw error;
+    }
+  }
+
+  private async loadLegacyState(): Promise<MailSubscriptionState | undefined> {
+    if (this.options.statePath) {
+      return undefined;
+    }
+
+    try {
+      const result = mailSubscriptionStateSchema.safeParse(
+        JSON.parse(await fs.readFile(getLegacySubscriptionStatePath(), 'utf8')),
+      );
+
+      if (!result.success || result.data.accountId !== this.accountId) {
+        return undefined;
       }
 
-      return createInitialState();
+      return result.data;
+    } catch (error) {
+      if (
+        error instanceof SyntaxError ||
+        (isNodeError(error) && error.code === 'ENOENT')
+      ) {
+        return undefined;
+      }
+
+      throw error;
     }
   }
 
@@ -508,7 +607,8 @@ export class MailSubscriptionManager {
 
   private async getSubscriptionAccount(accountId?: string) {
     const accounts = await this.options.authService.getAccounts();
-    const activeAccountId = accountId ?? this.options.authService.getActiveAccountId();
+    const activeAccountId =
+      accountId ?? this.accountId ?? this.options.authService.getActiveAccountId();
 
     return (
       accounts.find((account) => account.id === activeAccountId) ??
@@ -563,6 +663,19 @@ function createInitialState(): MailSubscriptionState {
     clientState: randomSecret(),
     authToken: randomSecret(),
   };
+}
+
+function getAccountSubscriptionStatePath(accountId: string) {
+  const safeAccountId = Buffer.from(accountId).toString('base64url');
+
+  return path.join(
+    app.getPath('userData'),
+    `mail-subscription-${safeAccountId}.json`,
+  );
+}
+
+function getLegacySubscriptionStatePath() {
+  return path.join(app.getPath('userData'), subscriptionStateFileName);
 }
 
 function isExpired(expirationDateTime: string, now = new Date()) {

@@ -22,6 +22,7 @@ export class AuthRequiredError extends Error {
 
 export class AuthService {
   private activeAccountId: string | undefined;
+  private cachedAccounts: MailAccount[] = [];
   private readonly providersById: Map<ProviderId, RegisteredProvider>;
 
   constructor(providers: RegisteredProvider[]) {
@@ -32,6 +33,10 @@ export class AuthService {
 
   async getSession(): Promise<AuthSession> {
     const accounts = await this.getAccounts();
+    return this.getSessionFromAccounts(accounts);
+  }
+
+  private getSessionFromAccounts(accounts: MailAccount[]): AuthSession {
     const providers = this.getProviderStatuses();
     const activeAccount = this.getActiveAccount(accounts);
 
@@ -79,14 +84,16 @@ export class AuthService {
   }
 
   async switchAccount(accountId: string): Promise<AuthSession> {
-    const accounts = await this.getAccounts();
+    const accounts = this.cachedAccounts.some((account) => account.id === accountId)
+      ? this.cachedAccounts
+      : await this.getAccounts();
 
     if (!accounts.some((account) => account.id === accountId)) {
       throw new AuthRequiredError('The selected mail account is not signed in.');
     }
 
     this.activeAccountId = accountId;
-    return this.getSession();
+    return this.getSessionFromAccounts(accounts);
   }
 
   async signOut(accountId?: string): Promise<AuthSession> {
@@ -114,7 +121,8 @@ export class AuthService {
       ),
     );
 
-    return accountLists.flat().sort(sortAccounts);
+    this.cachedAccounts = accountLists.flat().sort(sortAccounts);
+    return this.cachedAccounts;
   }
 
   getActiveAccountId() {

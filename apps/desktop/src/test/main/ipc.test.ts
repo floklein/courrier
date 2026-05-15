@@ -49,7 +49,7 @@ describe('IPC auth handlers', () => {
     );
 
     expect(result).toBe(session);
-    expect(startMailSubscriptions).toHaveBeenCalledWith('microsoft:account-1');
+    expect(startMailSubscriptions).toHaveBeenCalledWith();
   });
 
   it('does not start mail subscriptions after unauthenticated sign-in', async () => {

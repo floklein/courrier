@@ -9,25 +9,32 @@ export function useActiveMailAccountChange() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const resetActiveMailView = useCallback(() => {
+  const resetActiveMailView = useCallback(async () => {
     useComposeStore.getState().close();
-    resetMailRouteAfterActiveAccountChanged(navigate);
+    await resetMailRouteAfterActiveAccountChanged(navigate);
   }, [navigate]);
 
-  const resetActiveMailState = useCallback(() => {
-    resetActiveMailView();
+  const resetActiveMailState = useCallback(async () => {
+    await resetActiveMailView();
     queryClient.removeQueries({ queryKey: ['mail'] });
   }, [queryClient, resetActiveMailView]);
 
+  const resetSignedOutMailAccountState = useCallback(
+    async (accountId: string) => {
+      await resetActiveMailView();
+      queryClient.removeQueries({ queryKey: ['mail', accountId] });
+    },
+    [queryClient, resetActiveMailView],
+  );
+
   const prepareActiveMailAccountChange = useCallback(async () => {
-    await queryClient.cancelQueries({ queryKey: ['mail'] });
-    resetActiveMailState();
-  }, [queryClient, resetActiveMailState]);
+    await resetActiveMailView();
+  }, [resetActiveMailView]);
 
   const applyActiveMailAccountSession = useCallback(
-    (session: AuthSession) => {
+    async (session: AuthSession) => {
       queryClient.setQueryData(['auth', 'session'], session);
-      resetActiveMailView();
+      await resetActiveMailView();
     },
     [queryClient, resetActiveMailView],
   );
@@ -42,5 +49,7 @@ export function useActiveMailAccountChange() {
     invalidateMailState,
     prepareActiveMailAccountChange,
     queryClient,
+    resetActiveMailState,
+    resetSignedOutMailAccountState,
   };
 }
