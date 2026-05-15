@@ -106,12 +106,17 @@ export class GmailClient implements MailProvider {
       accountId,
       `${gmailBaseUrl}/users/me/labels`,
     );
-
-    return sortGmailFolders(
-      (data.labels ?? [])
-        .filter((label) => label.id && label.name && !isHiddenGmailLabel(label.id))
-        .map(mapGmailLabel),
+    const labels = (data.labels ?? []).filter(
+      (label) => label.id && label.name && !isHiddenGmailLabel(label.id),
     );
+    const hydratedLabels = await Promise.all(
+      labels.map(async (label) => ({
+        ...label,
+        ...(await this.getLabel(accountId, label.id ?? '')),
+      })),
+    );
+
+    return sortGmailFolders(hydratedLabels.map(mapGmailLabel));
   }
 
   async listMessages(
@@ -376,6 +381,13 @@ export class GmailClient implements MailProvider {
       `${gmailBaseUrl}/users/me/messages/${encodeURIComponent(
         messageId,
       )}?${params.toString()}`,
+    );
+  }
+
+  private async getLabel(accountId: string, labelId: string) {
+    return this.fetchGmail<GmailLabel>(
+      accountId,
+      `${gmailBaseUrl}/users/me/labels/${encodeURIComponent(labelId)}`,
     );
   }
 

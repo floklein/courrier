@@ -12,10 +12,22 @@ describe('GmailClient', () => {
     mockFetch(
       jsonResponse({
         labels: [
-          { id: 'Label_1', name: 'Projects', messagesTotal: 3, messagesUnread: 1 },
-          { id: 'INBOX', name: 'Inbox', messagesTotal: 10, messagesUnread: 2 },
+          { id: 'Label_1', name: 'Projects' },
+          { id: 'INBOX', name: 'Inbox' },
           { id: 'UNREAD', name: 'Unread' },
         ],
+      }),
+      jsonResponse({
+        id: 'Label_1',
+        name: 'Projects',
+        messagesTotal: 3,
+        messagesUnread: 1,
+      }),
+      jsonResponse({
+        id: 'INBOX',
+        name: 'Inbox',
+        messagesTotal: 10,
+        messagesUnread: 2,
       }),
     );
     const client = createGmailClient();
