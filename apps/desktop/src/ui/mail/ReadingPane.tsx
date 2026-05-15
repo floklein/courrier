@@ -105,6 +105,10 @@ export function ReadingPane({
           className,
         )}
       >
+        <header
+          aria-hidden="true"
+          className="app-window-header app-window-controls-end app-window-controls-start-mobile h-16 shrink-0 border-b"
+        />
         <PanelStatus label="Select a message" />
       </section>
     );
