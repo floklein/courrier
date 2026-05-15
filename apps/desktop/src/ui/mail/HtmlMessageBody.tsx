@@ -113,7 +113,7 @@ export function HtmlMessageBody({
 <html data-theme="${resolvedTheme}">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: cid:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src http: https: data: cid:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base target="_blank" />
     <style>
@@ -169,10 +169,10 @@ function sanitizeMailBodyHtml(html: string) {
   });
   const document = new DOMParser().parseFromString(sanitized, 'text/html');
 
-  document.body.querySelectorAll('[src]').forEach((element) => {
+  document.body.querySelectorAll('img[src]').forEach((element) => {
     const source = element.getAttribute('src');
 
-    if (element.tagName !== 'IMG' || !isInlineImageSource(source)) {
+    if (!isAllowedImageSource(source)) {
       element.removeAttribute('src');
     }
   });
@@ -188,13 +188,15 @@ function sanitizeMailBodyHtml(html: string) {
   return document.body.innerHTML;
 }
 
-function isInlineImageSource(source: string | null) {
+function isAllowedImageSource(source: string | null) {
   if (!source) {
     return false;
   }
 
   const normalizedSource = source.trim().toLowerCase();
   return (
+    normalizedSource.startsWith('https://') ||
+    normalizedSource.startsWith('http://') ||
     normalizedSource.startsWith('cid:') ||
     normalizedSource.startsWith('data:')
   );
