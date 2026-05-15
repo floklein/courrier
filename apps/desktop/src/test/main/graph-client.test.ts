@@ -224,6 +224,25 @@ describe('GraphClient write requests', () => {
     );
   });
 
+  it('marks messages unread through Microsoft Graph', async () => {
+    const fetchMock = mockFetch(new Response(null, { status: 204 }));
+    const client = createGraphClient();
+
+    await client.markMessageReadState(account.id, 'message-1', false);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${graphBaseUrl}/me/messages/message-1`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer test-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isRead: false }),
+      },
+    );
+  });
+
   it('throws structured Graph errors with Microsoft error codes', async () => {
     mockFetch(
       jsonResponse({

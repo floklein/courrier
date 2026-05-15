@@ -67,6 +67,24 @@ describe('GmailClient', () => {
     );
   });
 
+  it('marks messages unread by adding the Gmail UNREAD label', async () => {
+    const fetchMock = mockFetch(jsonResponse({ id: 'message-1' }));
+    const client = createGmailClient();
+
+    await client.markMessageReadState(accountId, 'message-1', false);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/message-1/modify',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          addLabelIds: ['UNREAD'],
+          removeLabelIds: [],
+        }),
+      }),
+    );
+  });
+
   it('sends raw RFC 2822 mail through Gmail', async () => {
     const fetchMock = mockFetch(jsonResponse({ id: 'sent-1' }));
     const client = createGmailClient();
