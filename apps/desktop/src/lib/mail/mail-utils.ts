@@ -25,6 +25,23 @@ export function getInitials(name: string) {
     .toUpperCase();
 }
 
+export function getMailAvatarColor(identity: string) {
+  const normalizedIdentity = identity.trim().toLowerCase();
+  const hash = Array.from(normalizedIdentity).reduce(
+    (value, character) =>
+      (value * 31 + character.charCodeAt(0)) >>> 0,
+    0,
+  );
+  const hue = hash % 360;
+
+  return {
+    lightBackground: `hsl(${hue} 72% 88%)`,
+    lightForeground: `hsl(${hue} 60% 23%)`,
+    darkBackground: `hsl(${hue} 46% 30%)`,
+    darkForeground: `hsl(${hue} 72% 90%)`,
+  };
+}
+
 export function formatMailDate(value: string, style: 'short' | 'long') {
   if (!value) {
     return '';

@@ -4,13 +4,13 @@ import { Link } from '@tanstack/react-router';
 import { Paperclip } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { mailMessageDragType } from '../../lib/mail/mail-drag';
-import { formatMailDate, getInitials } from '../../lib/mail/mail-utils';
+import { formatMailDate } from '../../lib/mail/mail-utils';
 import type { MailMessageSummary } from '../../lib/mail-types';
 import { encodeRouteId } from '../../lib/route-ids';
 import { cn } from '../../lib/utils';
 import { MailDragPreview } from './MailDragPreview';
+import { MailAvatar } from './MailAvatar';
 
 export function MessageListItem({
   folderId,
@@ -124,9 +124,11 @@ export function MessageListItem({
         )}
       >
         <div className="flex min-w-0 items-start gap-3">
-          <Avatar className="size-9">
-            <AvatarFallback>{getInitials(message.sender.name)}</AvatarFallback>
-          </Avatar>
+          <MailAvatar
+            name={message.sender.name}
+            email={message.sender.email}
+            className="size-9"
+          />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <p

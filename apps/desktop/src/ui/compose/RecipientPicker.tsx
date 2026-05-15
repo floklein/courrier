@@ -8,16 +8,15 @@ import {
   useState,
 } from 'react';
 import type { ClipboardEvent, KeyboardEvent } from 'react';
-import { Avatar, AvatarFallback } from '../../components/ui/avatar';
 import { Button } from '../../components/ui/button';
 import type {
   MailComposeRecipient,
   MailPersonSuggestion,
 } from '../../lib/mail-types';
 import { mailPeopleQueryOptions } from '../../lib/mail/mail-query-options';
-import { getInitials } from '../../lib/mail/mail-utils';
 import { parseRecipients } from '../../lib/mail/mail-compose-utils';
 import { cn } from '../../lib/utils';
+import { MailAvatar } from '../mail/MailAvatar';
 
 const recipientSeparators = new Set([',', ';']);
 
@@ -303,9 +302,11 @@ export function RecipientPicker({
               onMouseEnter={() => setHighlightedIndex(index)}
               onClick={() => addRecipient(personToRecipient(suggestion))}
             >
-              <Avatar className="size-9">
-                <AvatarFallback>{getInitials(suggestion.name)}</AvatarFallback>
-              </Avatar>
+              <MailAvatar
+                name={suggestion.name}
+                email={suggestion.email}
+                className="size-9"
+              />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">
                   {suggestion.name}
