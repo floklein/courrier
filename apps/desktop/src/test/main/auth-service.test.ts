@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
 }));
 
-import { shouldUsePlaintextCacheFallback } from '../../main/auth-service';
+import { shouldUsePlaintextCacheFallback } from '../../main/microsoft-auth-provider';
 
 describe('auth cache fallback detection', () => {
   it('detects unavailable DPAPI persistence validation errors', () => {

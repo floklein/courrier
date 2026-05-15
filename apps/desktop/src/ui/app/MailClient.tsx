@@ -8,7 +8,7 @@ export function MailClient() {
   const sessionQuery = useQuery(authSessionQueryOptions());
 
   if (sessionQuery.isPending) {
-    return <FullScreenStatus label="Checking Microsoft session..." />;
+    return <FullScreenStatus label="Checking mail sessions..." />;
   }
 
   if (sessionQuery.isError) {
@@ -17,6 +17,8 @@ export function MailClient() {
         session={{
           status: 'configuration-error',
           message: sessionQuery.error.message,
+          accounts: [],
+          providers: [],
         }}
       />
     );
@@ -26,5 +28,10 @@ export function MailClient() {
     return <Onboarding session={sessionQuery.data} />;
   }
 
-  return <AuthenticatedMailClient session={sessionQuery.data} />;
+  return (
+    <AuthenticatedMailClient
+      key={sessionQuery.data.activeAccount.id}
+      session={sessionQuery.data}
+    />
+  );
 }

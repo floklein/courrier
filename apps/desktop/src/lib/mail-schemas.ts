@@ -2,11 +2,9 @@ import { z } from 'zod';
 
 export const ipcIdSchema = z.string().min(1).max(2048);
 
-export const graphPageUrlSchema = z
-  .string()
-  .url()
-  .max(8192)
-  .optional();
+export const providerIdSchema = z.enum(['microsoft', 'google']);
+
+export const mailPageTokenSchema = z.string().min(1).max(8192).optional();
 
 export const mailSearchQuerySchema = z.string().max(512).optional();
 
