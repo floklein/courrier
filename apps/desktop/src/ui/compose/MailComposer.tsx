@@ -23,6 +23,7 @@ import { RecipientPicker } from './RecipientPicker';
 import { RichTextMailEditor, type RichTextMailEditorValue } from './RichTextMailEditor';
 
 export function MailComposer({
+  accountId,
   mode,
   isSending,
   error,
@@ -37,6 +38,7 @@ export function MailComposer({
   onSend,
   useWindowHeader,
 }: {
+  accountId: string;
   mode: 'new' | 'reply';
   isSending: boolean;
   error: Error | null;
@@ -72,11 +74,12 @@ export function MailComposer({
   const isReply = mode === 'reply';
   const currentDraft = useMemo<ComposeWindowDraft>(
     () => ({
+      accountId,
       toValue: serializeRecipients(toRecipients, toInputValue),
       subject,
       editorValue,
     }),
-    [editorValue, subject, toInputValue, toRecipients],
+    [accountId, editorValue, subject, toInputValue, toRecipients],
   );
   const hasBody = editorValue.text.trim().length > 0 && !editorValue.isEmpty;
   const isDirty =
@@ -178,6 +181,7 @@ export function MailComposer({
                 To
               </label>
               <RecipientPicker
+                accountId={accountId}
                 id={toInputId}
                 value={toRecipients}
                 inputValue={toInputValue}

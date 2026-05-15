@@ -8,6 +8,7 @@ import { useMailClientState } from '../../hooks/useMailClientState';
 import { api } from '../../lib/api-client';
 import type { ComposeWindowDraft } from '../../lib/compose-window';
 import {
+  isGoogleInvalidMessageIdError,
   isGraphItemNotFoundError,
   isMicrosoftSignInRequiredError,
 } from '../../lib/graph-errors';
@@ -29,6 +30,7 @@ export function AuthenticatedMailClient({
 }: {
   session: Extract<AuthSession, { status: 'authenticated' }>;
 }) {
+  const activeAccount = session.activeAccount;
   const navigate = useNavigate();
   const [replyMessageId, setReplyMessageId] = useState<string>();
   const [isOpeningComposeWindow, setIsOpeningComposeWindow] = useState(false);
@@ -49,7 +51,7 @@ export function AuthenticatedMailClient({
     searchQuery,
     selectedMessage,
     setSearchQuery,
-  } = useMailClientState();
+  } = useMailClientState(activeAccount.id);
   const isReadingMessage = Boolean(messageId);
   const {
     deleteMutation,
@@ -61,6 +63,7 @@ export function AuthenticatedMailClient({
     replyToMessageMutation,
     sendMessageMutation,
   } = useMailActions({
+    accountId: activeAccount.id,
     folders,
     messages,
     messageId,
@@ -112,7 +115,22 @@ export function AuthenticatedMailClient({
   }, [closeCompose, resolvedFolderId]);
 
   useEffect(() => {
-    if (!messageId || !isGraphItemNotFoundError(messageQuery.error)) {
+    if (!messageId || !messageQuery.error) {
+      return;
+    }
+
+    const error = messageQuery.error;
+
+    if (isGoogleInvalidMessageIdError(error)) {
+      void navigate({
+        to: '/mail/$folderId',
+        params: { folderId: 'inbox' },
+        replace: true,
+      });
+      return;
+    }
+
+    if (!isGraphItemNotFoundError(error)) {
       return;
     }
 
@@ -223,8 +241,11 @@ export function AuthenticatedMailClient({
     <TooltipProvider delay={200}>
       <main className="grid h-full min-h-0 grid-cols-[240px_minmax(280px,360px)_minmax(0,1fr)] bg-background max-lg:grid-cols-[76px_minmax(280px,340px)_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)]">
         <FolderRail
-          accountEmail={session.account.username}
-          accountName={session.account.name ?? session.account.username}
+          accountEmail={activeAccount.email}
+          accountName={activeAccount.name ?? activeAccount.email}
+          accounts={session.accounts}
+          providers={session.providers}
+          activeAccountId={activeAccount.id}
           currentFolderId={resolvedFolderId}
           folders={folders}
           isLoading={foldersQuery.isPending}
@@ -258,6 +279,7 @@ export function AuthenticatedMailClient({
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
         <ReadingPane
+          accountId={activeAccount.id}
           folderId={resolvedFolderId}
           folders={folders}
           isActionPending={isActionPending}
@@ -278,6 +300,7 @@ export function AuthenticatedMailClient({
         />
         {isComposingNew && (
           <NewMessageComposerOverlay
+            accountId={activeAccount.id}
             isSending={isSendingMessage || isOpeningComposeWindow}
             error={sendMessageMutation.error as Error | null}
             onClose={handleCloseCompose}

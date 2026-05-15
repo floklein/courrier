@@ -1,18 +1,18 @@
 # Courrier
 
-Courrier is a desktop mail client for Microsoft Outlook accounts. It is a
+Courrier is a desktop mail client for Microsoft Outlook and Gmail accounts. It is a
 pnpm/Turborepo monorepo with an Electron desktop app and a Fastify relay for
-Microsoft Graph update notifications.
+provider update notifications.
 
-The app signs in with Microsoft OAuth, reads folders and messages through Graph,
-and provides a focused three-pane mail interface for browsing, searching, and
-triaging messages.
+The app signs in with Microsoft or Google OAuth, reads folders and messages
+through provider APIs, and provides a focused three-pane mail interface for
+browsing, searching, and triaging messages.
 
 ## Features
 
-- Microsoft sign-in with MSAL and a local desktop token cache
-- Outlook folder navigation, including nested and well-known folders
-- Message list pagination and Microsoft Graph search
+- Microsoft sign-in with MSAL and Google sign-in with installed-app OAuth
+- Outlook folder navigation and Gmail label navigation
+- Message list pagination and provider search
 - HTML and plain-text message rendering with sanitized HTML content
 - Read/unread, move, compose, reply, and move-to-trash actions
 - Hardened Electron bridge with context isolation and trusted IPC checks
@@ -24,14 +24,14 @@ triaging messages.
 - **Build tooling:** Vite and TypeScript
 - **UI:** React, Tailwind CSS, shadcn/Base UI primitives, lucide-react icons
 - **Data:** TanStack Query and TanStack Router
-- **Auth and mail:** MSAL Node, MSAL Node Extensions, Microsoft Graph
+- **Auth and mail:** MSAL Node, MSAL Node Extensions, Microsoft Graph, Gmail API
 - **Testing:** Vitest and Testing Library
 
 ## Prerequisites
 
 - Node.js and pnpm
-- A Microsoft account with Outlook mail access
-- A Microsoft Entra app registration for local desktop OAuth
+- A Microsoft account with Outlook mail access or a Google account with Gmail
+- A Microsoft Entra app registration or Google OAuth desktop client
 
 ## Getting Started
 
@@ -47,10 +47,13 @@ Create a local environment file:
 Copy-Item apps/desktop/.env.example apps/desktop/.env
 ```
 
-Edit `apps/desktop/.env` and set your Microsoft application client ID:
+Edit `apps/desktop/.env` and set at least one provider client ID:
 
 ```dotenv
 MICROSOFT_CLIENT_ID=<Application client ID>
+GOOGLE_CLIENT_ID=<Google OAuth desktop client ID>
+GOOGLE_CLIENT_SECRET=<optional Google OAuth desktop client secret>
+GOOGLE_PUBSUB_TOPIC=projects/<project>/topics/<topic>
 ```
 
 The relay variables are optional for basic local desktop use. Add them only when
@@ -65,7 +68,7 @@ pnpm start
 Electron Forge starts the Electron main process, preload script, and Vite
 renderer. In development, Chromium DevTools open automatically.
 
-## Microsoft OAuth Setup
+## OAuth Setup
 
 Courrier is a public desktop client, so it uses Microsoft OAuth without a client
 secret. Create a Microsoft Entra app registration with a native redirect URI of:
@@ -79,7 +82,19 @@ actions such as marking messages read, moving messages, and moving messages to
 trash require mailbox write permission. Sending new messages and replies
 requires mail send permission.
 
-For the full setup flow, see [docs/oauth.md](docs/oauth.md).
+For the full Microsoft setup flow, see [docs/oauth.md](docs/oauth.md). For the
+Google setup flow, see [docs/google-oauth.md](docs/google-oauth.md).
+
+For Gmail, create a Google OAuth desktop client and enable the Gmail API and
+People API. Gmail live updates use Gmail `watch` with a Cloud Pub/Sub topic.
+Configure the Pub/Sub push subscription to deliver to:
+
+```text
+https://your-relay.example.com/google/pubsub
+```
+
+If you set `GOOGLE_PUBSUB_VERIFICATION_TOKEN` on the relay, include it as a
+`token` query parameter in the push endpoint URL.
 
 ## Scripts
 
@@ -104,14 +119,15 @@ packages/
   tsconfig/     Shared TypeScript base config
 docs/
   oauth.md      Microsoft OAuth registration and troubleshooting guide
+  google-oauth.md Google OAuth, Gmail API, and Pub/Sub setup guide
 ```
 
-## Graph Update Relay
+## Update Relay
 
-Microsoft Graph change notifications require a public HTTPS webhook endpoint. The
-desktop app keeps Microsoft tokens locally and creates the Graph subscription,
-while `apps/relay` receives Graph webhook POSTs and pushes compact invalidation
-events to the desktop app over WebSocket.
+Microsoft Graph change notifications and Gmail Pub/Sub push notifications require
+a public HTTPS webhook endpoint. The desktop app keeps provider tokens locally
+and creates provider subscriptions, while `apps/relay` receives webhook POSTs and
+pushes compact invalidation events to the desktop app over WebSocket.
 
 The current relay is intended for a self-hosted, single-user deployment. It uses
 an in-memory store with bounded event retention, so registrations and pending
@@ -124,6 +140,7 @@ Relay environment variables:
 ```dotenv
 RELAY_PUBLIC_URL=https://your-relay.example.com
 RELAY_ADMIN_TOKEN=<shared relay admin token, at least 24 chars>
+GOOGLE_PUBSUB_VERIFICATION_TOKEN=<optional shared push endpoint token>
 PORT=3001
 HOST=0.0.0.0
 ```

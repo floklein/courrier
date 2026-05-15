@@ -16,8 +16,12 @@ import {
 } from './lib/compose-window';
 import { AuthRequiredError, AuthService } from './main/auth-service';
 import { GraphClient } from './main/graph-client';
+import { GmailClient } from './main/gmail-client';
+import { GoogleAuthProvider } from './main/google-auth-provider';
 import { registerIpcHandlers } from './main/ipc';
 import { MailSubscriptionManager } from './main/mail-subscription-manager';
+import { MailService } from './main/mail-service';
+import { MicrosoftAuthProvider } from './main/microsoft-auth-provider';
 import {
   assertTrustedSender,
   createAppUrlTrustPolicy,
@@ -129,19 +133,28 @@ app.on('ready', () => {
     appFilePath: getRendererIndexPath(),
     devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
   });
-  const authService = new AuthService();
-  const graphClient = new GraphClient(authService);
+  const microsoftAuthProvider = new MicrosoftAuthProvider();
+  const googleAuthProvider = new GoogleAuthProvider();
+  const graphClient = new GraphClient(microsoftAuthProvider);
+  const gmailClient = new GmailClient(googleAuthProvider);
+  const providers = [
+    { auth: microsoftAuthProvider, mail: graphClient },
+    { auth: googleAuthProvider, mail: gmailClient },
+  ];
+  const authService = new AuthService(providers);
+  const mailService = new MailService([graphClient, gmailClient]);
   const subscriptionManager = new MailSubscriptionManager({
-    graphClient,
+    authService,
+    mailService,
     relayAdminToken: process.env.RELAY_ADMIN_TOKEN,
     relayPublicUrl: process.env.RELAY_PUBLIC_URL,
   });
 
   Menu.setApplicationMenu(null);
   registerSessionPermissionGuards();
-  registerIpcHandlers(authService, graphClient, {
+  registerIpcHandlers(authService, mailService, {
     trustPolicy,
-    startMailSubscriptions: () => subscriptionManager.start(),
+    startMailSubscriptions: (accountId) => subscriptionManager.start(accountId),
     stopMailSubscriptions: () =>
       subscriptionManager.stop({ deleteRemoteSubscription: true }),
   });

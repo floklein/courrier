@@ -10,11 +10,12 @@ import type {
 
 export function updateCachedMessageReadState(
   queryClient: QueryClient,
+  accountId: string,
   messageId: string,
   isRead: boolean,
 ) {
   queryClient.setQueriesData<InfiniteData<PagedMessages>>(
-    { queryKey: ['mail', 'messages'] },
+    { queryKey: ['mail', accountId, 'messages'] },
     (data) => {
       if (!data) {
         return data;
@@ -32,7 +33,7 @@ export function updateCachedMessageReadState(
     },
   );
   queryClient.setQueriesData<MailMessageDetail>(
-    { queryKey: ['mail', 'message'] },
+    { queryKey: ['mail', accountId, 'message'] },
     (message) =>
       message?.id === messageId
         ? {
@@ -45,10 +46,11 @@ export function updateCachedMessageReadState(
 
 export function removeCachedMessage(
   queryClient: QueryClient,
+  accountId: string,
   messageId: string,
 ) {
   queryClient.setQueriesData<InfiniteData<PagedMessages>>(
-    { queryKey: ['mail', 'messages'] },
+    { queryKey: ['mail', accountId, 'messages'] },
     (data) => {
       if (!data) {
         return data;
@@ -63,11 +65,15 @@ export function removeCachedMessage(
       };
     },
   );
-  queryClient.removeQueries({ queryKey: ['mail', 'message'], exact: false });
+  queryClient.removeQueries({
+    queryKey: ['mail', accountId, 'message'],
+    exact: false,
+  });
 }
 
 export function updateCachedFolderCounts(
   queryClient: QueryClient,
+  accountId: string,
   {
     folderId,
     totalDelta = 0,
@@ -82,16 +88,18 @@ export function updateCachedFolderCounts(
     return;
   }
 
-  queryClient.setQueryData<MailFolder[]>(['mail', 'folders'], (folders) =>
-    folders?.map((folder) =>
-      folder.id === folderId
-        ? {
-            ...folder,
-            totalCount: clampCount(folder.totalCount + totalDelta),
-            unreadCount: clampCount(folder.unreadCount + unreadDelta),
-          }
-        : folder,
-    ),
+  queryClient.setQueryData<MailFolder[]>(
+    ['mail', accountId, 'folders'],
+    (folders) =>
+      folders?.map((folder) =>
+        folder.id === folderId
+          ? {
+              ...folder,
+              totalCount: clampCount(folder.totalCount + totalDelta),
+              unreadCount: clampCount(folder.unreadCount + unreadDelta),
+            }
+          : folder,
+      ),
   );
 }
 

@@ -22,6 +22,13 @@ import {
 const originalWebSocket = globalThis.WebSocket;
 let statePath: string;
 let managers: MailSubscriptionManager[] = [];
+const account = {
+  id: 'microsoft:account-1',
+  providerId: 'microsoft' as const,
+  providerAccountId: 'account-1',
+  email: 'ada@example.com',
+  label: 'Ada',
+};
 
 beforeEach(async () => {
   managers = [];
@@ -232,7 +239,13 @@ describe('MailSubscriptionManager', () => {
 
 function createManager(graphClient = createGraphClient()) {
   const manager = new MailSubscriptionManager({
-    graphClient: graphClient as never,
+    authService: {
+      getAccounts: vi.fn().mockResolvedValue([account]),
+      getActiveAccountId: vi.fn(() => account.id),
+    } as never,
+    mailService: {
+      getProvider: vi.fn(() => graphClient),
+    } as never,
     relayAdminToken: 'admin-token-with-enough-length',
     relayPublicUrl: 'https://relay.example.com',
     reconnectDelayMs: 1,
@@ -252,6 +265,8 @@ function createGraphClient() {
       id: 'subscription-1',
       expirationDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     }),
+    deleteSubscription: vi.fn().mockResolvedValue(undefined),
+    getNotificationUrl: vi.fn(() => 'https://relay.example.com/graph/notifications'),
   };
 }
 

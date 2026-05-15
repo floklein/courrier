@@ -1,22 +1,18 @@
 export const api = {
   auth: {
     getSession: () => window.courrier.auth.getSession(),
-    signIn: () => window.courrier.auth.signIn(),
-    signOut: () => window.courrier.auth.signOut(),
+    signIn: window.courrier.auth.signIn,
+    switchAccount: window.courrier.auth.switchAccount,
+    signOut: window.courrier.auth.signOut,
   },
   mail: {
-    listFolders: () => window.courrier.mail.listFolders(),
-    listMessages: (folderId: string, pageUrl?: string, searchQuery?: string) =>
-      window.courrier.mail.listMessages(folderId, pageUrl, searchQuery),
-    getMessage: (folderId: string, messageId: string) =>
-      window.courrier.mail.getMessage(folderId, messageId),
-    markMessageReadState: (messageId: string, isRead: boolean) =>
-      window.courrier.mail.markMessageReadState(messageId, isRead),
-    moveMessage: (messageId: string, destinationFolderId: string) =>
-      window.courrier.mail.moveMessage(messageId, destinationFolderId),
-    deleteMessage: (messageId: string) =>
-      window.courrier.mail.deleteMessage(messageId),
-    listPeople: (query?: string) => window.courrier.mail.listPeople(query),
+    listFolders: window.courrier.mail.listFolders,
+    listMessages: window.courrier.mail.listMessages,
+    getMessage: window.courrier.mail.getMessage,
+    markMessageReadState: window.courrier.mail.markMessageReadState,
+    moveMessage: window.courrier.mail.moveMessage,
+    deleteMessage: window.courrier.mail.deleteMessage,
+    listPeople: window.courrier.mail.listPeople,
     sendMessage: window.courrier.mail.sendMessage,
     replyToMessage: window.courrier.mail.replyToMessage,
     onRemoteChange: window.courrier.mail.onRemoteChange,
