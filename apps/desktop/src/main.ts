@@ -154,9 +154,11 @@ app.on('ready', () => {
   registerSessionPermissionGuards();
   registerIpcHandlers(authService, mailService, {
     trustPolicy,
-    startMailSubscriptions: (accountId) => subscriptionManager.start(accountId),
-    stopMailSubscriptions: () =>
-      subscriptionManager.stop({ deleteRemoteSubscription: true }),
+    startMailSubscriptions: () => subscriptionManager.start(),
+    stopMailSubscriptions: (accountId) =>
+      subscriptionManager.stopAccount(accountId, {
+        deleteRemoteSubscription: true,
+      }),
   });
   registerWindowIpcHandlers(trustPolicy);
   createWindow(trustPolicy);

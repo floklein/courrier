@@ -29,9 +29,6 @@ export function MailClient() {
   }
 
   return (
-    <AuthenticatedMailClient
-      key={sessionQuery.data.activeAccount.id}
-      session={sessionQuery.data}
-    />
+    <AuthenticatedMailClient session={sessionQuery.data} />
   );
 }

@@ -20,7 +20,10 @@ export function useMailClientState(accountId: string) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  const { folderId, messageId } = parseMailPath(pathname);
+  const {
+    folderId,
+    messageId,
+  } = parseMailPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
   const foldersQuery = useQuery(mailFoldersQueryOptions(accountId));
   const folders = (foldersQuery.data ?? []) as MailFolder[];

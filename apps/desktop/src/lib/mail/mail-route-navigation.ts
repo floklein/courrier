@@ -12,17 +12,17 @@ function currentPathnameFromHash(): string {
 }
 
 export function resetMailRouteAfterActiveAccountChanged(
-  navigate: (opts: NavigateOptions) => void,
+  navigate: (opts: NavigateOptions) => Promise<void> | void,
 ) {
   const pathname = currentPathnameFromHash();
 
   if (!pathname.startsWith('/mail')) {
-    return;
+    return Promise.resolve();
   }
 
-  navigate({
+  return Promise.resolve(navigate({
     to: '/mail/$folderId',
     params: { folderId: 'inbox' },
     replace: true,
-  });
+  }));
 }

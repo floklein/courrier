@@ -35,39 +35,21 @@ export function registerIpcHandlers(
   });
   ipcMain.handle('auth:sign-in', async (event, providerId: unknown) => {
     assertSender(event);
-    const previousAccountId = authService.getActiveAccountId();
     const session = await authService.signIn(
       parseIpcPayload(providerIdSchema, providerId),
     );
 
     if (session.status === 'authenticated') {
-      await stopPreviousAccountSubscriptions(
-        options.stopMailSubscriptions,
-        previousAccountId,
-        session.activeAccount.id,
-      );
-      await options.startMailSubscriptions?.(session.activeAccount.id);
+      await options.startMailSubscriptions?.();
     }
 
     return session;
   });
   ipcMain.handle('auth:switch-account', async (event, accountId: string) => {
     assertSender(event);
-    const previousAccountId = authService.getActiveAccountId();
-    const session = await authService.switchAccount(
+    return authService.switchAccount(
       parseIpcPayload(ipcIdSchema, accountId),
     );
-
-    if (session.status === 'authenticated') {
-      await stopPreviousAccountSubscriptions(
-        options.stopMailSubscriptions,
-        previousAccountId,
-        session.activeAccount.id,
-      );
-      await options.startMailSubscriptions?.(session.activeAccount.id);
-    }
-
-    return session;
   });
   ipcMain.handle('auth:sign-out', async (event, accountId?: string) => {
     assertSender(event);
@@ -191,23 +173,4 @@ function parseIpcPayload<T>(
   }
 
   return result.data;
-}
-
-async function stopPreviousAccountSubscriptions(
-  stopMailSubscriptions: ((accountId?: string) => Promise<void>) | undefined,
-  previousAccountId: string | undefined,
-  nextAccountId: string,
-) {
-  if (!previousAccountId || previousAccountId === nextAccountId) {
-    return;
-  }
-
-  try {
-    await stopMailSubscriptions?.(previousAccountId);
-  } catch (error) {
-    console.warn(
-      'Mail subscription cleanup failed during account change.',
-      error,
-    );
-  }
 }

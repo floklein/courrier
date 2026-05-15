@@ -9,10 +9,11 @@ import {
   Sun,
   type LucideIcon,
 } from 'lucide-react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueries } from '@tanstack/react-query';
 import { useCallback, type CSSProperties } from 'react';
 import googleIconUrl from '../../assets/providers/google.svg';
 import microsoftIconUrl from '../../assets/providers/microsoft.svg';
+import { Avatar, AvatarBadge } from '../../components/ui/avatar';
 import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
@@ -30,9 +31,11 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { useActiveMailAccountChange } from '../../hooks/useActiveMailAccountChange';
 import { api } from '../../lib/api-client';
+import { mailFoldersQueryOptions } from '../../lib/mail/mail-query-options';
 import type {
   AuthSession,
   MailAccount,
+  MailFolder,
   ProviderConfigurationStatus,
   ProviderId,
 } from '../../lib/mail-types';
@@ -63,13 +66,18 @@ export function UserMenu({
   const handleAccountSessionChange = useCallback(
     async (session: AuthSession) => {
       await prepareActiveMailAccountChange();
-      applyActiveMailAccountSession(session);
+      await applyActiveMailAccountSession(session);
     },
     [applyActiveMailAccountSession, prepareActiveMailAccountChange],
   );
   const switchAccountMutation = useMutation({
-    mutationFn: (accountId: string) => api.auth.switchAccount(accountId),
-    onSuccess: handleAccountSessionChange,
+    mutationFn: async (accountId: string) => {
+      await prepareActiveMailAccountChange();
+      return api.auth.switchAccount(accountId);
+    },
+    onSuccess: async (session) => {
+      await applyActiveMailAccountSession(session);
+    },
   });
   const signInMutation = useMutation({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
@@ -78,6 +86,15 @@ export function UserMenu({
   const microsoftProvider = getProviderStatus(providers, 'microsoft');
   const googleProvider = getProviderStatus(providers, 'google');
   const activeAccount = accounts.find((account) => account.id === activeAccountId);
+  const accountFolderQueries = useQueries({
+    queries: accounts.map((account) => mailFoldersQueryOptions(account.id)),
+  });
+  const unreadInboxCountsByAccountId = new Map(
+    accounts.map((account, index) => [
+      account.id,
+      getUnreadInboxCount(accountFolderQueries[index]?.data as MailFolder[] | undefined),
+    ]),
+  );
   const signingInProviderId = signInMutation.isPending
     ? signInMutation.variables
     : undefined;
@@ -149,12 +166,11 @@ export function UserMenu({
                   label={account.email}
                   className="mx-1 px-3 py-2"
                 >
-                  <span className="flex size-4 shrink-0 items-center justify-center">
-                    <ProviderIcon
-                      providerId={account.providerId}
-                      className="size-5"
-                    />
-                  </span>
+                  <AccountProviderIcon
+                    providerId={account.providerId}
+                    unreadCount={unreadInboxCountsByAccountId.get(account.id)}
+                    className="size-5"
+                  />
                   <span className="min-w-0 flex-1 truncate">
                     {account.email}
                   </span>
@@ -263,6 +279,18 @@ function getProviderStatus(
   return providers.find((provider) => provider.providerId === providerId);
 }
 
+function getUnreadInboxCount(folders: MailFolder[] | undefined) {
+  if (!folders) {
+    return undefined;
+  }
+
+  return (
+    folders.find((folder) => folder.wellKnownName === 'inbox') ??
+    folders.find((folder) => folder.id.toLowerCase() === 'inbox') ??
+    folders[0]
+  )?.unreadCount;
+}
+
 function ThemeMenuItem({
   icon: Icon,
   isSelected,
@@ -302,5 +330,30 @@ function ProviderIcon({
       className={`${className} inline-block shrink-0 bg-current [mask:var(--provider-icon-url)_center/contain_no-repeat]`}
       style={maskStyle}
     />
+  );
+}
+
+function AccountProviderIcon({
+  providerId,
+  unreadCount,
+  className = 'size-4',
+}: {
+  providerId: ProviderId | undefined;
+  unreadCount: number | undefined;
+  className?: string;
+}) {
+  const hasUnread = Boolean(unreadCount && unreadCount > 0);
+
+  return (
+    <Avatar
+      size="sm"
+      className={`${className} bg-transparent text-current after:hidden`}
+      aria-label={hasUnread ? `${unreadCount} unread in inbox` : undefined}
+    >
+      <ProviderIcon providerId={providerId} className="size-full" />
+      {hasUnread && (
+        <AvatarBadge className="bg-destructive text-destructive-foreground" />
+      )}
+    </Avatar>
   );
 }

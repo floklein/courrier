@@ -14,10 +14,15 @@ import {
 } from '../../lib/graph-errors';
 import type {
   AuthSession,
+  MailFolder,
   MailMessageSummary,
   ReplyToMessageInput,
   SendMailInput,
 } from '../../lib/mail-types';
+import {
+  mailFoldersQueryOptions,
+  mailMessagesQueryOptions,
+} from '../../lib/mail/mail-query-options';
 import { encodeRouteId } from '../../lib/route-ids';
 import { cn } from '../../lib/utils';
 import { NewMessageComposerOverlay } from '../compose/NewMessageComposerOverlay';
@@ -75,6 +80,25 @@ export function AuthenticatedMailClient({
   useEffect(() => cleanupLiveRegion, []);
 
   useEffect(() => {
+    for (const account of session.accounts) {
+      void queryClient
+        .ensureQueryData(mailFoldersQueryOptions(account.id))
+        .then((folders) => {
+          const inboxFolder = getInboxFolder(folders);
+
+          if (!inboxFolder) {
+            return;
+          }
+
+          return queryClient.prefetchInfiniteQuery(
+            mailMessagesQueryOptions(account.id, inboxFolder.id),
+          );
+        })
+        .catch(() => undefined);
+    }
+  }, [queryClient, session.accounts]);
+
+  useEffect(() => {
     if (
       !isMicrosoftSignInRequiredError(foldersQuery.error) &&
       !isMicrosoftSignInRequiredError(messagesQuery.error) &&
@@ -83,29 +107,15 @@ export function AuthenticatedMailClient({
       return;
     }
 
-    queryClient.removeQueries({ queryKey: ['mail'] });
+    queryClient.removeQueries({ queryKey: ['mail', activeAccount.id] });
     void queryClient.invalidateQueries({ queryKey: ['auth', 'session'] });
   }, [
+    activeAccount.id,
     foldersQuery.error,
     messageQuery.error,
     messagesQuery.error,
     queryClient,
   ]);
-
-  useEffect(() => {
-    if (!currentFolder || messageId || !messages[0]) {
-      return;
-    }
-
-    navigate({
-      to: '/mail/$folderId/$messageId',
-      params: {
-        folderId: encodeRouteId(resolvedFolderId),
-        messageId: encodeRouteId(messages[0].id),
-      },
-      replace: true,
-    });
-  }, [currentFolder, messageId, messages, navigate, resolvedFolderId]);
 
   useEffect(() => {
     setSearchQuery('');
@@ -312,5 +322,17 @@ export function AuthenticatedMailClient({
         )}
       </main>
     </TooltipProvider>
+  );
+}
+
+function getInboxFolder(folders: MailFolder[] | undefined) {
+  if (!folders?.length) {
+    return undefined;
+  }
+
+  return (
+    folders.find((folder) => folder.wellKnownName === 'inbox') ??
+    folders.find((folder) => folder.id.toLowerCase() === 'inbox') ??
+    folders[0]
   );
 }
