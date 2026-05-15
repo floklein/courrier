@@ -1,4 +1,4 @@
-import { MoreHorizontal, Reply, Trash2 } from 'lucide-react';
+import { MailOpen, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -109,7 +109,7 @@ export function ReadingPane({
           aria-hidden="true"
           className="app-window-header app-window-controls-end app-window-controls-start-mobile h-16 shrink-0 border-b"
         />
-        <PanelStatus label="Select a message" />
+        <EmptyMessageSelection />
       </section>
     );
   }
@@ -233,5 +233,21 @@ export function ReadingPane({
         />
       )}
     </article>
+  );
+}
+
+function EmptyMessageSelection() {
+  return (
+    <div className="flex flex-1 items-center justify-center p-8">
+      <div className="max-w-64 text-center">
+        <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-muted">
+          <MailOpen className="size-5 text-muted-foreground" />
+        </div>
+        <h2 className="mt-4 text-sm font-semibold">Select a message</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Choose a conversation from the list to read it here.
+        </p>
+      </div>
+    </div>
   );
 }
