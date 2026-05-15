@@ -3,9 +3,9 @@ import {
   ChevronsUpDown,
   Loader2,
   LogOut,
-  MailPlus,
   Monitor,
   Moon,
+  Plus,
   Sun,
   type LucideIcon,
 } from 'lucide-react';
@@ -166,7 +166,7 @@ export function UserMenu({
                 disabled={signInMutation.isPending}
                 className="mx-1 px-3 py-2"
               >
-                <MailPlus data-icon="inline-start" />
+                <Plus data-icon="inline-start" />
                 Add account
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-56 p-1">
@@ -185,7 +185,7 @@ export function UserMenu({
                   ) : (
                     <ProviderIcon providerId="microsoft" />
                   )}
-                  Microsoft account
+                  Add Microsoft account
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   closeOnClick={false}
@@ -201,7 +201,7 @@ export function UserMenu({
                   ) : (
                     <ProviderIcon providerId="google" />
                   )}
-                  Google account
+                  Add Google account
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
