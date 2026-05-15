@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseRecipients,
+  serializeRecipients,
   sanitizeOutgoingMailHtml,
 } from '../../../lib/mail/mail-compose-utils';
 
@@ -35,6 +36,42 @@ describe('mail compose utilities', () => {
         valid: [{ email: 'ada@example.com' }, { email: 'grace@example.com' }],
         invalid: [],
       });
+    });
+
+    it('keeps quoted separators and escaped quotes inside display names', () => {
+      expect(
+        parseRecipients(
+          '"Lovelace, Ada" <ada@example.com>, "Grace \\"Amazing\\" Hopper" <grace@example.com>',
+        ),
+      ).toEqual({
+        valid: [
+          { name: 'Lovelace, Ada', email: 'ada@example.com' },
+          { name: 'Grace "Amazing" Hopper', email: 'grace@example.com' },
+        ],
+        invalid: [],
+      });
+    });
+  });
+
+  describe('serializeRecipients', () => {
+    it('formats named recipients, bare recipients, and pending text', () => {
+      expect(
+        serializeRecipients(
+          [
+            { name: 'Ada "Countess" Lovelace', email: 'ada@example.com' },
+            { email: 'grace@example.com' },
+          ],
+          ' alan@example.com ',
+        ),
+      ).toBe(
+        '"Ada \\"Countess\\" Lovelace" <ada@example.com>, grace@example.com, alan@example.com',
+      );
+    });
+
+    it('omits blank pending text', () => {
+      expect(serializeRecipients([{ email: 'ada@example.com' }], '   ')).toBe(
+        'ada@example.com',
+      );
     });
   });
 
