@@ -45,6 +45,7 @@ export interface GraphMessageDetail extends GraphMessage {
 }
 
 export interface GraphAttachment {
+  '@odata.type'?: string | null;
   id?: string | null;
   name?: string | null;
   contentType?: string | null;
@@ -186,9 +187,14 @@ export function mapGraphMessageDetail(
     bodyContentType: contentType,
     bodyContent: message.body?.content || '',
     attachments: (message.attachments ?? [])
+      .filter(isGraphFileAttachment)
       .map(mapGraphAttachment)
       .filter((attachment) => attachment.id && !attachment.isInline),
   };
+}
+
+function isGraphFileAttachment(attachment: GraphAttachment) {
+  return attachment['@odata.type'] === '#microsoft.graph.fileAttachment';
 }
 
 function mapGraphAttachment(attachment: GraphAttachment): MailAttachment {

@@ -108,7 +108,7 @@ export class GraphClient implements MailProvider {
         folderId,
       )}/messages/${encodeURIComponent(
         messageId,
-      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients,body&$expand=attachments($select=id,name,contentType,size,isInline)`,
+      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients,body&$expand=attachments($select=id,name,contentType,size,isInline,@odata.type)`,
     );
 
     return mapGraphMessageDetail(folderId, data);
@@ -291,7 +291,14 @@ export class GraphClient implements MailProvider {
       )}/attachments/${encodeURIComponent(attachmentId)}`,
     );
 
-    if (!attachment.contentBytes) {
+    if (
+      attachment['@odata.type'] &&
+      attachment['@odata.type'] !== '#microsoft.graph.fileAttachment'
+    ) {
+      throw new Error('Microsoft Graph attachment type is not supported.');
+    }
+
+    if (attachment.contentBytes == null) {
       throw new Error('Microsoft Graph did not return attachment content.');
     }
 
@@ -544,7 +551,7 @@ export class GraphClient implements MailProvider {
     }
 
     const file = await fs.open(attachment.path, 'r');
-    const chunkSize = 327_680 * 20;
+    const chunkSize = 327_680 * 12;
     let offset = 0;
 
     try {
@@ -556,6 +563,7 @@ export class GraphClient implements MailProvider {
         const response = await fetch(session.uploadUrl, {
           method: 'PUT',
           headers: {
+            'Content-Type': 'application/octet-stream',
             'Content-Length': String(chunk.byteLength),
             'Content-Range': `bytes ${offset}-${offset + chunk.byteLength - 1}/${attachment.size}`,
           },

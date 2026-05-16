@@ -327,7 +327,7 @@ export class GmailClient implements MailProvider {
         )
       ).data;
 
-    if (!data) {
+    if (data == null) {
       throw new Error('Gmail did not return attachment content.');
     }
 
@@ -767,7 +767,7 @@ function isInlinePart(part: GmailMessagePart) {
     ?.find((header) => header.name?.toLowerCase() === 'content-disposition')
     ?.value?.toLowerCase();
 
-  return disposition?.includes('inline') ?? false;
+  return disposition?.split(';', 1)[0].trim() === 'inline';
 }
 
 function decodeBase64Url(value: string) {
