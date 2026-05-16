@@ -6,9 +6,11 @@ name = "courrier"
 script = '''
 cd "$CODEX_WORKTREE_PATH"
 pnpm i
+cp "$CODEX_SOURCE_TREE_PATH/apps/desktop/.env" "$CODEX_WORKTREE_PATH/apps/desktop"
+cp "$CODEX_SOURCE_TREE_PATH/apps/relay/.env" "$CODEX_WORKTREE_PATH/apps/relay"
 '''
 
 [[actions]]
 name = "dev"
-icon = "tool"
+icon = "run"
 command = "turbo dev"
