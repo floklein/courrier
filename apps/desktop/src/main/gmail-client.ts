@@ -1,4 +1,7 @@
 import type {
+  MailRemoteChangeEvent,
+} from '@courrier/mail-contracts';
+import type {
   MailAccount,
   MailActionCapability,
   MailAddress,
@@ -15,6 +18,8 @@ import type {
   DownloadedMailAttachment,
   MailAuthProvider,
   MailProvider,
+  MailNotificationResolution,
+  MailNotificationState,
   MailSubscription,
   MoveMessageInput,
   ProviderReplyToMessageInput,
@@ -98,6 +103,17 @@ interface GmailWatchResponse {
 interface GmailAttachmentResponse {
   data?: string;
   size?: number;
+}
+
+interface GmailHistoryResponse {
+  historyId?: string;
+  history?: Array<{
+    messagesAdded?: Array<{ message?: GmailMessageListItem }>;
+    labelsAdded?: Array<{
+      message?: GmailMessageListItem;
+      labelIds?: string[];
+    }>;
+  }>;
 }
 
 interface PeopleSearchResponse {
@@ -264,6 +280,67 @@ export class GmailClient implements MailProvider {
     );
 
     return mapGmailMessageDetail(folderId, message);
+  }
+
+  async getNotificationMessages(
+    accountId: string,
+    event: MailRemoteChangeEvent,
+    state: MailNotificationState = {},
+  ): Promise<MailNotificationResolution> {
+    if (event.kind !== 'message-change' || event.providerId !== 'google') {
+      return { messages: [], state };
+    }
+
+    const historyId = event.historyId ?? event.subscriptionId;
+
+    if (!state.gmailLastHistoryId) {
+      return {
+        messages: [],
+        state: { ...state, gmailLastHistoryId: historyId },
+      };
+    }
+
+    const params = new URLSearchParams({
+      startHistoryId: state.gmailLastHistoryId,
+      historyTypes: 'messageAdded',
+    });
+    const data = await this.fetchGmail<GmailHistoryResponse>(
+      accountId,
+      `${gmailBaseUrl}/users/me/history?${params.toString()}`,
+    );
+    const candidateIds = new Set<string>();
+
+    for (const item of data.history ?? []) {
+      for (const added of item.messagesAdded ?? []) {
+        if (added.message?.id) {
+          candidateIds.add(added.message.id);
+        }
+      }
+
+      for (const labels of item.labelsAdded ?? []) {
+        if (labels.message?.id && labels.labelIds?.includes('INBOX')) {
+          candidateIds.add(labels.message.id);
+        }
+      }
+    }
+
+    const messages = (
+      await Promise.all(
+        [...candidateIds].map((messageId) =>
+          this.getMessageSummary(accountId, 'INBOX', messageId),
+        ),
+      )
+    ).filter((message) =>
+      !message.isRead && message.matchedFolderIds?.includes('INBOX'),
+    );
+
+    return {
+      messages,
+      state: {
+        ...state,
+        gmailLastHistoryId: data.historyId ?? historyId,
+      },
+    };
   }
 
   async markMessageReadState(

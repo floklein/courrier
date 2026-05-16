@@ -1,4 +1,5 @@
 import {
+  Bell,
   Check,
   ChevronsUpDown,
   Loader2,
@@ -9,7 +10,12 @@ import {
   Sun,
   type LucideIcon,
 } from 'lucide-react';
-import { useMutation, useQueries } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useCallback } from 'react';
 import GoogleIcon from '@/assets/providers/google.svg?react';
 import MicrosoftIcon from '@/assets/providers/microsoft.svg?react';
@@ -17,6 +23,7 @@ import { Avatar, AvatarBadge } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -59,6 +66,7 @@ export function UserMenu({
   onSignOut: () => void;
 }) {
   const { theme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
   const {
     applyActiveMailAccountSession,
     prepareActiveMailAccountChange,
@@ -83,6 +91,16 @@ export function UserMenu({
     mutationFn: (providerId: ProviderId) => api.auth.signIn(providerId),
     onSuccess: handleAccountSessionChange,
   });
+  const notificationSettingsQuery = useQuery({
+    queryKey: ['notifications', 'settings'],
+    queryFn: api.notifications.getSettings,
+  });
+  const notificationSettingsMutation = useMutation({
+    mutationFn: api.notifications.updateSettings,
+    onSuccess: (settings) => {
+      queryClient.setQueryData(['notifications', 'settings'], settings);
+    },
+  });
   const microsoftProvider = getProviderStatus(providers, 'microsoft');
   const googleProvider = getProviderStatus(providers, 'google');
   const activeAccount = accounts.find((account) => account.id === activeAccountId);
@@ -98,6 +116,21 @@ export function UserMenu({
   const signingInProviderId = signInMutation.isPending
     ? signInMutation.variables
     : undefined;
+  const notificationSettings = notificationSettingsQuery.data ?? {
+    enabled: false,
+    includePreview: true,
+    silent: false,
+  };
+  const isNotificationSettingsPending =
+    notificationSettingsQuery.isLoading || notificationSettingsMutation.isPending;
+  const updateNotificationSettings = (
+    settings: Partial<typeof notificationSettings>,
+  ) => {
+    notificationSettingsMutation.mutate({
+      ...notificationSettings,
+      ...settings,
+    });
+  };
 
   return (
     <div className="w-full">
@@ -250,6 +283,49 @@ export function UserMenu({
               label="System"
               onSelect={() => setTheme('system')}
             />
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="mx-1 px-3 py-2">
+                <Bell data-icon="inline-start" />
+                Notifications
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56 p-1">
+                <DropdownMenuCheckboxItem
+                  checked={notificationSettings.enabled}
+                  disabled={isNotificationSettingsPending}
+                  onCheckedChange={(enabled) =>
+                    updateNotificationSettings({ enabled: Boolean(enabled) })
+                  }
+                  className="px-2 py-2"
+                >
+                  Enable notifications
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={notificationSettings.includePreview}
+                  disabled={isNotificationSettingsPending}
+                  onCheckedChange={(includePreview) =>
+                    updateNotificationSettings({
+                      includePreview: Boolean(includePreview),
+                    })
+                  }
+                  className="px-2 py-2"
+                >
+                  Show preview
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={notificationSettings.silent}
+                  disabled={isNotificationSettingsPending}
+                  onCheckedChange={(silent) =>
+                    updateNotificationSettings({ silent: Boolean(silent) })
+                  }
+                  className="px-2 py-2"
+                >
+                  Silent
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>

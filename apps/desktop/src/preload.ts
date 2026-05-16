@@ -18,6 +18,11 @@ import {
   type MailRemoteChangeEvent,
 } from '@courrier/mail-contracts';
 
+interface OpenMailMessagePayload {
+  folderId: string;
+  messageId: string;
+}
+
 const courrier = {
   platform: process.platform,
   auth: {
@@ -202,6 +207,41 @@ const courrier = {
         ipcRenderer.removeListener('mail:remote-change', handler);
       };
     },
+    onOpenMessage: (listener: (payload: OpenMailMessagePayload) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+        if (
+          typeof payload === 'object' &&
+          payload !== null &&
+          typeof (payload as OpenMailMessagePayload).folderId === 'string' &&
+          typeof (payload as OpenMailMessagePayload).messageId === 'string'
+        ) {
+          listener(payload as OpenMailMessagePayload);
+        }
+      };
+
+      ipcRenderer.on('mail:open-message', handler);
+      return () => {
+        ipcRenderer.removeListener('mail:open-message', handler);
+      };
+    },
+  },
+  notifications: {
+    getSettings: () =>
+      ipcRenderer.invoke('notifications:get-settings') as Promise<{
+        enabled: boolean;
+        includePreview: boolean;
+        silent: boolean;
+      }>,
+    updateSettings: (settings: {
+      enabled?: boolean;
+      includePreview?: boolean;
+      silent?: boolean;
+    }) =>
+      ipcRenderer.invoke('notifications:update-settings', settings) as Promise<{
+        enabled: boolean;
+        includePreview: boolean;
+        silent: boolean;
+      }>,
   },
   window: {
     closeCurrent: () => ipcRenderer.invoke('window:close-current') as Promise<void>,

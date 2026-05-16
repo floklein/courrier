@@ -8,6 +8,7 @@ import {
   nativeTheme,
   session,
   shell,
+  Tray,
 } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -24,6 +25,7 @@ import { GoogleAuthProvider } from '@/main/google-auth-provider';
 import { registerIpcHandlers } from '@/main/ipc';
 import { LocalAttachmentStore } from '@/main/local-attachment-store';
 import { MailSubscriptionManager } from '@/main/mail-subscription-manager';
+import { MailNotificationService } from '@/main/mail-notification-service';
 import { MailService } from '@/main/mail-service';
 import { MicrosoftAuthProvider } from '@/main/microsoft-auth-provider';
 import {
@@ -39,15 +41,26 @@ if (started) {
 }
 
 const composeDraftsByWebContentsId = new Map<number, ComposeWindowDraft>();
+let mainWindow: BrowserWindow | undefined;
+let tray: Tray | undefined;
+let isExplicitQuit = false;
+let isKeepingMainWindowInTray = false;
 
-function getWindowIconPath() {
+export function getWindowIconPath() {
   return path.join(app.getAppPath(), 'src/assets/icon.png');
 }
 
 const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    isKeepingMainWindowInTray = false;
+    mainWindow.show();
+    mainWindow.focus();
+    return mainWindow;
+  }
+
   const titleBarOverlay = getTitleBarOverlayOptions();
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 920,
@@ -65,6 +78,9 @@ const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
     },
   });
   registerWindowNavigationGuards(mainWindow, shell.openExternal, trustPolicy);
+  mainWindow.on('closed', () => {
+    mainWindow = undefined;
+  });
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -78,6 +94,8 @@ const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.webContents.openDevTools();
   }
+
+  return mainWindow;
 };
 
 const createComposeWindow = (
@@ -154,8 +172,17 @@ app.on('ready', () => {
   const authService = new AuthService(providers);
   const localAttachmentStore = new LocalAttachmentStore();
   const mailService = new MailService([graphClient, gmailClient], localAttachmentStore);
+  const mailNotificationService = new MailNotificationService({
+    icon: getWindowIconPath(),
+    mailService,
+    onNotificationClick: (message) => {
+      const window = createWindow(trustPolicy);
+      openMessageWhenWindowReady(window, message.folderId, message.id);
+    },
+  });
   const subscriptionManager = new MailSubscriptionManager({
     authService,
+    mailNotificationService,
     mailService,
     relayAdminToken: process.env.RELAY_ADMIN_TOKEN,
     relayPublicUrl: process.env.RELAY_PUBLIC_URL,
@@ -172,13 +199,102 @@ app.on('ready', () => {
       }),
   });
   registerWindowIpcHandlers(trustPolicy);
+  registerNotificationIpcHandlers(trustPolicy, mailNotificationService);
   registerAttachmentIpcHandlers(trustPolicy, localAttachmentStore, mailService);
-  createWindow(trustPolicy);
+  const window = createWindow(trustPolicy);
+  registerMainWindowCloseBehavior(window, mailNotificationService);
+  configureTray(trustPolicy);
   void startMailSubscriptions(subscriptionManager);
   app.on('before-quit', () => {
+    isExplicitQuit = true;
     void subscriptionManager.stop();
   });
 });
+
+function sendOpenMessageToWindow(
+  window: BrowserWindow,
+  folderId: string,
+  messageId: string,
+) {
+  window.show();
+  window.focus();
+  window.webContents.send('mail:open-message', { folderId, messageId });
+}
+
+function openMessageWhenWindowReady(
+  window: BrowserWindow,
+  folderId: string,
+  messageId: string,
+) {
+  let didOpen = false;
+  const openMessage = () => {
+    if (didOpen) {
+      return;
+    }
+
+    didOpen = true;
+    sendOpenMessageToWindow(window, folderId, messageId);
+  };
+
+  window.once('ready-to-show', openMessage);
+  if (window.webContents.isLoading()) {
+    window.webContents.once('did-finish-load', openMessage);
+    return;
+  }
+
+  openMessage();
+}
+
+function registerMainWindowCloseBehavior(
+  window: BrowserWindow,
+  mailNotificationService: MailNotificationService,
+) {
+  window.on('close', async (event) => {
+    if (isExplicitQuit) {
+      return;
+    }
+
+    const settings = await mailNotificationService.getSettings();
+
+    if (!settings.enabled || !mailNotificationService.isSupported()) {
+      isKeepingMainWindowInTray = false;
+      return;
+    }
+
+    event.preventDefault();
+    isKeepingMainWindowInTray = true;
+    window.hide();
+  });
+}
+
+function configureTray(trustPolicy: AppUrlTrustPolicy) {
+  if (tray) {
+    return;
+  }
+
+  tray = new Tray(getWindowIconPath());
+  tray.setToolTip('Courrier');
+  tray.on('double-click', () => {
+    createWindow(trustPolicy);
+  });
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'Open',
+        click: () => {
+          createWindow(trustPolicy);
+        },
+      },
+      {
+        label: 'Close',
+        click: () => {
+          isExplicitQuit = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+}
 
 function registerWindowIpcHandlers(trustPolicy: AppUrlTrustPolicy) {
   ipcMain.handle('window:open-compose', (event, draft: ComposeWindowDraft) => {
@@ -192,6 +308,36 @@ function registerWindowIpcHandlers(trustPolicy: AppUrlTrustPolicy) {
   ipcMain.handle('window:close-current', (event) => {
     assertTrustedSender(event, trustPolicy);
     BrowserWindow.fromWebContents(event.sender)?.close();
+  });
+}
+
+function registerNotificationIpcHandlers(
+  trustPolicy: AppUrlTrustPolicy,
+  mailNotificationService: MailNotificationService,
+) {
+  ipcMain.handle('notifications:get-settings', (event) => {
+    assertTrustedSender(event, trustPolicy);
+    return mailNotificationService.getSettings();
+  });
+  ipcMain.handle('notifications:update-settings', (event, settings: unknown) => {
+    assertTrustedSender(event, trustPolicy);
+
+    if (typeof settings !== 'object' || settings === null) {
+      throw new Error('Invalid IPC payload');
+    }
+
+    const candidate = settings as Record<string, unknown>;
+    return mailNotificationService.updateSettings({
+      ...(typeof candidate.enabled === 'boolean'
+        ? { enabled: candidate.enabled }
+        : {}),
+      ...(typeof candidate.includePreview === 'boolean'
+        ? { includePreview: candidate.includePreview }
+        : {}),
+      ...(typeof candidate.silent === 'boolean'
+        ? { silent: candidate.silent }
+        : {}),
+    });
   });
 }
 
@@ -379,7 +525,7 @@ async function startMailSubscriptions(subscriptionManager: MailSubscriptionManag
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' && !isKeepingMainWindowInTray) {
     app.quit();
   }
 });
@@ -388,10 +534,11 @@ app.on('activate', () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow(createAppUrlTrustPolicy({
+    const trustPolicy = createAppUrlTrustPolicy({
       appFilePath: getRendererIndexPath(),
       devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
-    }));
+    });
+    createWindow(trustPolicy);
   }
 });
 

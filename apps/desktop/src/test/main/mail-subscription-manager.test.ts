@@ -83,7 +83,10 @@ describe('mail subscription manager helpers', () => {
 describe('MailSubscriptionManager', () => {
   it('creates a subscription, registers with the relay, receives mail changes, and acknowledges them', async () => {
     const graphClient = createGraphClient();
-    const manager = createManager(graphClient);
+    const mailNotificationService = {
+      handleRemoteChange: vi.fn().mockResolvedValue(undefined),
+    };
+    const manager = createManager(graphClient, mailNotificationService);
 
     await manager.start();
     MockWebSocket.instances[0].open();
@@ -114,6 +117,9 @@ describe('MailSubscriptionManager', () => {
     });
     expect(rendererSend).toHaveBeenCalledWith(
       'mail:remote-change',
+      expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
+    );
+    expect(mailNotificationService.handleRemoteChange).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
     );
     await waitFor(() =>
@@ -237,7 +243,10 @@ describe('MailSubscriptionManager', () => {
   });
 });
 
-function createManager(graphClient = createGraphClient()) {
+function createManager(
+  graphClient = createGraphClient(),
+  mailNotificationService?: { handleRemoteChange: ReturnType<typeof vi.fn> },
+) {
   const manager = new MailSubscriptionManager({
     authService: {
       getAccounts: vi.fn().mockResolvedValue([account]),
@@ -250,6 +259,7 @@ function createManager(graphClient = createGraphClient()) {
     relayPublicUrl: 'https://relay.example.com',
     reconnectDelayMs: 1,
     statePath,
+    mailNotificationService: mailNotificationService as never,
   });
   managers.push(manager);
   return manager;

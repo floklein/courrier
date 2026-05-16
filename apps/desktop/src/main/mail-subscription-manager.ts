@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 import type { MailAccount, ProviderId } from '@/lib/mail-types';
 import type { AuthService } from '@/main/auth-service';
+import type { MailNotificationService } from '@/main/mail-notification-service';
 import type { MailService } from '@/main/mail-service';
 
 const subscriptionStateFileName = 'mail-subscription.json';
@@ -33,6 +34,7 @@ interface MailSubscriptionState {
 interface MailSubscriptionManagerOptions {
   authService: AuthService;
   mailService: MailService;
+  mailNotificationService?: MailNotificationService;
   relayAdminToken?: string;
   relayPublicUrl?: string;
   reconnectDelayMs?: number;
@@ -389,6 +391,9 @@ class MailAccountSubscription {
       return;
     }
 
+    await this.options.mailNotificationService?.handleRemoteChange(
+      result.data.event,
+    );
     sendRemoteChangeToRenderers(result.data.event);
     state.lastEventId = result.data.event.id;
     await this.saveState(state);

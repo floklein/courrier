@@ -354,6 +354,94 @@ describe('GmailClient', () => {
     });
     expect(attachment.content).toHaveLength(0);
   });
+
+  it('uses the first Gmail notification as a history baseline without notifying', async () => {
+    const client = createGmailClient();
+
+    await expect(
+      client.getNotificationMessages(accountId, {
+        id: 'event-1',
+        clientId: 'client-1',
+        accountId,
+        providerId: 'google',
+        subscriptionId: 'pubsub-message-1',
+        historyId: '123',
+        kind: 'message-change',
+        changeType: 'updated',
+        receivedAt: '2026-05-16T10:00:00.000Z',
+      }),
+    ).resolves.toEqual({
+      messages: [],
+      state: { gmailLastHistoryId: '123' },
+    });
+  });
+
+  it('resolves unread Gmail inbox additions from history for native notifications', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        historyId: '124',
+        history: [
+          {
+            messagesAdded: [{ message: { id: 'message-1' } }],
+            labelsAdded: [
+              { message: { id: 'message-2' }, labelIds: ['INBOX'] },
+            ],
+          },
+        ],
+      }),
+      jsonResponse({
+        id: 'message-1',
+        labelIds: ['INBOX', 'UNREAD'],
+        snippet: 'Preview',
+        internalDate: '1778935200000',
+        payload: {
+          headers: [
+            { name: 'From', value: 'Ada Lovelace <ada@example.com>' },
+            { name: 'To', value: 'Grace Hopper <grace@example.com>' },
+            { name: 'Subject', value: 'Hello' },
+            { name: 'Date', value: 'Sat, 16 May 2026 10:00:00 +0000' },
+          ],
+        },
+      }),
+      jsonResponse({
+        id: 'message-2',
+        labelIds: ['INBOX'],
+        payload: { headers: [] },
+      }),
+    );
+    const client = createGmailClient();
+
+    const resolution = await client.getNotificationMessages(
+      accountId,
+      {
+        id: 'event-2',
+        clientId: 'client-1',
+        accountId,
+        providerId: 'google',
+        subscriptionId: 'pubsub-message-2',
+        historyId: '124',
+        kind: 'message-change',
+        changeType: 'updated',
+        receivedAt: '2026-05-16T10:01:00.000Z',
+      },
+      { gmailLastHistoryId: '123' },
+    );
+
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      'startHistoryId=123&historyTypes=messageAdded',
+    );
+    expect(resolution.state).toEqual({ gmailLastHistoryId: '124' });
+    expect(resolution.messages).toMatchObject([
+      {
+        id: 'message-1',
+        folderId: 'INBOX',
+        sender: { name: 'Ada Lovelace', email: 'ada@example.com' },
+        subject: 'Hello',
+        isRead: false,
+        matchedFolderIds: ['INBOX', 'UNREAD'],
+      },
+    ]);
+  });
 });
 
 function createGmailClient() {

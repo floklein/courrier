@@ -29,6 +29,11 @@ export const api = {
     sendMessage: window.courrier.mail.sendMessage,
     replyToMessage: window.courrier.mail.replyToMessage,
     onRemoteChange: window.courrier.mail.onRemoteChange,
+    onOpenMessage: window.courrier.mail.onOpenMessage,
+  },
+  notifications: {
+    getSettings: window.courrier.notifications.getSettings,
+    updateSettings: window.courrier.notifications.updateSettings,
   },
   window: {
     closeCurrent: () => window.courrier.window.closeCurrent(),

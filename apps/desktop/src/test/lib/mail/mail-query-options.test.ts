@@ -36,6 +36,11 @@ function installCourrierApi() {
     sendMessage: vi.fn(),
     replyToMessage: vi.fn(),
     onRemoteChange: vi.fn(),
+    onOpenMessage: vi.fn(),
+  };
+  const notifications = {
+    getSettings: vi.fn(),
+    updateSettings: vi.fn(),
   };
   const windowApi = {
     closeCurrent: vi.fn(),
@@ -45,7 +50,7 @@ function installCourrierApi() {
 
   Object.defineProperty(window, 'courrier', {
     configurable: true,
-    value: { attachments, auth, mail, window: windowApi },
+    value: { attachments, auth, mail, notifications, window: windowApi },
   });
 
   return { auth, mail };

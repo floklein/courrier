@@ -91,6 +91,18 @@ export function AuthenticatedMailClient({
   useEffect(() => cleanupLiveRegion, []);
 
   useEffect(() => {
+    return api.mail.onOpenMessage(({ folderId, messageId }) => {
+      void navigate({
+        to: '/mail/$folderId/$messageId',
+        params: {
+          folderId: encodeRouteId(folderId),
+          messageId: encodeRouteId(messageId),
+        },
+      });
+    });
+  }, [navigate]);
+
+  useEffect(() => {
     for (const account of session.accounts) {
       void queryClient
         .ensureQueryData(mailFoldersQueryOptions(account.id))
