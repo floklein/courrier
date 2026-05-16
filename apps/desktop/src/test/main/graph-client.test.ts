@@ -185,6 +185,37 @@ describe('GraphClient write requests', () => {
     });
   });
 
+  it('includes Cc and Bcc recipients in Microsoft Graph send payloads', async () => {
+    const fetchMock = mockFetch(new Response('', { status: 202 }));
+    const client = createGraphClient();
+
+    await client.sendMessage(account.id, {
+      subject: 'Hello',
+      bodyHtml: '<p>Hi</p>',
+      toRecipients: [{ email: 'ada@example.com' }],
+      ccRecipients: [{ email: 'grace@example.com' }],
+      bccRecipients: [{ email: 'hidden@example.com' }],
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
+    expect(body.message.ccRecipients).toEqual([
+      {
+        emailAddress: {
+          name: 'grace@example.com',
+          address: 'grace@example.com',
+        },
+      },
+    ]);
+    expect(body.message.bccRecipients).toEqual([
+      {
+        emailAddress: {
+          name: 'hidden@example.com',
+          address: 'hidden@example.com',
+        },
+      },
+    ]);
+  });
+
   it('uploads large attachments with Graph upload-session byte ranges', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'courrier-test-'));
     const filePath = path.join(tempDir, 'large.bin');
@@ -305,6 +336,47 @@ describe('GraphClient write requests', () => {
       `${graphBaseUrl}/me/messages/draft-1/send`,
     );
     expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'POST' });
+  });
+
+  it('uses Graph reply-all and forward draft actions', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'reply-all-draft' }),
+      new Response(null, { status: 204 }),
+      new Response('', { status: 202 }),
+      jsonResponse({ id: 'forward-draft' }),
+      new Response(null, { status: 204 }),
+      new Response('', { status: 202 }),
+    );
+    const client = createGraphClient();
+
+    await client.replyToMessage(account.id, {
+      kind: 'replyAll',
+      messageId: 'message-1',
+      bodyHtml: '<p>Reply</p>',
+    });
+    await client.replyToMessage(account.id, {
+      kind: 'forward',
+      messageId: 'message-1',
+      bodyHtml: '<p>Forward</p>',
+      toRecipients: [{ email: 'ada@example.com' }],
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/createReplyAll`,
+    );
+    expect(fetchMock.mock.calls[3][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/createForward`,
+    );
+    expect(JSON.parse(fetchMock.mock.calls[4][1]?.body as string)).toMatchObject({
+      toRecipients: [
+        {
+          emailAddress: {
+            name: 'ada@example.com',
+            address: 'ada@example.com',
+          },
+        },
+      ],
+    });
   });
 
   it('does not update or send a reply draft when Graph omits the draft id', async () => {

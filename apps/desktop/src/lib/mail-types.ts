@@ -54,14 +54,22 @@ export interface LocalMailAttachment {
 
 export interface SendMailInput {
   toRecipients: MailComposeRecipient[];
+  ccRecipients?: MailComposeRecipient[];
+  bccRecipients?: MailComposeRecipient[];
   subject: string;
   bodyHtml: string;
   attachments?: LocalMailAttachment[];
 }
 
+export type MailResponseKind = 'reply' | 'replyAll' | 'forward';
+
 export interface ReplyToMessageInput {
+  kind?: MailResponseKind;
   messageId: string;
   bodyHtml: string;
+  toRecipients?: MailComposeRecipient[];
+  ccRecipients?: MailComposeRecipient[];
+  bccRecipients?: MailComposeRecipient[];
   attachments?: LocalMailAttachment[];
 }
 
@@ -73,6 +81,8 @@ export interface MailMessageSummary {
   matchedFolderIds?: string[];
   sender: MailAddress;
   recipients: string[];
+  ccRecipients?: string[];
+  replyTo?: MailAddress[];
   subject: string;
   preview: string;
   receivedDateTime: string;
@@ -82,6 +92,9 @@ export interface MailMessageSummary {
   isStarred?: boolean;
   isFlagged?: boolean;
   isImportant?: boolean;
+  internetMessageId?: string;
+  threadId?: string;
+  conversationId?: string;
 }
 
 export interface MailMessageDetail extends MailMessageSummary {

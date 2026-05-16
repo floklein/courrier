@@ -157,7 +157,7 @@ export class GraphClient implements MailProvider {
         folderId,
       )}/messages/${encodeURIComponent(
         messageId,
-      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,flag,from,toRecipients,body&$expand=attachments($select=id,name,contentType,size,isInline,@odata.type)`,
+      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,flag,from,toRecipients,ccRecipients,bccRecipients,replyTo,internetMessageId,conversationId,body&$expand=attachments($select=id,name,contentType,size,isInline,@odata.type)`,
     );
 
     return mapGraphMessageDetail(folderId, data);
@@ -318,6 +318,7 @@ export class GraphClient implements MailProvider {
               content: input.bodyHtml,
             },
             toRecipients: input.toRecipients.map(formatGraphRecipient),
+            ...createGraphOptionalRecipients(input),
           }),
         },
       );
@@ -344,6 +345,7 @@ export class GraphClient implements MailProvider {
             content: input.bodyHtml,
           },
           toRecipients: input.toRecipients.map(formatGraphRecipient),
+          ...createGraphOptionalRecipients(input),
         },
         saveToSentItems: true,
       }),
@@ -354,11 +356,17 @@ export class GraphClient implements MailProvider {
     accountId: string,
     input: ProviderReplyToMessageInput,
   ): Promise<void> {
+    const kind = input.kind ?? 'reply';
+    const action = kind === 'replyAll'
+      ? 'createReplyAll'
+      : kind === 'forward'
+        ? 'createForward'
+        : 'createReply';
     const draft = await this.fetchGraph<GraphMessageDetail>(
       accountId,
       `${graphBaseUrl}/me/messages/${encodeURIComponent(
         input.messageId,
-      )}/createReply`,
+      )}/${action}`,
       {
         method: 'POST',
         headers: {
@@ -380,6 +388,7 @@ export class GraphClient implements MailProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          ...createGraphResponseRecipientPatch(input),
           body: {
             contentType: 'HTML',
             content: input.bodyHtml,
@@ -759,7 +768,7 @@ function createMessagesUrl(folderId: string, search?: string) {
   const params = new URLSearchParams({
     $top: '25',
     $select:
-      'id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,flag,from,toRecipients',
+      'id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,flag,from,toRecipients,ccRecipients,replyTo,internetMessageId,conversationId',
   });
 
   if (search) {
@@ -915,6 +924,31 @@ function formatGraphRecipient(recipient: SendMailInput['toRecipients'][number]) 
       name: recipient.name || recipient.email,
       address: recipient.email,
     },
+  };
+}
+
+function createGraphResponseRecipientPatch(input: ProviderReplyToMessageInput) {
+  return {
+    ...(input.toRecipients
+      ? { toRecipients: input.toRecipients.map(formatGraphRecipient) }
+      : {}),
+    ...(input.ccRecipients
+      ? { ccRecipients: input.ccRecipients.map(formatGraphRecipient) }
+      : {}),
+    ...(input.bccRecipients
+      ? { bccRecipients: input.bccRecipients.map(formatGraphRecipient) }
+      : {}),
+  };
+}
+
+function createGraphOptionalRecipients(input: SendMailInput) {
+  return {
+    ...(input.ccRecipients?.length
+      ? { ccRecipients: input.ccRecipients.map(formatGraphRecipient) }
+      : {}),
+    ...(input.bccRecipients?.length
+      ? { bccRecipients: input.bccRecipients.map(formatGraphRecipient) }
+      : {}),
   };
 }
 

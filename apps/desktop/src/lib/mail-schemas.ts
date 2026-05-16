@@ -42,13 +42,19 @@ export const localMailAttachmentSchema = z.object({
 
 export const sendMailInputSchema = z.object({
   toRecipients: z.array(mailComposeRecipientSchema).min(1).max(500),
+  ccRecipients: z.array(mailComposeRecipientSchema).max(500).optional(),
+  bccRecipients: z.array(mailComposeRecipientSchema).max(500).optional(),
   subject: z.string().max(998),
   bodyHtml: z.string().min(1).max(5_000_000),
   attachments: z.array(localMailAttachmentSchema).max(100).optional(),
 });
 
 export const replyToMessageInputSchema = z.object({
+  kind: z.enum(['reply', 'replyAll', 'forward']).optional(),
   messageId: ipcIdSchema,
   bodyHtml: z.string().min(1).max(5_000_000),
+  toRecipients: z.array(mailComposeRecipientSchema).max(500).optional(),
+  ccRecipients: z.array(mailComposeRecipientSchema).max(500).optional(),
+  bccRecipients: z.array(mailComposeRecipientSchema).max(500).optional(),
   attachments: z.array(localMailAttachmentSchema).max(100).optional(),
 });

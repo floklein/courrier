@@ -5,7 +5,9 @@ import {
   FolderInput,
   Mail,
   MailOpen,
+  Forward,
   Reply,
+  ReplyAll,
   Star,
   Trash2,
 } from 'lucide-react';
@@ -46,6 +48,8 @@ interface MailActionMenuProps {
   onMarkReadState: (message: MailMessageSummary, isRead: boolean) => void;
   onMove: (message: MailMessageSummary, destinationFolderId: string) => void;
   onReply: (message: MailMessageSummary) => void;
+  onReplyAll: (message: MailMessageSummary) => void;
+  onForward: (message: MailMessageSummary) => void;
   onToggleFlag: (message: MailMessageSummary, isFlagged: boolean) => void;
   onToggleImportant: (message: MailMessageSummary, isImportant: boolean) => void;
   onToggleStar: (message: MailMessageSummary, isStarred: boolean) => void;
@@ -62,6 +66,20 @@ export function MailActionDropdownContent(props: MailActionMenuProps) {
       >
         <Reply />
         Reply
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onReplyAll(props.message)}
+      >
+        <ReplyAll />
+        Reply all
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onForward(props.message)}
+      >
+        <Forward />
+        Forward
       </DropdownMenuItem>
       <DropdownMenuItem
         disabled={props.isBusy}
@@ -96,6 +114,20 @@ export function MailActionContextContent(props: MailActionMenuProps) {
       >
         <Reply />
         Reply
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onReplyAll(props.message)}
+      >
+        <ReplyAll />
+        Reply all
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onForward(props.message)}
+      >
+        <Forward />
+        Forward
       </ContextMenuItem>
       <ContextMenuItem
         disabled={props.isBusy}

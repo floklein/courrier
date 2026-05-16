@@ -221,6 +221,65 @@ describe('GmailClient', () => {
     expect(decoded).toContain('<p>Hi</p>');
   });
 
+  it('includes Cc and Bcc headers in raw Gmail mail', async () => {
+    const fetchMock = mockFetch(jsonResponse({ id: 'sent-1' }));
+    const client = createGmailClient();
+
+    await client.sendMessage(accountId, {
+      subject: 'Hello',
+      bodyHtml: '<p>Hi</p>',
+      toRecipients: [{ email: 'ada@example.com' }],
+      ccRecipients: [{ email: 'grace@example.com' }],
+      bccRecipients: [{ email: 'hidden@example.com' }],
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      raw: string;
+    };
+    const decoded = Buffer.from(body.raw, 'base64url').toString('utf8');
+
+    expect(decoded).toContain('Cc: grace@example.com');
+    expect(decoded).toContain('Bcc: hidden@example.com');
+  });
+
+  it('builds Gmail reply-all recipients from Reply-To, To, and Cc', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        id: 'message-1',
+        threadId: 'thread-1',
+        payload: {
+          headers: [
+            { name: 'Reply-To', value: 'Sender <sender@example.com>' },
+            { name: 'To', value: 'Ada <ada@example.com>, Other <other@example.com>' },
+            { name: 'Cc', value: 'Copy <copy@example.com>' },
+            { name: 'Subject', value: 'Hello' },
+            { name: 'Message-ID', value: '<message-1@example.com>' },
+          ],
+        },
+      }),
+      jsonResponse({ id: 'sent-1' }),
+    );
+    const client = createGmailClient();
+
+    await client.replyToMessage(accountId, {
+      kind: 'replyAll',
+      messageId: 'message-1',
+      bodyHtml: '<p>Reply</p>',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1]?.body as string) as {
+      raw: string;
+      threadId: string;
+    };
+    const decoded = Buffer.from(body.raw, 'base64url')
+      .toString('utf8')
+      .replace(/\r\n[ \t]+/g, ' ');
+
+    expect(body.threadId).toBe('thread-1');
+    expect(decoded).toContain('To: Sender <sender@example.com>, Other <other@example.com>, Copy <copy@example.com>');
+    expect(decoded).not.toContain('Ada <ada@example.com>');
+  });
+
   it('keeps attachments whose filenames contain inline', async () => {
     mockFetch(jsonResponse({
       id: 'message-1',
@@ -298,7 +357,15 @@ function createGmailClient() {
     id: 'google',
     displayName: 'Google',
     getConfigurationError: vi.fn(),
-    getAccounts: vi.fn(),
+    getAccounts: vi.fn().mockResolvedValue([
+      {
+        id: accountId,
+        providerId: 'google',
+        providerAccountId: 'account-1',
+        email: 'ada@example.com',
+        label: 'Ada',
+      },
+    ]),
     signIn: vi.fn(),
     signOut: vi.fn(),
     getAccessToken: vi.fn().mockResolvedValue('test-token'),

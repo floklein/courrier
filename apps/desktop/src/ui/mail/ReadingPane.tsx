@@ -4,10 +4,12 @@ import {
   Download,
   ExternalLink,
   Flag,
+  Forward,
   MailOpen,
   MoreHorizontal,
   Paperclip,
   Reply,
+  ReplyAll,
   Star,
   Trash2,
 } from 'lucide-react';
@@ -29,6 +31,7 @@ import type {
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
+  MailResponseKind,
   ReplyToMessageInput,
 } from '@/lib/mail-types';
 import { api } from '@/lib/api-client';
@@ -46,12 +49,14 @@ import { MailAvatar } from '@/ui/mail/MailAvatar';
 
 export function ReadingPane({
   accountId,
+  accountEmail,
   folderId,
   folders,
   actionCapabilities,
   isActionPending,
   message,
   replyMessageId,
+  responseKind,
   isSendingMessage,
   replyError,
   isLoading,
@@ -63,7 +68,9 @@ export function ReadingPane({
   onMarkMessageJunkState,
   onMarkMessageReadState,
   onMoveMessage,
+  onForwardMessage,
   onReplyToMessage,
+  onReplyAllToMessage,
   onReplyToMessageBody,
   onToggleMessageFlag,
   onToggleMessageImportant,
@@ -71,12 +78,14 @@ export function ReadingPane({
   className,
 }: {
   accountId: string;
+  accountEmail?: string;
   folderId: string;
   folders: MailFolder[];
   actionCapabilities: MailActionCapability[];
   isActionPending: boolean;
   message: MailMessageDetail | undefined;
   replyMessageId: string | undefined;
+  responseKind: MailResponseKind;
   isSendingMessage: boolean;
   replyError: Error | null;
   isLoading: boolean;
@@ -97,7 +106,9 @@ export function ReadingPane({
     message: MailMessageSummary,
     destinationFolderId: string,
   ) => void;
+  onForwardMessage: (message: MailMessageSummary) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onReplyAllToMessage: (message: MailMessageSummary) => void;
   onReplyToMessageBody: (input: ReplyToMessageInput) => void;
   onToggleMessageFlag: (
     message: MailMessageSummary,
@@ -209,6 +220,18 @@ export function ReadingPane({
             />
           )}
           <ToolbarButton
+            icon={ReplyAll}
+            label="Reply all"
+            disabled={isActionPending}
+            onClick={() => onReplyAllToMessage(message)}
+          />
+          <ToolbarButton
+            icon={Forward}
+            label="Forward"
+            disabled={isActionPending}
+            onClick={() => onForwardMessage(message)}
+          />
+          <ToolbarButton
             icon={Trash2}
             label="Move to trash"
             disabled={isActionPending}
@@ -245,7 +268,9 @@ export function ReadingPane({
               onMarkJunk={onMarkMessageJunkState}
               onMarkReadState={onMarkMessageReadState}
               onMove={onMoveMessage}
+              onForward={onForwardMessage}
               onReply={onReplyToMessage}
+              onReplyAll={onReplyAllToMessage}
               onToggleFlag={onToggleMessageFlag}
               onToggleImportant={onToggleMessageImportant}
               onToggleStar={onToggleMessageStar}
@@ -305,7 +330,8 @@ export function ReadingPane({
       {replyMessageId === message.id && (
           <MailComposer
             accountId={accountId}
-            mode="reply"
+            accountEmail={accountEmail}
+            mode={responseKind}
           replyMessage={message}
           isSending={isSendingMessage}
           error={replyError}
