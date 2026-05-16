@@ -5,6 +5,7 @@ const accountId = 'google:account-1';
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('GmailClient', () => {
@@ -441,6 +442,35 @@ describe('GmailClient', () => {
         matchedFolderIds: ['INBOX', 'UNREAD'],
       },
     ]);
+  });
+
+  it('returns the Gmail watch history id as notification baseline state', async () => {
+    vi.stubEnv('GOOGLE_PUBSUB_TOPIC', 'projects/test/topics/mail');
+    const fetchMock = mockFetch(
+      jsonResponse({ historyId: 'history-100', expiration: '1779021600000' }),
+    );
+    const client = createGmailClient();
+
+    await expect(
+      client.createMailSubscription({
+        account: {
+          id: accountId,
+          providerId: 'google',
+          providerAccountId: 'account-1',
+          email: 'ada@example.com',
+          label: 'Ada',
+        },
+        clientState: 'client-state-with-enough-length',
+        expirationDateTime: '2026-05-17T10:00:00.000Z',
+        notificationUrl: 'https://relay.example.com/google/pubsub',
+      }),
+    ).resolves.toMatchObject({
+      id: 'history-100',
+      notificationState: { gmailLastHistoryId: 'history-100' },
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/watch',
+    );
   });
 });
 

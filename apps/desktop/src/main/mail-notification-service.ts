@@ -27,7 +27,7 @@ interface MailNotificationServiceOptions {
   icon?: string | NativeImage;
   mailService: MailService;
   now?: () => Date;
-  onNotificationClick: (message: MailMessageSummary) => void;
+  onNotificationClick: (accountId: string, message: MailMessageSummary) => void;
   settingsPath?: string;
 }
 
@@ -35,6 +35,8 @@ const notificationStateFileName = 'mail-notifications.json';
 const maxRecentMessageIds = 200;
 
 export class MailNotificationService {
+  private cachedSettings: MailNotificationSettings | undefined;
+
   constructor(private readonly options: MailNotificationServiceOptions) {}
 
   isSupported() {
@@ -43,7 +45,9 @@ export class MailNotificationService {
 
   async getSettings(): Promise<MailNotificationSettings> {
     const store = await this.loadStore();
-    return normalizeSettings(store.settings, this.isSupported());
+    const settings = normalizeSettings(store.settings, this.isSupported());
+    this.cachedSettings = settings;
+    return settings;
   }
 
   async updateSettings(
@@ -57,7 +61,35 @@ export class MailNotificationService {
 
     store.settings = settings;
     await this.saveStore(store);
+    this.cachedSettings = settings;
     return settings;
+  }
+
+  shouldKeepMainWindowInTray() {
+    const settings =
+      this.cachedSettings ?? normalizeSettings(undefined, this.isSupported());
+
+    return settings.enabled && this.isSupported();
+  }
+
+  async mergeProviderState(
+    accountId: string,
+    state: MailNotificationState | undefined,
+  ) {
+    if (!state) {
+      return;
+    }
+
+    const store = await this.loadStore();
+
+    store.providerStateByAccountId = {
+      ...(store.providerStateByAccountId ?? {}),
+      [accountId]: {
+        ...(store.providerStateByAccountId?.[accountId] ?? {}),
+        ...state,
+      },
+    };
+    await this.saveStore(store);
   }
 
   async handleRemoteChange(event: MailRemoteChangeEvent) {
@@ -65,13 +97,14 @@ export class MailNotificationService {
       return;
     }
 
+    const accountId = event.accountId;
     const settings = await this.getSettings();
 
     if (!settings.enabled || !this.isSupported()) {
       return;
     }
 
-    const provider = this.options.mailService.getProvider(event.accountId);
+    const provider = this.options.mailService.getProvider(accountId);
 
     if (!provider.getNotificationMessages) {
       return;
@@ -79,25 +112,27 @@ export class MailNotificationService {
 
     const store = await this.loadStore();
     const providerState =
-      store.providerStateByAccountId?.[event.accountId] ?? {};
+      store.providerStateByAccountId?.[accountId] ?? {};
     const resolution = await provider.getNotificationMessages(
-      event.accountId,
+      accountId,
       event,
       providerState,
     );
 
     store.providerStateByAccountId = {
       ...(store.providerStateByAccountId ?? {}),
-      [event.accountId]: resolution.state ?? providerState,
+      [accountId]: resolution.state ?? providerState,
     };
 
     const recentIds = new Set(store.recentMessageIds ?? []);
     const messages = resolution.messages.filter((message) => {
-      if (recentIds.has(message.id)) {
+      const recentId = createRecentMessageId(accountId, message.id);
+
+      if (recentIds.has(recentId)) {
         return false;
       }
 
-      recentIds.add(message.id);
+      recentIds.add(recentId);
       return true;
     });
 
@@ -106,11 +141,12 @@ export class MailNotificationService {
     await this.saveStore(store);
 
     for (const message of messages) {
-      this.showNotification(message, settings);
+      this.showNotification(accountId, message, settings);
     }
   }
 
   private showNotification(
+    accountId: string,
     message: MailMessageSummary,
     settings: MailNotificationSettings,
   ) {
@@ -122,7 +158,7 @@ export class MailNotificationService {
     });
 
     notification.on('click', () => {
-      this.options.onNotificationClick(message);
+      this.options.onNotificationClick(accountId, message);
     });
 
     try {
@@ -192,6 +228,10 @@ function truncate(value: string, maxLength: number) {
   return value.length > maxLength
     ? `${value.slice(0, maxLength - 3)}...`
     : value;
+}
+
+function createRecentMessageId(accountId: string, messageId: string) {
+  return `${accountId}:${messageId}`;
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

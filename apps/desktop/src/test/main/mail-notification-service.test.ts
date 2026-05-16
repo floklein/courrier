@@ -92,9 +92,9 @@ describe('MailNotificationService', () => {
 
     electronMock.notifications[0]?.handlers.click?.();
 
-    expect(onNotificationClick).toHaveBeenCalledWith(message);
+    expect(onNotificationClick).toHaveBeenCalledWith('microsoft:account-1', message);
     await expect(readStore()).resolves.toMatchObject({
-      recentMessageIds: ['message-1'],
+      recentMessageIds: ['microsoft:account-1:message-1'],
       providerStateByAccountId: {
         'microsoft:account-1': { gmailLastHistoryId: 'history-2' },
       },
@@ -128,13 +128,73 @@ describe('MailNotificationService', () => {
       enabled: false,
     });
   });
+
+  it('does not suppress the same provider message id across accounts', async () => {
+    const provider = {
+      getNotificationMessages: vi.fn().mockResolvedValue({
+        messages: [createMessage()],
+      }),
+    };
+    const service = new MailNotificationService({
+      mailService: {
+        getProvider: vi.fn(() => provider),
+      } as never,
+      onNotificationClick: vi.fn(),
+      settingsPath,
+    });
+
+    await service.handleRemoteChange(createEvent('event-1', 'microsoft:account-1'));
+    await service.handleRemoteChange(createEvent('event-2', 'google:account-2'));
+
+    expect(electronMock.notifications).toHaveLength(2);
+    await expect(readStore()).resolves.toMatchObject({
+      recentMessageIds: [
+        'microsoft:account-1:message-1',
+        'google:account-2:message-1',
+      ],
+    });
+  });
+
+  it('updates the synchronous tray decision when settings change', async () => {
+    const service = new MailNotificationService({
+      mailService: { getProvider: vi.fn() } as never,
+      onNotificationClick: vi.fn(),
+      settingsPath,
+    });
+
+    expect(service.shouldKeepMainWindowInTray()).toBe(true);
+
+    await service.updateSettings({ enabled: false });
+
+    expect(service.shouldKeepMainWindowInTray()).toBe(false);
+  });
+
+  it('merges provider notification state without clearing existing store data', async () => {
+    const service = new MailNotificationService({
+      mailService: { getProvider: vi.fn() } as never,
+      onNotificationClick: vi.fn(),
+      settingsPath,
+    });
+
+    await service.updateSettings({ includePreview: false });
+    await service.mergeProviderState('google:account-1', {
+      gmailLastHistoryId: 'history-100',
+    });
+
+    await expect(readStore()).resolves.toMatchObject({
+      settings: { includePreview: false },
+      providerStateByAccountId: {
+        'google:account-1': { gmailLastHistoryId: 'history-100' },
+      },
+    });
+  });
 });
 
-function createEvent(id = 'event-1') {
+function createEvent(id = 'event-1', accountId = 'microsoft:account-1') {
   return {
     id,
     clientId: 'client-1',
-    accountId: 'microsoft:account-1',
+    accountId,
     providerId: 'microsoft' as const,
     subscriptionId: 'subscription-1',
     kind: 'message-change' as const,

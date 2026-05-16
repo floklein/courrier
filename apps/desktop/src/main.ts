@@ -175,11 +175,12 @@ app.on('ready', () => {
   const mailNotificationService = new MailNotificationService({
     icon: getWindowIconPath(),
     mailService,
-    onNotificationClick: (message) => {
+    onNotificationClick: (accountId, message) => {
       const window = createWindow(trustPolicy);
-      openMessageWhenWindowReady(window, message.folderId, message.id);
+      openMessageWhenWindowReady(window, accountId, message.folderId, message.id);
     },
   });
+  void mailNotificationService.getSettings();
   const subscriptionManager = new MailSubscriptionManager({
     authService,
     mailNotificationService,
@@ -213,16 +214,18 @@ app.on('ready', () => {
 
 function sendOpenMessageToWindow(
   window: BrowserWindow,
+  accountId: string,
   folderId: string,
   messageId: string,
 ) {
   window.show();
   window.focus();
-  window.webContents.send('mail:open-message', { folderId, messageId });
+  window.webContents.send('mail:open-message', { accountId, folderId, messageId });
 }
 
 function openMessageWhenWindowReady(
   window: BrowserWindow,
+  accountId: string,
   folderId: string,
   messageId: string,
 ) {
@@ -233,7 +236,7 @@ function openMessageWhenWindowReady(
     }
 
     didOpen = true;
-    sendOpenMessageToWindow(window, folderId, messageId);
+    sendOpenMessageToWindow(window, accountId, folderId, messageId);
   };
 
   window.once('ready-to-show', openMessage);
@@ -249,14 +252,12 @@ function registerMainWindowCloseBehavior(
   window: BrowserWindow,
   mailNotificationService: MailNotificationService,
 ) {
-  window.on('close', async (event) => {
+  window.on('close', (event) => {
     if (isExplicitQuit) {
       return;
     }
 
-    const settings = await mailNotificationService.getSettings();
-
-    if (!settings.enabled || !mailNotificationService.isSupported()) {
+    if (!mailNotificationService.shouldKeepMainWindowInTray()) {
       isKeepingMainWindowInTray = false;
       return;
     }

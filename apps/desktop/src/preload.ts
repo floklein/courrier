@@ -19,6 +19,7 @@ import {
 } from '@courrier/mail-contracts';
 
 interface OpenMailMessagePayload {
+  accountId: string;
   folderId: string;
   messageId: string;
 }
@@ -212,6 +213,7 @@ const courrier = {
         if (
           typeof payload === 'object' &&
           payload !== null &&
+          typeof (payload as OpenMailMessagePayload).accountId === 'string' &&
           typeof (payload as OpenMailMessagePayload).folderId === 'string' &&
           typeof (payload as OpenMailMessagePayload).messageId === 'string'
         ) {

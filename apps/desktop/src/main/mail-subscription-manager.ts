@@ -11,6 +11,7 @@ import { z } from 'zod';
 import type { MailAccount, ProviderId } from '@/lib/mail-types';
 import type { AuthService } from '@/main/auth-service';
 import type { MailNotificationService } from '@/main/mail-notification-service';
+import type { MailSubscription } from '@/main/mail-provider';
 import type { MailService } from '@/main/mail-service';
 
 const subscriptionStateFileName = 'mail-subscription.json';
@@ -185,6 +186,7 @@ class MailAccountSubscription {
 
     state.subscriptionId = subscription.id;
     state.expirationDateTime = subscription.expirationDateTime;
+    await this.seedNotificationProviderState(account.id, subscription.notificationState);
     await this.saveState(state);
     if (!this.isLifecycleActive(generation)) {
       return;
@@ -391,15 +393,32 @@ class MailAccountSubscription {
       return;
     }
 
-    await this.options.mailNotificationService?.handleRemoteChange(
-      result.data.event,
-    );
     sendRemoteChangeToRenderers(result.data.event);
     state.lastEventId = result.data.event.id;
     await this.saveState(state);
 
     if (this.webSocket === socket && !this.isStopped) {
       socket.send(JSON.stringify({ type: 'ack', eventId: result.data.event.id }));
+    }
+
+    void this.options.mailNotificationService
+      ?.handleRemoteChange(result.data.event)
+      .catch((error: unknown) => {
+        console.warn('Native mail notification handling failed.', error);
+      });
+  }
+
+  private async seedNotificationProviderState(
+    accountId: string,
+    notificationState: MailSubscription['notificationState'],
+  ) {
+    try {
+      await this.options.mailNotificationService?.mergeProviderState(
+        accountId,
+        notificationState,
+      );
+    } catch (error) {
+      console.warn('Could not seed native mail notification state.', error);
     }
   }
 

@@ -84,6 +84,7 @@ export interface MailSubscription {
   id: string;
   expirationDateTime: string;
   resource?: string;
+  notificationState?: MailNotificationState;
 }
 
 export interface MailProvider extends MailSubscriptionProvider {

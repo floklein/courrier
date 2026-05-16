@@ -599,6 +599,9 @@ export class GmailClient implements MailProvider {
       expirationDateTime: data.expiration
         ? new Date(Number(data.expiration)).toISOString()
         : input.expirationDateTime,
+      notificationState: data.historyId
+        ? { gmailLastHistoryId: data.historyId }
+        : undefined,
       resource: input.account.email,
     };
   }
