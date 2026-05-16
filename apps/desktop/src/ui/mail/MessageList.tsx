@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, useEffect, useRef, useState } from 'react';
+import { MouseEvent, useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2, Search, X } from 'lucide-react';
 import { Button } from '../../components/ui/button';
@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '../../components/ui/tooltip';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
 import { cn } from '../../lib/utils';
 import { PanelStatus } from '../app/StatusViews';
@@ -72,6 +73,7 @@ export function MessageList({
 }) {
   const [isSearching, setIsSearching] = useState(Boolean(searchQuery));
   const [draftSearch, setDraftSearch] = useState(searchQuery);
+  const debouncedDraftSearch = useDebouncedValue(draftSearch, 250);
   const [contextMessage, setContextMessage] =
     useState<MailMessageSummary>();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -89,8 +91,30 @@ export function MessageList({
 
   useEffect(() => {
     setDraftSearch(searchQuery);
-    setIsSearching(Boolean(searchQuery));
+
+    if (searchQuery) {
+      setIsSearching(true);
+    }
   }, [searchQuery]);
+
+  useEffect(() => {
+    setDraftSearch('');
+    setIsSearching(false);
+  }, [folderId]);
+
+  useEffect(() => {
+    if (!isSearching) {
+      return;
+    }
+
+    const nextSearchQuery = debouncedDraftSearch.trim();
+
+    if (nextSearchQuery === searchQuery) {
+      return;
+    }
+
+    onSearch(nextSearchQuery);
+  }, [debouncedDraftSearch, isSearching, onSearch, searchQuery]);
 
   useEffect(() => {
     if (!isSearching) {
@@ -137,11 +161,6 @@ export function MessageList({
     virtualRows,
   ]);
 
-  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSearch(draftSearch.trim());
-  }
-
   function clearSearch() {
     setDraftSearch('');
     setIsSearching(false);
@@ -179,9 +198,8 @@ export function MessageList({
     >
       <header className="app-window-header app-window-controls-end-mobile flex h-16 shrink-0 items-center justify-between gap-3 border-b px-5">
         {isSearching ? (
-          <form
+          <div
             className="flex min-w-0 flex-1 items-center gap-2"
-            onSubmit={handleSearchSubmit}
           >
             <Input
               ref={searchInputRef}
@@ -207,7 +225,7 @@ export function MessageList({
               />
               <TooltipContent>Clear search</TooltipContent>
             </Tooltip>
-          </form>
+          </div>
         ) : (
           <>
             <div className="min-w-0">

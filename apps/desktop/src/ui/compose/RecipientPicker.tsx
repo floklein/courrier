@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 import { Button } from '../../components/ui/button';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type {
   MailComposeRecipient,
   MailPersonSuggestion,
@@ -331,18 +332,4 @@ function personToRecipient(person: MailPersonSuggestion): MailComposeRecipient {
 
 function getOptionId(listboxId: string, index: number) {
   return `${listboxId}-option-${index}`;
-}
-
-function useDebouncedValue(value: string, delayMs: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setDebouncedValue(value);
-    }, delayMs);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [delayMs, value]);
-
-  return debouncedValue;
 }
