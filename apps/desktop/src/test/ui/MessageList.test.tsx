@@ -1,15 +1,56 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { MailSearchScope } from '@/lib/mail-types';
+import type {
+  MailFolder,
+  MailMessageSummary,
+  MailSearchScope,
+} from '@/lib/mail-types';
 import { MessageList } from '@/ui/mail/MessageList';
+
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 104,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_item, index) => ({
+        index,
+        key: index,
+        start: index * 104,
+      })),
+    measureElement: vi.fn(),
+  }),
+}));
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>();
+
+  return {
+    ...actual,
+    Link: ({
+      children,
+      className,
+      draggable,
+    }: {
+      children: ReactNode;
+      className?: string;
+      draggable?: boolean;
+    }) => (
+      <a className={className} draggable={draggable} href="/mail/inbox/message-1">
+        {children}
+      </a>
+    ),
+  };
+});
 
 function renderMessageList(
   onSearch = vi.fn(),
   {
     onSearchScopeChange = vi.fn(),
     searchScope = 'folder' as MailSearchScope,
+    folders = [] as MailFolder[],
+    messages = [] as MailMessageSummary[],
   } = {},
 ) {
   render(
@@ -17,9 +58,9 @@ function renderMessageList(
       <MessageList
         folderId="inbox"
         folderLabel="Inbox"
-        folders={[]}
+        folders={folders}
         actionCapabilities={[]}
-        messages={[]}
+        messages={messages}
         selectedMessageId={undefined}
         isLoading={false}
         error={null}
@@ -157,4 +198,51 @@ describe('MessageList', () => {
 
     expect(onSearchScopeChange).toHaveBeenCalledWith('folder');
   });
+
+  it('uses a global search result folder for move destinations', async () => {
+    const folders = [
+      createFolder('inbox', 'Inbox'),
+      createFolder('sent', 'Sent'),
+      createFolder('archive', 'Archive'),
+    ];
+
+    renderMessageList(vi.fn(), {
+      folders,
+      messages: [
+        {
+          id: 'message-1',
+          folderId: 'sent',
+          folderLabel: 'Sent',
+          sender: { name: 'Ada', email: 'ada@example.com' },
+          recipients: [],
+          subject: 'Global result',
+          preview: 'Found outside the current folder',
+          receivedDateTime: '2026-05-16T10:00:00.000Z',
+          isRead: true,
+          hasAttachments: false,
+          importance: 'normal',
+        },
+      ],
+      searchScope: 'all',
+    });
+
+    fireEvent.contextMenu(screen.getByText('Global result'));
+    fireEvent.click(await screen.findByText('Move to'));
+
+    expect(screen.getAllByText('Inbox')).toHaveLength(2);
+    expect(screen.getByText('Archive')).toBeInTheDocument();
+    expect(screen.queryAllByText('Sent')).toHaveLength(1);
+  });
 });
+
+function createFolder(id: string, label: string): MailFolder {
+  return {
+    id,
+    label,
+    icon: 'folder',
+    unreadCount: 0,
+    totalCount: 0,
+    hasChildren: false,
+    depth: 0,
+  };
+}

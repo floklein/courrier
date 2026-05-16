@@ -161,6 +161,7 @@ describe('mail query options', () => {
       query: 'urgent',
       scope: 'folder',
       folderId: 'inbox',
+      includeSpamTrash: undefined,
       nextPageToken: undefined,
     });
     expect(bridge.mail.listPeople).toHaveBeenCalledWith('account-1', 'Ada');
@@ -192,6 +193,7 @@ describe('mail query options', () => {
       query: 'urgent',
       scope: 'all',
       folderId: 'inbox',
+      includeSpamTrash: true,
       nextPageToken: 'next-page',
     });
   });

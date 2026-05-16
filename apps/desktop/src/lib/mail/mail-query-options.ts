@@ -43,6 +43,7 @@ export function mailMessagesQueryOptions(
             query: normalizedSearch,
             scope: searchScope,
             folderId,
+            includeSpamTrash: searchScope === 'all' ? true : undefined,
             nextPageToken: pageParam,
           })
         : api.mail.listMessages(accountId, folderId, pageParam),

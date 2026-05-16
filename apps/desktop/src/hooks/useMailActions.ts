@@ -62,7 +62,7 @@ export function useMailActions({
       void navigate({
         to: '/mail/$folderId/$messageId',
         params: {
-          folderId: encodeRouteId(resolvedFolderId),
+          folderId: encodeRouteId(nextMessage.folderId || resolvedFolderId),
           messageId: encodeRouteId(nextMessage.id),
         },
         replace: true,
@@ -117,7 +117,13 @@ export function useMailActions({
           refetchType: 'none',
         }),
         queryClient.invalidateQueries({
-          queryKey: ['mail', accountId, 'message', resolvedFolderId, message.id],
+          queryKey: [
+            'mail',
+            accountId,
+            'message',
+            message.folderId || resolvedFolderId,
+            message.id,
+          ],
           refetchType: 'none',
         }),
       ]);

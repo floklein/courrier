@@ -44,6 +44,7 @@ export function AuthenticatedMailClient({
   const closeCompose = useComposeStore((state) => state.close);
   const openCompose = useComposeStore((state) => state.open);
   const manuallyMarkedUnreadMessageId = useRef<string | undefined>(undefined);
+  const previousFolderId = useRef<string | undefined>(undefined);
   const {
     currentFolder,
     folders,
@@ -126,6 +127,15 @@ export function AuthenticatedMailClient({
   ]);
 
   useEffect(() => {
+    const didChangeFolder =
+      previousFolderId.current !== undefined &&
+      previousFolderId.current !== resolvedFolderId;
+    previousFolderId.current = resolvedFolderId;
+
+    if (!didChangeFolder) {
+      return;
+    }
+
     if (searchScope === 'folder') {
       setSearchQuery('');
     }
@@ -244,7 +254,7 @@ export function AuthenticatedMailClient({
     void navigate({
       to: '/mail/$folderId/$messageId',
       params: {
-        folderId: encodeRouteId(resolvedFolderId),
+        folderId: encodeRouteId(message.folderId || resolvedFolderId),
         messageId: encodeRouteId(message.id),
       },
       replace: true,

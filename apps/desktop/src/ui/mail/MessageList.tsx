@@ -164,7 +164,7 @@ export function MessageList({
 
   useEffect(() => {
     loadMoreRequestLengthRef.current = null;
-  }, [folderId, messages.length, searchQuery]);
+  }, [folderId, messages.length, searchQuery, searchScope]);
 
   useEffect(() => {
     if (
@@ -235,9 +235,14 @@ export function MessageList({
         className,
       )}
     >
-      <header className="app-window-header app-window-controls-end-mobile flex h-16 shrink-0 items-center justify-between gap-3 border-b px-5">
+      <header
+        className={cn(
+          'app-window-header app-window-controls-end-mobile flex shrink-0 items-center justify-between gap-3 border-b px-5',
+          isSearching ? 'min-h-24 py-2' : 'h-16',
+        )}
+      >
         {isSearching ? (
-          <div className="flex min-w-0 flex-1 flex-col gap-2 py-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <Input
                 ref={searchInputRef}
@@ -380,7 +385,7 @@ export function MessageList({
           />
           {contextMessage && (
             <MailActionContextContent
-              currentFolderId={folderId}
+              currentFolderId={contextMessage.folderId || folderId}
               actionCapabilities={actionCapabilities}
               folders={folders}
               isBusy={isActionPending}

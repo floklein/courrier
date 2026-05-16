@@ -807,7 +807,8 @@ export function getValidatedGlobalMessagePageUrl(nextPageUrl?: string) {
     url.origin === graphBase.origin &&
     pathSegments[1] === 'v1.0' &&
     pathSegments[2] === 'me' &&
-    pathSegments[3] === 'messages';
+    pathSegments[3] === 'messages' &&
+    pathSegments.length === 4;
 
   if (!isExpectedMessagePage) {
     throw new Error(

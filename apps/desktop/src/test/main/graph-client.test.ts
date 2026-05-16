@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GraphClient, getValidatedMessagePageUrl } from '@/main/graph-client';
+import {
+  GraphClient,
+  getValidatedGlobalMessagePageUrl,
+  getValidatedMessagePageUrl,
+} from '@/main/graph-client';
 import type { MailAccount } from '@/lib/mail-types';
 import {
   GraphRequestError,
@@ -45,6 +49,18 @@ describe('Graph message pagination URL validation', () => {
       getValidatedMessagePageUrl(
         'inbox',
         'https://graph.microsoft.com/v1.0/me/mailFolders/archive/messages?$top=25',
+      ),
+    ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
+  });
+
+  it('accepts only the global messages collection for global search pages', () => {
+    const nextLink =
+      'https://graph.microsoft.com/v1.0/me/messages?$top=25&$skiptoken=next';
+
+    expect(getValidatedGlobalMessagePageUrl(nextLink)).toBe(nextLink);
+    expect(() =>
+      getValidatedGlobalMessagePageUrl(
+        'https://graph.microsoft.com/v1.0/me/messages/message-1/attachments',
       ),
     ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
   });
