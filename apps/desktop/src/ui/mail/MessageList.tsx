@@ -1,13 +1,20 @@
 import {
   Archive,
+  Loader2,
   MailOpen,
   MousePointer2,
+  Search,
   Trash2,
   X,
-  Search,
-  Loader2,
 } from 'lucide-react';
-import { type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Button } from '@/components/ui/button';
 import {
@@ -103,8 +110,12 @@ export function MessageList({
     () => messages.filter((message) => selectedIds.has(message.id)),
     [messages, selectedIds],
   );
+  const messageIds = useMemo(
+    () => new Set(messages.map((message) => message.id)),
+    [messages],
+  );
   const archiveFolder = folders.find((folder) => folder.wellKnownName === 'archive');
-  const hasBulkSelection = selectedIds.size > 0;
+  const hasBulkSelection = selectedMessages.length > 0;
 
   useEffect(() => {
     setDraftSearch(searchQuery);
@@ -158,6 +169,29 @@ export function MessageList({
       setContextMessage(undefined);
     }
   }, [contextMessage, messages]);
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      let changed = false;
+      const next = new Set<string>();
+
+      for (const id of current) {
+        if (messageIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+    setAnchorId((current) =>
+      current && !messageIds.has(current) ? undefined : current,
+    );
+    setActiveId((current) =>
+      current && !messageIds.has(current) ? undefined : current,
+    );
+  }, [messageIds]);
 
   useEffect(() => {
     const lastVirtualRow = virtualRows.at(-1);
@@ -433,7 +467,7 @@ export function MessageList({
         <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-muted/30 px-3 text-sm">
           <span className="flex min-w-0 flex-1 items-center gap-2 font-medium">
             <MousePointer2 className="size-4 text-muted-foreground" />
-            {selectedIds.size} selected
+            {selectedMessages.length} selected
           </span>
           <Tooltip>
             <TooltipTrigger

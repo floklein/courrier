@@ -2,27 +2,84 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { MailFolder, MailMessageSummary } from '@/lib/mail-types';
 import { MessageList } from '@/ui/mail/MessageList';
 
-function renderMessageList(onSearch = vi.fn()) {
-  render(
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  }) => (
+    <a href="#message" onClick={onClick}>
+      {children}
+    </a>
+  ),
+}));
+
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({
+    count,
+    estimateSize,
+    getItemKey,
+  }: {
+    count: number;
+    estimateSize: (index: number) => number;
+    getItemKey?: (index: number) => React.Key;
+  }) => ({
+    getTotalSize: () =>
+      Array.from({ length: count }, (_, index) => estimateSize(index)).reduce(
+        (total, size) => total + size,
+        0,
+      ),
+    getVirtualItems: () => {
+      let start = 0;
+
+      return Array.from({ length: count }, (_, index) => {
+        const size = estimateSize(index);
+        const item = {
+          index,
+          key: getItemKey?.(index) ?? index,
+          size,
+          start,
+        };
+        start += size;
+        return item;
+      });
+    },
+    measureElement: () => undefined,
+    scrollToIndex: () => undefined,
+  }),
+}));
+
+function renderMessageList({
+  folders = [],
+  isActionPending = false,
+  messages = [],
+  onDeleteMessage = vi.fn(),
+  onMoveMessage = vi.fn(),
+  onSearch = vi.fn(),
+}: Partial<MessageListProps> = {}) {
+  const result = render(
     <TooltipProvider>
       <MessageList
         folderId="inbox"
         folderLabel="Inbox"
-        folders={[]}
-        messages={[]}
+        folders={folders}
+        messages={messages}
         selectedMessageId={undefined}
         isLoading={false}
         error={null}
         hasNextPage={false}
         isFetchingNextPage={false}
-        isActionPending={false}
+        isActionPending={isActionPending}
         onLoadMore={vi.fn()}
-        onDeleteMessage={vi.fn()}
+        onDeleteMessage={onDeleteMessage}
         onDragActiveChange={vi.fn()}
         onMarkMessageReadState={vi.fn()}
-        onMoveMessage={vi.fn()}
+        onMoveMessage={onMoveMessage}
         onReplyToMessage={vi.fn()}
         onSearch={onSearch}
         searchQuery=""
@@ -30,7 +87,7 @@ function renderMessageList(onSearch = vi.fn()) {
     </TooltipProvider>,
   );
 
-  return { onSearch };
+  return { ...result, onDeleteMessage, onMoveMessage, onSearch };
 }
 
 function renderControlledMessageList(onSearch = vi.fn()) {
@@ -122,4 +179,109 @@ describe('MessageList', () => {
     expect(screen.getByLabelText('Search Inbox')).toBeInTheDocument();
     vi.useRealTimers();
   });
+
+  it('drops bulk selection when selected messages leave the current list', () => {
+    const { rerender } = renderMessageList({
+      messages: [message({ id: 'message-1' }), message({ id: 'message-2' })],
+    });
+
+    fireEvent.click(screen.getByText('Subject message-1').closest('a')!, {
+      ctrlKey: true,
+    });
+
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+    rerender(
+      <TooltipProvider>
+        <MessageList
+          folderId="inbox"
+          folderLabel="Inbox"
+          folders={[]}
+          messages={[message({ id: 'message-2' })]}
+          selectedMessageId={undefined}
+          isLoading={false}
+          error={null}
+          hasNextPage={false}
+          isFetchingNextPage={false}
+          isActionPending={false}
+          onLoadMore={vi.fn()}
+          onDeleteMessage={vi.fn()}
+          onDragActiveChange={vi.fn()}
+          onMarkMessageReadState={vi.fn()}
+          onMoveMessage={vi.fn()}
+          onReplyToMessage={vi.fn()}
+          onSearch={vi.fn()}
+          searchQuery=""
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
+  });
+
+  it('archives only messages still present in the current bulk selection', () => {
+    const onMoveMessage = vi.fn();
+    renderMessageList({
+      folders: [folder({ id: 'archive', wellKnownName: 'archive' })],
+      messages: [message({ id: 'message-1' }), message({ id: 'message-2' })],
+      onMoveMessage,
+    });
+
+    fireEvent.click(screen.getByText('Subject message-1').closest('a')!, {
+      ctrlKey: true,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Archive selected' }));
+
+    expect(onMoveMessage).toHaveBeenCalledTimes(1);
+    expect(onMoveMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'message-1' }),
+      'archive',
+    );
+    expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
+  });
 });
+
+type MessageListProps = React.ComponentProps<typeof MessageList>;
+
+function message({
+  id,
+  folderId = 'inbox',
+}: {
+  id: string;
+  folderId?: string;
+}): MailMessageSummary {
+  return {
+    id,
+    folderId,
+    sender: {
+      name: `Sender ${id}`,
+      email: `${id}@example.com`,
+    },
+    recipients: [],
+    subject: `Subject ${id}`,
+    preview: `Preview ${id}`,
+    receivedDateTime: '2026-05-16T10:00:00.000Z',
+    isRead: false,
+    hasAttachments: false,
+    importance: 'normal',
+  };
+}
+
+function folder({
+  id,
+  wellKnownName,
+}: {
+  id: string;
+  wellKnownName?: string;
+}): MailFolder {
+  return {
+    id,
+    label: id,
+    icon: 'folder',
+    unreadCount: 0,
+    totalCount: 0,
+    wellKnownName,
+    hasChildren: false,
+    depth: 0,
+  };
+}
