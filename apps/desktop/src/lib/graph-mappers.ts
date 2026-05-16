@@ -28,6 +28,8 @@ export interface GraphMessage {
   id?: string | null;
   subject?: string | null;
   bodyPreview?: string | null;
+  createdDateTime?: string | null;
+  lastModifiedDateTime?: string | null;
   receivedDateTime?: string | null;
   isRead?: boolean | null;
   hasAttachments?: boolean | null;

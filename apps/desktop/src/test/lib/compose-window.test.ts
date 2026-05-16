@@ -8,6 +8,7 @@ describe('compose window draft schema', () => {
   it('accepts the empty draft shape used by new compose windows', () => {
     expect(emptyComposeWindowDraft).toEqual({
       accountId: '',
+      kind: 'new',
       toValue: '',
       subject: '',
       attachments: [],

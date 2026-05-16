@@ -6,12 +6,14 @@ import { assertTrustedSender, type AppUrlTrustPolicy } from '@/main/security';
 import type {
   ReplyToMessageInput,
   SendMailInput,
+  MailDraftSaveInput,
 } from '@/lib/mail-types';
 import {
   ipcIdSchema,
   mailPageTokenSchema,
   mailPeopleQuerySchema,
   mailSearchQuerySchema,
+  mailDraftSaveInputSchema,
   providerIdSchema,
   replyToMessageInputSchema,
   sendMailInputSchema,
@@ -139,6 +141,38 @@ export function registerIpcHandlers(
     return mailService.listPeople(
       parseIpcPayload(ipcIdSchema, accountId),
       parseIpcPayload(mailPeopleQuerySchema, query),
+    );
+  });
+  ipcMain.handle('draft:list', (event, accountId: string) => {
+    assertSender(event);
+    return mailService.listDrafts(parseIpcPayload(ipcIdSchema, accountId));
+  });
+  ipcMain.handle('draft:get', (event, accountId: string, providerDraftId: string) => {
+    assertSender(event);
+    return mailService.getDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(ipcIdSchema, providerDraftId),
+    );
+  });
+  ipcMain.handle('draft:save', (event, accountId: string, input: MailDraftSaveInput) => {
+    assertSender(event);
+    return mailService.saveDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(mailDraftSaveInputSchema, input),
+    );
+  });
+  ipcMain.handle('draft:delete', (event, accountId: string, providerDraftId: string) => {
+    assertSender(event);
+    return mailService.deleteDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(ipcIdSchema, providerDraftId),
+    );
+  });
+  ipcMain.handle('draft:send', (event, accountId: string, providerDraftId: string) => {
+    assertSender(event);
+    return mailService.sendDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(ipcIdSchema, providerDraftId),
     );
   });
   ipcMain.handle('mail:send-message', (event, accountId: string, input: SendMailInput) => {

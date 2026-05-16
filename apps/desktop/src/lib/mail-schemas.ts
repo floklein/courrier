@@ -20,6 +20,7 @@ export const localMailAttachmentSchema = z.object({
   name: z.string().min(1).max(512),
   contentType: z.string().max(255),
   size: z.number().int().nonnegative().max(150 * 1024 * 1024),
+  providerAttachmentId: z.string().min(1).max(2048).optional(),
 });
 
 export const sendMailInputSchema = z.object({
@@ -32,5 +33,24 @@ export const sendMailInputSchema = z.object({
 export const replyToMessageInputSchema = z.object({
   messageId: ipcIdSchema,
   bodyHtml: z.string().min(1).max(5_000_000),
+  attachments: z.array(localMailAttachmentSchema).max(100).optional(),
+});
+
+export const mailDraftSaveInputSchema = z.object({
+  providerDraftId: ipcIdSchema.optional(),
+  providerDraftMessageId: ipcIdSchema.optional(),
+  kind: z.enum(['new', 'reply', 'replyAll', 'forward']),
+  relatedMessageId: ipcIdSchema.optional(),
+  toRecipients: z.array(mailComposeRecipientSchema).max(500),
+  toValue: z.string().max(10_000),
+  ccValue: z.string().max(10_000).optional(),
+  bccValue: z.string().max(10_000).optional(),
+  subject: z.string().max(998),
+  bodyHtml: z.string().max(5_000_000),
+  editorValue: z.object({
+    html: z.string().max(5_000_000),
+    text: z.string().max(1_000_000),
+    isEmpty: z.boolean(),
+  }),
   attachments: z.array(localMailAttachmentSchema).max(100).optional(),
 });

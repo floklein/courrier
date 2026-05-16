@@ -23,6 +23,13 @@ export const api = {
     replyToMessage: window.courrier.mail.replyToMessage,
     onRemoteChange: window.courrier.mail.onRemoteChange,
   },
+  drafts: {
+    list: window.courrier.drafts.list,
+    get: window.courrier.drafts.get,
+    save: window.courrier.drafts.save,
+    delete: window.courrier.drafts.delete,
+    send: window.courrier.drafts.send,
+  },
   window: {
     closeCurrent: () => window.courrier.window.closeCurrent(),
     getComposeDraft: () => window.courrier.window.getComposeDraft(),

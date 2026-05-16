@@ -3,6 +3,9 @@ import type {
   AuthSession,
   LocalMailAttachment,
   MailFolder,
+  MailDraftDetail,
+  MailDraftSaveInput,
+  MailDraftSummary,
   MailMessageDetail,
   MailPersonSuggestion,
   PagedMessages,
@@ -134,6 +137,22 @@ const courrier = {
         ipcRenderer.removeListener('mail:remote-change', handler);
       };
     },
+  },
+  drafts: {
+    list: (accountId: string) =>
+      ipcRenderer.invoke('draft:list', accountId) as Promise<MailDraftSummary[]>,
+    get: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke(
+        'draft:get',
+        accountId,
+        providerDraftId,
+      ) as Promise<MailDraftDetail>,
+    save: (accountId: string, input: MailDraftSaveInput) =>
+      ipcRenderer.invoke('draft:save', accountId, input) as Promise<MailDraftDetail>,
+    delete: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke('draft:delete', accountId, providerDraftId) as Promise<void>,
+    send: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke('draft:send', accountId, providerDraftId) as Promise<void>,
   },
   window: {
     closeCurrent: () => ipcRenderer.invoke('window:close-current') as Promise<void>,

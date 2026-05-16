@@ -10,7 +10,13 @@ export interface ComposeEditorValue {
 
 export interface ComposeWindowDraft {
   accountId: string;
+  providerDraftId?: string;
+  providerDraftMessageId?: string;
+  kind?: 'new' | 'reply' | 'replyAll' | 'forward';
+  relatedMessageId?: string;
   toValue: string;
+  ccValue?: string;
+  bccValue?: string;
   subject: string;
   editorValue: ComposeEditorValue;
   attachments?: LocalMailAttachment[];
@@ -18,6 +24,7 @@ export interface ComposeWindowDraft {
 
 export const emptyComposeWindowDraft: ComposeWindowDraft = {
   accountId: '',
+  kind: 'new',
   toValue: '',
   subject: '',
   editorValue: {
@@ -36,7 +43,13 @@ export const composeEditorValueSchema = z.object({
 
 export const composeWindowDraftSchema = z.object({
   accountId: z.string().min(1).max(2048),
+  providerDraftId: z.string().min(1).max(2048).optional(),
+  providerDraftMessageId: z.string().min(1).max(2048).optional(),
+  kind: z.enum(['new', 'reply', 'replyAll', 'forward']).optional(),
+  relatedMessageId: z.string().min(1).max(2048).optional(),
   toValue: z.string().max(10_000),
+  ccValue: z.string().max(10_000).optional(),
+  bccValue: z.string().max(10_000).optional(),
   subject: z.string().max(998),
   editorValue: composeEditorValueSchema,
   attachments: z.array(localMailAttachmentSchema).max(100).optional(),

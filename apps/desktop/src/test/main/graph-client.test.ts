@@ -356,6 +356,46 @@ describe('GraphClient write requests', () => {
     });
     expect(isGraphItemNotFoundError(error)).toBe(true);
   });
+
+  it('creates, updates, and sends Microsoft Graph provider drafts', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'draft-1' }),
+      new Response(null, { status: 204 }),
+      jsonResponse({
+        id: 'draft-1',
+        subject: 'Hello',
+        bodyPreview: 'Hello',
+        body: { contentType: 'html', content: '<p>Hello</p>' },
+        toRecipients: [
+          { emailAddress: { address: 'ada@example.com' } },
+        ],
+        createdDateTime: '2026-05-16T10:00:00.000Z',
+        lastModifiedDateTime: '2026-05-16T10:00:01.000Z',
+      }),
+      new Response(null, { status: 202 }),
+    );
+    const client = createGraphClient();
+
+    const draft = await client.createDraft(account.id, {
+      kind: 'new',
+      toRecipients: [{ email: 'ada@example.com' }],
+      toValue: 'ada@example.com',
+      subject: 'Hello',
+      bodyHtml: '<p>Hello</p>',
+      editorValue: { html: '<p>Hello</p>', text: 'Hello', isEmpty: false },
+      attachments: [],
+    });
+    await client.sendDraft(account.id, draft.providerDraftId);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${graphBaseUrl}/me/messages`);
+    expect(fetchMock.mock.calls[1][0]).toBe(`${graphBaseUrl}/me/messages/draft-1`);
+    expect(fetchMock.mock.calls[3][0]).toBe(`${graphBaseUrl}/me/messages/draft-1/send`);
+    expect(draft).toMatchObject({
+      providerDraftId: 'draft-1',
+      toValue: 'ada@example.com',
+      subject: 'Hello',
+    });
+  });
 });
 
 function createGraphClient() {

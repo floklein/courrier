@@ -3,6 +3,9 @@ import type {
   MailFolder,
   MailMessageDetail,
   MailPersonSuggestion,
+  MailDraftDetail,
+  MailDraftSaveInput,
+  MailDraftSummary,
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
@@ -39,6 +42,10 @@ export interface ProviderSendMailInput extends Omit<SendMailInput, 'attachments'
 
 export interface ProviderReplyToMessageInput extends Omit<ReplyToMessageInput, 'attachments'> {
   attachments?: LocalAttachmentFile[];
+}
+
+export interface ProviderDraftSaveInput extends Omit<MailDraftSaveInput, 'attachments'> {
+  attachments?: Array<LocalAttachmentFile | NonNullable<MailDraftSaveInput['attachments']>[number]>;
 }
 
 export interface DownloadedMailAttachment {
@@ -98,6 +105,19 @@ export interface MailProvider extends MailSubscriptionProvider {
     messageId: string,
   ): Promise<MailMessageDetail | undefined>;
   listPeople(accountId: string, query?: string): Promise<MailPersonSuggestion[]>;
+  listDrafts(accountId: string): Promise<MailDraftSummary[]>;
+  getDraft(accountId: string, providerDraftId: string): Promise<MailDraftDetail>;
+  createDraft(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail>;
+  updateDraft(
+    accountId: string,
+    providerDraftId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail>;
+  deleteDraft(accountId: string, providerDraftId: string): Promise<void>;
+  sendDraft(accountId: string, providerDraftId: string): Promise<void>;
   sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void>;
   replyToMessage(accountId: string, input: ProviderReplyToMessageInput): Promise<void>;
   downloadAttachment(

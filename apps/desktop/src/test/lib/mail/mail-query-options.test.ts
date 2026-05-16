@@ -30,6 +30,13 @@ function installCourrierApi() {
     replyToMessage: vi.fn(),
     onRemoteChange: vi.fn(),
   };
+  const drafts = {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
+    save: vi.fn(),
+    delete: vi.fn(),
+    send: vi.fn(),
+  };
   const windowApi = {
     closeCurrent: vi.fn(),
     getComposeDraft: vi.fn(),
@@ -38,7 +45,7 @@ function installCourrierApi() {
 
   Object.defineProperty(window, 'courrier', {
     configurable: true,
-    value: { attachments, auth, mail, window: windowApi },
+    value: { attachments, auth, drafts, mail, window: windowApi },
   });
 
   return { auth, mail };

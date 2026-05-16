@@ -11,6 +11,8 @@ import {
 import type {
   MailAccount,
   MailFolder,
+  MailDraftDetail,
+  MailDraftSummary,
   MailMessageDetail,
   MailPersonSuggestion,
   PagedMessages,
@@ -25,6 +27,7 @@ import type {
   MailProvider,
   MailSubscription,
   MoveMessageInput,
+  ProviderDraftSaveInput,
   ProviderReplyToMessageInput,
   ProviderSendMailInput,
   RenewSubscriptionInput,
@@ -182,6 +185,93 @@ export class GraphClient implements MailProvider {
     );
 
     return mapPeopleSuggestions(data.value ?? []);
+  }
+
+  async listDrafts(accountId: string): Promise<MailDraftSummary[]> {
+    const data = await this.fetchGraph<GraphCollection<GraphMessageDetail>>(
+      accountId,
+      `${graphBaseUrl}/me/mailFolders/drafts/messages?$top=25&$select=id,subject,bodyPreview,createdDateTime,lastModifiedDateTime,body,toRecipients,hasAttachments&$expand=attachments($select=id,name,contentType,size,isInline,@odata.type)`,
+    );
+
+    return (data.value ?? [])
+      .filter((message) => Boolean(message.id))
+      .map((message) => mapGraphDraft(accountId, message));
+  }
+
+  async getDraft(
+    accountId: string,
+    providerDraftId: string,
+  ): Promise<MailDraftDetail> {
+    const message = await this.fetchGraph<GraphMessageDetail>(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(
+        providerDraftId,
+      )}?$select=id,subject,bodyPreview,createdDateTime,lastModifiedDateTime,body,toRecipients,hasAttachments&$expand=attachments($select=id,name,contentType,size,isInline,@odata.type)`,
+    );
+
+    return mapGraphDraft(accountId, message);
+  }
+
+  async createDraft(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    const draft =
+      input.kind === 'reply' || input.kind === 'replyAll' || input.kind === 'forward'
+        ? await this.createResponseDraft(accountId, input)
+        : await this.fetchGraph<GraphMessageDetail>(
+            accountId,
+            `${graphBaseUrl}/me/messages`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(graphDraftPayload(input)),
+            },
+          );
+
+    if (!draft.id) {
+      throw new Error('Microsoft Graph did not return a draft ID.');
+    }
+
+    return this.updateDraft(accountId, draft.id, input);
+  }
+
+  async updateDraft(
+    accountId: string,
+    providerDraftId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    await this.fetchGraph(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(providerDraftId)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(graphDraftPayload(input)),
+      },
+    );
+    await this.addAttachmentsToDraft(
+      accountId,
+      providerDraftId,
+      (input.attachments ?? []).filter(isLocalAttachmentFile),
+    );
+    return this.getDraft(accountId, providerDraftId);
+  }
+
+  async deleteDraft(accountId: string, providerDraftId: string): Promise<void> {
+    await this.fetchGraph(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(providerDraftId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async sendDraft(accountId: string, providerDraftId: string): Promise<void> {
+    await this.fetchGraph(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(providerDraftId)}/send`,
+      { method: 'POST' },
+    );
   }
 
   async sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void> {
@@ -583,12 +673,29 @@ export class GraphClient implements MailProvider {
     }
   }
 
-  private async sendDraft(accountId: string, draftId: string) {
-    await this.fetchGraph(
+  private async createResponseDraft(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ) {
+    if (!input.relatedMessageId) {
+      throw new Error('Response drafts require a related message ID.');
+    }
+
+    const action =
+      input.kind === 'replyAll'
+        ? 'createReplyAll'
+        : input.kind === 'forward'
+          ? 'createForward'
+          : 'createReply';
+
+    return this.fetchGraph<GraphMessageDetail>(
       accountId,
-      `${graphBaseUrl}/me/messages/${encodeURIComponent(draftId)}/send`,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(
+        input.relatedMessageId,
+      )}/${action}`,
       {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       },
     );
   }
@@ -607,6 +714,70 @@ function isMicrosoftGraphUrl(rawUrl: string) {
   } catch {
     return false;
   }
+}
+
+function graphDraftPayload(input: ProviderDraftSaveInput) {
+  return {
+    subject: input.subject,
+    body: {
+      contentType: 'HTML',
+      content: input.bodyHtml,
+    },
+    toRecipients: input.toRecipients.map(formatGraphRecipient),
+  };
+}
+
+function mapGraphDraft(
+  accountId: string,
+  message: GraphMessageDetail,
+): MailDraftDetail {
+  const bodyHtml = message.body?.content ?? '';
+
+  return {
+    providerDraftId: message.id ?? '',
+    providerDraftMessageId: message.id ?? '',
+    accountId,
+    kind: 'new',
+    toValue: (message.toRecipients ?? [])
+      .map((recipient) => recipient.emailAddress?.address)
+      .filter(Boolean)
+      .join(', '),
+    subject: message.subject ?? '',
+    editorValue: {
+      html: bodyHtml,
+      text: message.bodyPreview ?? '',
+      isEmpty: !bodyHtml && !message.bodyPreview,
+    },
+    attachments: (message.attachments ?? [])
+      .filter(isGraphFileAttachment)
+      .filter((attachment) => attachment.id && !attachment.isInline)
+      .map((attachment) => ({
+        id: attachment.id ?? '',
+        providerAttachmentId: attachment.id ?? '',
+        name: attachment.name ?? 'attachment',
+        contentType: attachment.contentType ?? 'application/octet-stream',
+        size: attachment.size ?? 0,
+      })),
+    createdAt: message.createdDateTime ?? message.receivedDateTime ?? '',
+    updatedAt:
+      message.lastModifiedDateTime ??
+      message.createdDateTime ??
+      message.receivedDateTime ??
+      '',
+  };
+}
+
+function isGraphFileAttachment(attachment: GraphAttachment) {
+  return attachment['@odata.type'] === '#microsoft.graph.fileAttachment';
+}
+
+function isLocalAttachmentFile(
+  attachment: NonNullable<ProviderDraftSaveInput['attachments']>[number],
+): attachment is Extract<
+  NonNullable<ProviderDraftSaveInput['attachments']>[number],
+  { path: string }
+> {
+  return 'path' in attachment;
 }
 
 function createGraphRequestError(status: number, body: string) {

@@ -80,21 +80,46 @@ export function MailComposer({
   const [attachments, setAttachments] = useState<LocalMailAttachment[]>(
     initialDraft?.attachments ?? [],
   );
+  const [providerDraftId, setProviderDraftId] = useState(
+    initialDraft?.providerDraftId,
+  );
+  const [providerDraftMessageId, setProviderDraftMessageId] = useState(
+    initialDraft?.providerDraftMessageId,
+  );
   const [editorValue, setEditorValue] = useState<RichTextMailEditorValue>({
     ...(initialDraft?.editorValue ?? emptyComposeWindowDraft.editorValue),
   });
   const [validationMessage, setValidationMessage] = useState('');
+  const [autosaveStatus, setAutosaveStatus] = useState<
+    'idle' | 'saving' | 'saved' | 'failed'
+  >('idle');
+  const [isSendingDraft, setIsSendingDraft] = useState(false);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const isReply = mode === 'reply';
   const currentDraft = useMemo<ComposeWindowDraft>(
     () => ({
       accountId,
+      providerDraftId,
+      providerDraftMessageId,
+      kind: isReply ? 'reply' : 'new',
+      relatedMessageId: replyMessage?.id,
       toValue: serializeRecipients(toRecipients, toInputValue),
       subject,
       editorValue,
       attachments,
     }),
-    [accountId, attachments, editorValue, subject, toInputValue, toRecipients],
+    [
+      accountId,
+      attachments,
+      editorValue,
+      isReply,
+      providerDraftId,
+      providerDraftMessageId,
+      replyMessage?.id,
+      subject,
+      toInputValue,
+      toRecipients,
+    ],
   );
   const hasBody = editorValue.text.trim().length > 0 && !editorValue.isEmpty;
   const isDirty =
@@ -110,6 +135,18 @@ export function MailComposer({
 
     onDraftChange?.(currentDraft);
   }, [currentDraft, isReply, onDraftChange]);
+
+  useEffect(() => {
+    if (!isDirty || !accountId || isSending || isSendingDraft) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void saveDraft();
+    }, 750);
+
+    return () => window.clearTimeout(timeout);
+  }, [accountId, currentDraft, isDirty, isSending, isSendingDraft]);
 
   useEffect(() => {
     const element = formRef.current;
@@ -130,7 +167,7 @@ export function MailComposer({
     });
   }, [isSending]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setValidationMessage('');
 
@@ -147,11 +184,12 @@ export function MailComposer({
         return;
       }
 
-      onReply({
-        messageId: replyMessage.id,
-        bodyHtml,
-        attachments,
-      });
+      if (providerDraftId) {
+        await sendProviderDraft();
+        return;
+      }
+
+      onReply({ messageId: replyMessage.id, bodyHtml, attachments });
       return;
     }
 
@@ -172,12 +210,68 @@ export function MailComposer({
       return;
     }
 
-    onSend({
-      toRecipients: recipients,
-      subject: subject.trim(),
-      bodyHtml,
-      attachments,
-    });
+    if (providerDraftId) {
+      await sendProviderDraft();
+      return;
+    }
+
+    onSend({ toRecipients: recipients, subject: subject.trim(), bodyHtml, attachments });
+  }
+
+  async function saveDraft() {
+    if (!isDirty || !accountId) {
+      return undefined;
+    }
+
+    setAutosaveStatus('saving');
+
+    try {
+      const pendingRecipients = parseRecipients(toInputValue);
+      const savedDraft = await api.drafts.save(accountId, {
+        providerDraftId,
+        providerDraftMessageId,
+        kind: isReply ? 'reply' : 'new',
+        relatedMessageId: replyMessage?.id,
+        toRecipients: dedupeRecipients([
+          ...toRecipients,
+          ...pendingRecipients.valid,
+        ]),
+        toValue: currentDraft.toValue,
+        subject: subject.trim(),
+        bodyHtml: sanitizeOutgoingMailHtml(editorValue.html),
+        editorValue,
+        attachments,
+      });
+
+      setProviderDraftId(savedDraft.providerDraftId);
+      setProviderDraftMessageId(savedDraft.providerDraftMessageId);
+      setAttachments(savedDraft.attachments);
+      setAutosaveStatus('saved');
+      return savedDraft;
+    } catch {
+      setAutosaveStatus('failed');
+      return undefined;
+    }
+  }
+
+  async function sendProviderDraft() {
+    const savedDraft = await saveDraft();
+
+    if (!savedDraft?.providerDraftId) {
+      setValidationMessage('Autosave failed. Keep the composer open and try again.');
+      return;
+    }
+
+    setIsSendingDraft(true);
+
+    try {
+      await api.drafts.send(accountId, savedDraft.providerDraftId);
+      onClose();
+    } catch (error) {
+      setValidationMessage(getErrorMessage(error));
+    } finally {
+      setIsSendingDraft(false);
+    }
   }
 
   async function addPickedAttachments() {
@@ -217,11 +311,18 @@ export function MailComposer({
     );
   }
 
-  function handleClose() {
-    if (
-      isDirty &&
-      !window.confirm('Discard this unsent message?')
-    ) {
+  async function handleClose() {
+    if (isDirty && !providerDraftId) {
+      const savedDraft = await saveDraft();
+
+      if (!savedDraft && !window.confirm('Autosave failed. Discard this unsent message?')) {
+        return;
+      }
+    }
+
+    if (isDirty && providerDraftId && window.confirm('Discard this saved draft?')) {
+      await api.drafts.delete(accountId, providerDraftId);
+      onClose();
       return;
     }
 
@@ -239,8 +340,9 @@ export function MailComposer({
     >
       <MailComposerHeader
         currentDraft={currentDraft}
+        autosaveStatus={autosaveStatus}
         isReply={isReply}
-        isSending={isSending}
+        isSending={isSending || isSendingDraft}
         replyMessage={replyMessage}
         useWindowHeader={useWindowHeader}
         onClose={handleClose}
@@ -263,7 +365,7 @@ export function MailComposer({
                 id={toInputId}
                 value={toRecipients}
                 inputValue={toInputValue}
-                disabled={isSending}
+                disabled={isSending || isSendingDraft}
                 invalid={validationMessage.startsWith('Check recipient')}
                 onChange={setToRecipients}
                 onInputChange={setToInputValue}
@@ -297,7 +399,7 @@ export function MailComposer({
           <RichTextMailEditor
             id={bodyInputId}
             className="flex-1"
-            disabled={isSending}
+            disabled={isSending || isSendingDraft}
             initialValue={initialDraft?.editorValue}
             onPickAttachments={() => void addPickedAttachments()}
             placeholder={isReply ? 'Write a reply' : 'Write a message'}
@@ -325,7 +427,7 @@ export function MailComposer({
                         variant="ghost"
                         size="icon-xs"
                         aria-label={`Remove ${attachment.name}`}
-                        disabled={isSending}
+                        disabled={isSending || isSendingDraft}
                         onClick={() => removeAttachment(attachment.id)}
                       >
                         <X data-icon="inline-start" />
@@ -350,14 +452,14 @@ export function MailComposer({
         <Button
           type="button"
           variant="ghost"
-          disabled={isSending}
+          disabled={isSending || isSendingDraft}
           onClick={handleClose}
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isSending}>
+        <Button type="submit" disabled={isSending || isSendingDraft}>
           <Send data-icon="inline-start" />
-          {isSending ? 'Sending...' : 'Send'}
+          {isSending || isSendingDraft ? 'Sending...' : 'Send'}
         </Button>
       </div>
 
@@ -404,4 +506,8 @@ function getAttachmentErrorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
     : 'Could not add attachment.';
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Could not send draft.';
 }

@@ -178,6 +178,55 @@ describe('GmailClient', () => {
     });
     expect(attachment.content).toHaveLength(0);
   });
+
+  it('creates and sends Gmail provider drafts', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        id: 'draft-1',
+        message: {
+          id: 'message-1',
+          snippet: 'Hello',
+          payload: {
+            headers: [
+              { name: 'To', value: 'ada@example.com' },
+              { name: 'Subject', value: 'Hello' },
+              { name: 'Date', value: 'Sat, 16 May 2026 10:00:00 +0000' },
+            ],
+            body: {
+              data: Buffer.from('<p>Hello</p>').toString('base64url'),
+            },
+            mimeType: 'text/html',
+          },
+        },
+      }),
+      jsonResponse({ id: 'sent-1' }),
+    );
+    const client = createGmailClient();
+
+    const draft = await client.createDraft(accountId, {
+      kind: 'new',
+      toRecipients: [{ email: 'ada@example.com' }],
+      toValue: 'ada@example.com',
+      subject: 'Hello',
+      bodyHtml: '<p>Hello</p>',
+      editorValue: { html: '<p>Hello</p>', text: 'Hello', isEmpty: false },
+      attachments: [],
+    });
+    await client.sendDraft(accountId, draft.providerDraftId);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/drafts',
+    );
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/drafts/send',
+    );
+    expect(draft).toMatchObject({
+      providerDraftId: 'draft-1',
+      providerDraftMessageId: 'message-1',
+      toValue: 'ada@example.com',
+      subject: 'Hello',
+    });
+  });
 });
 
 function createGmailClient() {

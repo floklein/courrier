@@ -2,6 +2,8 @@ import type {
   MailAccount,
   MailAddress,
   MailAttachment,
+  MailDraftDetail,
+  MailDraftSummary,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
@@ -15,6 +17,7 @@ import type {
   MailProvider,
   MailSubscription,
   MoveMessageInput,
+  ProviderDraftSaveInput,
   ProviderReplyToMessageInput,
   ProviderSendMailInput,
   RenewSubscriptionInput,
@@ -56,6 +59,21 @@ interface GmailMessageListItem {
 interface GmailListMessagesResponse {
   messages?: GmailMessageListItem[];
   nextPageToken?: string;
+}
+
+interface GmailDraftListItem {
+  id?: string;
+  message?: GmailMessageListItem;
+}
+
+interface GmailListDraftsResponse {
+  drafts?: GmailDraftListItem[];
+  nextPageToken?: string;
+}
+
+interface GmailDraft {
+  id?: string;
+  message?: GmailMessage;
 }
 
 interface GmailHeader {
@@ -249,6 +267,88 @@ export class GmailClient implements MailProvider {
     );
 
     return mapPeopleSuggestions(data);
+  }
+
+  async listDrafts(accountId: string): Promise<MailDraftSummary[]> {
+    const data = await this.fetchGmail<GmailListDraftsResponse>(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts?maxResults=25`,
+    );
+    const drafts = await Promise.all(
+      (data.drafts ?? [])
+        .filter((draft) => draft.id)
+        .map((draft) => this.getDraft(accountId, draft.id ?? '')),
+    );
+
+    return drafts;
+  }
+
+  async getDraft(
+    accountId: string,
+    providerDraftId: string,
+  ): Promise<MailDraftDetail> {
+    const draft = await this.fetchGmail<GmailDraft>(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts/${encodeURIComponent(providerDraftId)}?format=full`,
+    );
+
+    return mapGmailDraft(accountId, draft);
+  }
+
+  async createDraft(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    const draft = await this.fetchGmail<GmailDraft>(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: await createGmailDraftMessage(input),
+        }),
+      },
+    );
+
+    return mapGmailDraft(accountId, draft);
+  }
+
+  async updateDraft(
+    accountId: string,
+    providerDraftId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    const draft = await this.fetchGmail<GmailDraft>(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts/${encodeURIComponent(providerDraftId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: providerDraftId,
+          message: await createGmailDraftMessage(input),
+        }),
+      },
+    );
+
+    return mapGmailDraft(accountId, draft);
+  }
+
+  async deleteDraft(accountId: string, providerDraftId: string): Promise<void> {
+    await this.fetchGmail(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts/${encodeURIComponent(providerDraftId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async sendDraft(accountId: string, providerDraftId: string): Promise<void> {
+    await this.fetchGmail(accountId, `${gmailBaseUrl}/users/me/drafts/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: providerDraftId }),
+    });
   }
 
   async sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void> {
@@ -558,6 +658,58 @@ function mapGmailMessageDetail(
     bodyContent: body.content,
     attachments: collectAttachments(message.payload),
   };
+}
+
+async function createGmailDraftMessage(input: ProviderDraftSaveInput) {
+  return {
+    raw: await createRawMail({
+      attachments: (input.attachments ?? []).filter(isLocalAttachmentFile),
+      bodyHtml: input.bodyHtml,
+      subject: input.subject,
+      toRecipients: input.toRecipients,
+    }),
+    ...(input.providerDraftMessageId
+      ? { id: input.providerDraftMessageId }
+      : {}),
+  };
+}
+
+function mapGmailDraft(accountId: string, draft: GmailDraft): MailDraftDetail {
+  const message = draft.message ?? {};
+  const headers = getHeaderMap(message.payload?.headers);
+  const body = extractBody(message.payload);
+
+  return {
+    providerDraftId: draft.id ?? '',
+    providerDraftMessageId: message.id,
+    accountId,
+    kind: 'new',
+    toValue: headers.get('to') ?? '',
+    subject: headers.get('subject') ?? '',
+    editorValue: {
+      html: body.contentType === 'html' ? body.content : '',
+      text: message.snippet ?? '',
+      isEmpty: !body.content && !message.snippet,
+    },
+    attachments: collectAttachments(message.payload).map((attachment) => ({
+      id: attachment.id,
+      providerAttachmentId: attachment.id,
+      name: attachment.name,
+      contentType: attachment.contentType,
+      size: attachment.size,
+    })),
+    createdAt: mapGmailDate(message, headers),
+    updatedAt: mapGmailDate(message, headers),
+  };
+}
+
+function isLocalAttachmentFile(
+  attachment: NonNullable<ProviderDraftSaveInput['attachments']>[number],
+): attachment is Extract<
+  NonNullable<ProviderDraftSaveInput['attachments']>[number],
+  { path: string }
+> {
+  return 'path' in attachment;
 }
 
 function getGmailDisplayName(id: string, name: string | undefined) {
