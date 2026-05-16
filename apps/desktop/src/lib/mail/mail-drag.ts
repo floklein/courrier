@@ -5,7 +5,9 @@ export const mailMessageDragType = 'courrier-mail-message';
 export interface MailMessageDragData {
   type: typeof mailMessageDragType;
   message: MailMessageSummary;
+  messages?: MailMessageSummary[];
   sourceFolderId: string;
+  primaryMessageId?: string;
 }
 
 export function isMailMessageDragData(
@@ -21,6 +23,10 @@ export function isMailMessageDragData(
     candidate.type === mailMessageDragType &&
     typeof candidate.sourceFolderId === 'string' &&
     typeof candidate.message === 'object' &&
-    candidate.message !== null
+    candidate.message !== null &&
+    (
+      candidate.messages === undefined ||
+      Array.isArray(candidate.messages)
+    )
   );
 }

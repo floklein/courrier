@@ -1,8 +1,8 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { disableNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/disable-native-drag-preview';
 import { Link } from '@tanstack/react-router';
-import { Paperclip } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Paperclip } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { mailMessageDragType } from '@/lib/mail/mail-drag';
 import { formatMailDate } from '@/lib/mail/mail-utils';
@@ -16,19 +16,29 @@ export function MessageListItem({
   folderId,
   isSelected,
   isActionPending,
+  isBulkSelected,
+  dragMessages,
   message,
   onDragActiveChange,
+  onMessageClick,
 }: {
   folderId: string;
   isSelected: boolean;
   isActionPending: boolean;
+  isBulkSelected: boolean;
+  dragMessages: MailMessageSummary[];
   message: MailMessageSummary;
   onDragActiveChange: (isActive: boolean) => void;
+  onMessageClick: (
+    event: MouseEvent<HTMLAnchorElement>,
+    message: MailMessageSummary,
+  ) => void;
 }) {
   const dragRef = useRef<HTMLDivElement>(null);
   const isActionPendingRef = useRef(isActionPending);
   const folderIdRef = useRef(folderId);
   const messageRef = useRef(message);
+  const dragMessagesRef = useRef(dragMessages);
   const [isDragging, setIsDragging] = useState(false);
   const [dragPreview, setDragPreview] = useState<DragPreviewState>();
 
@@ -45,7 +55,8 @@ export function MessageListItem({
   useEffect(() => {
     folderIdRef.current = folderId;
     messageRef.current = message;
-  }, [folderId, message]);
+    dragMessagesRef.current = dragMessages;
+  }, [dragMessages, folderId, message]);
 
   useEffect(() => {
     return clearDragState;
@@ -64,7 +75,9 @@ export function MessageListItem({
       getInitialData: () => ({
         type: mailMessageDragType,
         message: messageRef.current,
+        messages: dragMessagesRef.current,
         sourceFolderId: folderIdRef.current,
+        primaryMessageId: messageRef.current.id,
       }),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         disableNativeDragPreview({ nativeSetDragImage });
@@ -118,12 +131,23 @@ export function MessageListItem({
           folderId: encodeRouteId(folderId),
           messageId: encodeRouteId(message.id),
         }}
-        className={cn(
+          className={cn(
           'block min-w-0 overflow-hidden px-3 py-3 transition-colors hover:bg-accent/70',
           isSelected && 'bg-accent',
+          isBulkSelected && !isSelected && 'bg-primary/10',
         )}
+        onClick={(event) => onMessageClick(event, message)}
       >
         <div className="flex min-w-0 items-start gap-3">
+          <span
+            className={cn(
+              'mt-1 flex size-4 shrink-0 items-center justify-center rounded border text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
+              isBulkSelected && 'opacity-100 bg-primary text-primary-foreground',
+            )}
+            aria-hidden="true"
+          >
+            {isBulkSelected && <Check className="size-3" />}
+          </span>
           <MailAvatar
             name={message.sender.name}
             email={message.sender.email}
@@ -170,7 +194,7 @@ export function MessageListItem({
               top: dragPreview.pointerY + 12,
             }}
           >
-            <MailDragPreview message={message} />
+            <MailDragPreview message={message} count={dragMessages.length} />
           </div>,
           document.body,
         )}

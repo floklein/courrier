@@ -1,6 +1,14 @@
-import { MouseEvent, useEffect, useRef, useState } from 'react';
+import {
+  Archive,
+  MailOpen,
+  MousePointer2,
+  Trash2,
+  X,
+  Search,
+  Loader2,
+} from 'lucide-react';
+import { type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Loader2, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -76,6 +84,9 @@ export function MessageList({
   const debouncedDraftSearch = useDebouncedValue(draftSearch, 250);
   const [contextMessage, setContextMessage] =
     useState<MailMessageSummary>();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [anchorId, setAnchorId] = useState<string>();
+  const [activeId, setActiveId] = useState<string>();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollParentRef = useRef<HTMLDivElement>(null);
   const loadMoreRequestLengthRef = useRef<number | null>(null);
@@ -88,6 +99,12 @@ export function MessageList({
     overscan: overscanRows,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
+  const selectedMessages = useMemo(
+    () => messages.filter((message) => selectedIds.has(message.id)),
+    [messages, selectedIds],
+  );
+  const archiveFolder = folders.find((folder) => folder.wellKnownName === 'archive');
+  const hasBulkSelection = selectedIds.size > 0;
 
   useEffect(() => {
     setDraftSearch(searchQuery);
@@ -100,7 +117,12 @@ export function MessageList({
   useEffect(() => {
     setDraftSearch('');
     setIsSearching(false);
+    clearSelection();
   }, [folderId]);
+
+  useEffect(() => {
+    clearSelection();
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!isSearching) {
@@ -165,6 +187,153 @@ export function MessageList({
     setDraftSearch('');
     setIsSearching(false);
     onSearch('');
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setAnchorId(undefined);
+    setActiveId(undefined);
+  }
+
+  function selectRange(fromId: string, toId: string, mode: 'replace' | 'add') {
+    const fromIndex = messages.findIndex((message) => message.id === fromId);
+    const toIndex = messages.findIndex((message) => message.id === toId);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      return;
+    }
+
+    const [start, end] = [fromIndex, toIndex].sort((left, right) => left - right);
+    const rangeIds = messages.slice(start, end + 1).map((message) => message.id);
+
+    setSelectedIds((current) => {
+      const next = mode === 'add' ? new Set(current) : new Set<string>();
+
+      for (const id of rangeIds) {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }
+
+  function handleMessageClick(
+    event: MouseEvent<HTMLAnchorElement>,
+    message: MailMessageSummary,
+  ) {
+    setActiveId(message.id);
+
+    if (isPrimaryModifier(event) || event.altKey || event.shiftKey) {
+      event.preventDefault();
+
+      if ((event.altKey || event.shiftKey) && anchorId) {
+        selectRange(anchorId, message.id, isPrimaryModifier(event) ? 'add' : 'replace');
+        return;
+      }
+
+      setSelectedIds((current) => {
+        const next = new Set(current);
+
+        if (next.has(message.id)) {
+          next.delete(message.id);
+        } else {
+          next.add(message.id);
+        }
+
+        return next;
+      });
+      setAnchorId(message.id);
+      return;
+    }
+
+    clearSelection();
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (shouldIgnoreShortcut(event.target)) {
+      return;
+    }
+
+    const currentIndex = activeId
+      ? messages.findIndex((message) => message.id === activeId)
+      : -1;
+
+    if (isPrimaryModifier(event) && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      setSelectedIds(new Set(messages.map((message) => message.id)));
+      setAnchorId(messages[0]?.id);
+      setActiveId(messages[0]?.id);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      clearSelection();
+      return;
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      const nextIndex = Math.max(
+        0,
+        Math.min(messages.length - 1, currentIndex === -1 ? 0 : currentIndex + delta),
+      );
+      const nextMessage = messages[nextIndex];
+
+      if (!nextMessage) {
+        return;
+      }
+
+      setActiveId(nextMessage.id);
+      rowVirtualizer.scrollToIndex(nextIndex, { align: 'auto' });
+
+      if (event.shiftKey) {
+        const nextAnchorId = anchorId ?? activeId ?? nextMessage.id;
+        setAnchorId(nextAnchorId);
+        selectRange(nextAnchorId, nextMessage.id, 'replace');
+      }
+      return;
+    }
+
+    if (!hasBulkSelection) {
+      return;
+    }
+
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      deleteSelectedMessages();
+      return;
+    }
+
+    if (event.key.toLowerCase() === 'e' && archiveFolder) {
+      event.preventDefault();
+      moveSelectedMessages(archiveFolder.id);
+      return;
+    }
+  }
+
+  function deleteSelectedMessages() {
+    for (const message of selectedMessages) {
+      onDeleteMessage(message);
+    }
+
+    clearSelection();
+  }
+
+  function markSelectedMessagesReadState(isRead: boolean) {
+    for (const message of selectedMessages) {
+      onMarkMessageReadState(message, isRead);
+    }
+
+    clearSelection();
+  }
+
+  function moveSelectedMessages(destinationFolderId: string) {
+    for (const message of selectedMessages) {
+      onMoveMessage(message, destinationFolderId);
+    }
+
+    clearSelection();
   }
 
   function handleContextMenu(event: MouseEvent<HTMLDivElement>) {
@@ -260,6 +429,75 @@ export function MessageList({
           </>
         )}
       </header>
+      {hasBulkSelection && (
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-muted/30 px-3 text-sm">
+          <span className="flex min-w-0 flex-1 items-center gap-2 font-medium">
+            <MousePointer2 className="size-4 text-muted-foreground" />
+            {selectedIds.size} selected
+          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={isActionPending}
+                  aria-label="Mark selected as read"
+                  onClick={() => markSelectedMessagesReadState(true)}
+                >
+                  <MailOpen data-icon="inline-start" />
+                </Button>
+              }
+            />
+            <TooltipContent>Mark as read</TooltipContent>
+          </Tooltip>
+          {archiveFolder && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={isActionPending}
+                    aria-label="Archive selected"
+                    onClick={() => moveSelectedMessages(archiveFolder.id)}
+                  >
+                    <Archive data-icon="inline-start" />
+                  </Button>
+                }
+              />
+              <TooltipContent>Archive</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={isActionPending}
+                  aria-label="Delete selected"
+                  onClick={deleteSelectedMessages}
+                >
+                  <Trash2 data-icon="inline-start" />
+                </Button>
+              }
+            />
+            <TooltipContent>Delete</TooltipContent>
+          </Tooltip>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={clearSelection}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
       {isLoading && <PanelStatus label="Loading messages..." />}
       {!isLoading && error && <PanelStatus label={error.message} />}
       {!isLoading && !error && messages.length > 0 && (
@@ -268,8 +506,10 @@ export function MessageList({
             render={
               <div
                 ref={scrollParentRef}
+                tabIndex={0}
                 className="min-h-0 min-w-0 flex-1 overflow-auto"
                 onContextMenu={handleContextMenu}
+                onKeyDown={handleKeyDown}
               >
                 <div
                   className="relative w-full min-w-0 max-w-full"
@@ -291,9 +531,16 @@ export function MessageList({
                           <MessageListItem
                             folderId={folderId}
                             isSelected={message.id === selectedMessageId}
+                            isBulkSelected={selectedIds.has(message.id)}
                             isActionPending={isActionPending}
+                            dragMessages={
+                              selectedIds.has(message.id) && selectedMessages.length > 0
+                                ? selectedMessages
+                                : [message]
+                            }
                             message={message}
                             onDragActiveChange={onDragActiveChange}
+                            onMessageClick={handleMessageClick}
                           />
                         ) : (
                           <div className="flex h-12 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -332,5 +579,21 @@ export function MessageList({
       )}
       {!isLoading && !error && messages.length === 0 && <EmptyFolder />}
     </section>
+  );
+}
+
+function isPrimaryModifier(event: MouseEvent | KeyboardEvent) {
+  return event.metaKey || event.ctrlKey;
+}
+
+function shouldIgnoreShortcut(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(
+      'input, textarea, [contenteditable="true"], [role="menu"], [role="dialog"]',
+    ),
   );
 }

@@ -201,7 +201,9 @@ function FolderRailItem({
           return;
         }
 
-        onMoveMessage(data.message, folder.id);
+        for (const message of data.messages ?? [data.message]) {
+          onMoveMessage(message, folder.id);
+        }
       },
     });
   }, [folder.id, isActionPending, onMoveMessage]);
