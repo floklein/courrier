@@ -14,6 +14,7 @@ import {
   mailSearchQuerySchema,
   providerIdSchema,
   replyToMessageInputSchema,
+  searchMessagesInputSchema,
   sendMailInputSchema,
 } from '@/lib/mail-schemas';
 
@@ -101,6 +102,13 @@ export function registerIpcHandlers(
       parseIpcPayload(ipcIdSchema, accountId),
       parseIpcPayload(ipcIdSchema, folderId),
       parseIpcPayload(ipcIdSchema, messageId),
+    );
+  });
+  ipcMain.handle('mail:search-messages', (event, accountId: string, input: unknown) => {
+    assertSender(event);
+    return mailService.searchMessages(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(searchMessagesInputSchema, input),
     );
   });
   ipcMain.handle(

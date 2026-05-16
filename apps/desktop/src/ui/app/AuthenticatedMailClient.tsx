@@ -54,8 +54,10 @@ export function AuthenticatedMailClient({
     messagesQuery,
     resolvedFolderId,
     searchQuery,
+    searchScope,
     selectedMessage,
     setSearchQuery,
+    setSearchScope,
   } = useMailClientState(activeAccount.id);
   const isReadingMessage = Boolean(messageId);
   const {
@@ -124,11 +126,14 @@ export function AuthenticatedMailClient({
   ]);
 
   useEffect(() => {
-    setSearchQuery('');
+    if (searchScope === 'folder') {
+      setSearchQuery('');
+    }
+
     setReplyMessageId(undefined);
     closeCompose();
     manuallyMarkedUnreadMessageId.current = undefined;
-  }, [closeCompose, resolvedFolderId]);
+  }, [closeCompose, resolvedFolderId, searchScope, setSearchQuery]);
 
   useEffect(() => {
     if (!messageId || !messageQuery.error) {
@@ -285,6 +290,10 @@ export function AuthenticatedMailClient({
     setSearchQuery(query);
   }
 
+  function handleSearchScopeChange(scope: typeof searchScope) {
+    setSearchScope(scope);
+  }
+
   return (
     <TooltipProvider delay={200}>
       <main className="grid h-full min-h-0 grid-cols-[240px_minmax(280px,360px)_minmax(0,1fr)] bg-background max-lg:grid-cols-[76px_minmax(280px,340px)_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)]">
@@ -329,7 +338,9 @@ export function AuthenticatedMailClient({
           onToggleMessageImportant={handleToggleMessageImportant}
           onToggleMessageStar={handleToggleMessageStar}
           onSearch={handleSearch}
+          onSearchScopeChange={handleSearchScopeChange}
           searchQuery={searchQuery}
+          searchScope={searchScope}
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
         <ReadingPane

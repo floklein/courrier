@@ -17,6 +17,7 @@ function installCourrierApi() {
     getCapabilities: vi.fn(),
     listFolders: vi.fn(),
     listMessages: vi.fn(),
+    searchMessages: vi.fn(),
     getMessage: vi.fn(),
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
@@ -58,6 +59,7 @@ describe('api client', () => {
     api.auth.signIn('google');
     api.mail.getCapabilities('account-1');
     api.mail.moveMessage('account-1', 'message-1', 'inbox', 'archive');
+    api.mail.searchMessages('account-1', { query: 'hello', scope: 'all' });
 
     expect(bridge.auth.getSession).toHaveBeenCalledOnce();
     expect(bridge.auth.signIn).toHaveBeenCalledWith('google');
@@ -68,6 +70,10 @@ describe('api client', () => {
       'inbox',
       'archive',
     );
+    expect(bridge.mail.searchMessages).toHaveBeenCalledWith('account-1', {
+      query: 'hello',
+      scope: 'all',
+    });
   });
 
   it('wraps current-window bridge calls', async () => {

@@ -22,6 +22,7 @@ function installCourrierApi() {
     getCapabilities: vi.fn().mockResolvedValue([]),
     listFolders: vi.fn().mockResolvedValue([]),
     listMessages: vi.fn().mockResolvedValue({ messages: [] }),
+    searchMessages: vi.fn().mockResolvedValue({ messages: [] }),
     getMessage: vi.fn().mockResolvedValue({ id: 'message-1' }),
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
@@ -116,6 +117,7 @@ describe('mail query options', () => {
       'account-1',
       'messages',
       'inbox',
+      'folder',
       '',
     ]);
     expect(options.initialPageParam).toBeUndefined();
@@ -124,7 +126,6 @@ describe('mail query options', () => {
       'account-1',
       'inbox',
       'page-2',
-      undefined,
     );
     expect(
       options.getNextPageParam?.(
@@ -150,18 +151,49 @@ describe('mail query options', () => {
       'account-1',
       'messages',
       'inbox',
+      'folder',
       'urgent',
     ]);
     expect(people.queryKey).toEqual(['mail', 'account-1', 'people', 'Ada']);
     await runQueryFn(messages, { pageParam: undefined });
     await runQueryFn(people);
-    expect(bridge.mail.listMessages).toHaveBeenCalledWith(
+    expect(bridge.mail.searchMessages).toHaveBeenCalledWith('account-1', {
+      query: 'urgent',
+      scope: 'folder',
+      folderId: 'inbox',
+      nextPageToken: undefined,
+    });
+    expect(bridge.mail.listPeople).toHaveBeenCalledWith('account-1', 'Ada');
+  });
+
+  it('builds global message search queries', async () => {
+    const bridge = installCourrierApi();
+    const { mailMessagesQueryOptions } = await import(
+      '@/lib/mail/mail-query-options'
+    );
+
+    const messages = mailMessagesQueryOptions(
       'account-1',
       'inbox',
-      undefined,
-      'urgent',
+      ' urgent ',
+      'all',
     );
-    expect(bridge.mail.listPeople).toHaveBeenCalledWith('account-1', 'Ada');
+
+    expect(messages.queryKey).toEqual([
+      'mail',
+      'account-1',
+      'messages',
+      'inbox',
+      'all',
+      'urgent',
+    ]);
+    await runQueryFn(messages, { pageParam: 'next-page' });
+    expect(bridge.mail.searchMessages).toHaveBeenCalledWith('account-1', {
+      query: 'urgent',
+      scope: 'all',
+      folderId: 'inbox',
+      nextPageToken: 'next-page',
+    });
   });
 
   it('passes undefined for empty people queries', async () => {

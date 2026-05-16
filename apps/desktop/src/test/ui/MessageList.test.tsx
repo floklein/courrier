@@ -2,9 +2,16 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { MailSearchScope } from '@/lib/mail-types';
 import { MessageList } from '@/ui/mail/MessageList';
 
-function renderMessageList(onSearch = vi.fn()) {
+function renderMessageList(
+  onSearch = vi.fn(),
+  {
+    onSearchScopeChange = vi.fn(),
+    searchScope = 'folder' as MailSearchScope,
+  } = {},
+) {
   render(
     <TooltipProvider>
       <MessageList
@@ -31,12 +38,14 @@ function renderMessageList(onSearch = vi.fn()) {
         onToggleMessageImportant={vi.fn()}
         onToggleMessageStar={vi.fn()}
         onSearch={onSearch}
+        onSearchScopeChange={onSearchScopeChange}
         searchQuery=""
+        searchScope={searchScope}
       />
     </TooltipProvider>,
   );
 
-  return { onSearch };
+  return { onSearch, onSearchScopeChange };
 }
 
 function renderControlledMessageList(onSearch = vi.fn()) {
@@ -74,7 +83,9 @@ function renderControlledMessageList(onSearch = vi.fn()) {
           onToggleMessageImportant={vi.fn()}
           onToggleMessageStar={vi.fn()}
           onSearch={handleSearch}
+          onSearchScopeChange={vi.fn()}
           searchQuery={searchQuery}
+          searchScope="folder"
         />
       </TooltipProvider>
     );
@@ -133,5 +144,17 @@ describe('MessageList', () => {
     expect(onSearch).toHaveBeenLastCalledWith('');
     expect(screen.getByLabelText('Search Inbox')).toBeInTheDocument();
     vi.useRealTimers();
+  });
+
+  it('renders all-mail search tabs and switches scope', () => {
+    const onSearchScopeChange = vi.fn();
+    renderMessageList(vi.fn(), { onSearchScopeChange, searchScope: 'all' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search mail' }));
+
+    expect(screen.getByLabelText('Search all mail')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'This folder' }));
+
+    expect(onSearchScopeChange).toHaveBeenCalledWith('folder');
   });
 });

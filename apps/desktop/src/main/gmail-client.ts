@@ -8,6 +8,7 @@ import type {
   MailMessageSummary,
   MailPersonSuggestion,
   PagedMessages,
+  SearchMessagesInput,
 } from '@/lib/mail-types';
 import type {
   CreateMailSubscriptionInput,
@@ -170,6 +171,69 @@ export class GmailClient implements MailProvider {
         .map((message) =>
           this.getMessageSummary(accountId, folderId, message.id ?? ''),
         ),
+    );
+
+    return {
+      messages,
+      nextPageToken: data.nextPageToken,
+    };
+  }
+
+  async searchMessages(
+    accountId: string,
+    input: SearchMessagesInput,
+  ): Promise<PagedMessages> {
+    if (input.scope === 'folder') {
+      return this.listMessages(
+        accountId,
+        input.folderId ?? 'INBOX',
+        input.nextPageToken,
+        input.query,
+      );
+    }
+
+    const params = new URLSearchParams({
+      maxResults: gmailPageSize,
+      q: input.query.trim(),
+    });
+
+    if (input.nextPageToken) {
+      params.set('pageToken', input.nextPageToken);
+    }
+
+    if (input.includeSpamTrash) {
+      params.set('includeSpamTrash', 'true');
+    }
+
+    const [data, folders] = await Promise.all([
+      this.fetchGmail<GmailListMessagesResponse>(
+        accountId,
+        `${gmailBaseUrl}/users/me/messages?${params.toString()}`,
+      ),
+      this.listFolders(accountId),
+    ]);
+    const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
+    const messages = await Promise.all(
+      (data.messages ?? [])
+        .filter((message) => message.id)
+        .map(async (message) => {
+          const summary = await this.getMessageSummary(
+            accountId,
+            input.folderId ?? 'INBOX',
+            message.id ?? '',
+          );
+          const matchedFolderIds = summary.matchedFolderIds ?? [];
+          const displayFolderId =
+            getPreferredDisplayFolderId(matchedFolderIds) ?? summary.folderId;
+          const folder = foldersById.get(displayFolderId);
+
+          return {
+            ...summary,
+            folderId: displayFolderId,
+            folderLabel: folder?.label ?? getGmailDisplayName(displayFolderId, displayFolderId),
+            folderWellKnownName: folder?.wellKnownName,
+          };
+        }),
     );
 
     return {
@@ -609,6 +673,7 @@ function mapGmailMessageSummary(
     importance: (message.labelIds ?? []).includes('IMPORTANT') ? 'high' : 'normal',
     isStarred: (message.labelIds ?? []).includes('STARRED'),
     isImportant: (message.labelIds ?? []).includes('IMPORTANT'),
+    matchedFolderIds: message.labelIds ?? [],
   };
 }
 
@@ -644,6 +709,15 @@ function getGmailDisplayName(id: string, name: string | undefined) {
   };
 
   return map[id] ?? name ?? id;
+}
+
+function getPreferredDisplayFolderId(labelIds: string[]) {
+  const preferredOrder = ['INBOX', 'SENT', 'DRAFT', 'TRASH', 'SPAM', 'STARRED'];
+
+  return (
+    preferredOrder.find((labelId) => labelIds.includes(labelId)) ??
+    labelIds.find((labelId) => !isHiddenGmailLabel(labelId))
+  );
 }
 
 function sortGmailFolders(folders: MailFolder[]) {
