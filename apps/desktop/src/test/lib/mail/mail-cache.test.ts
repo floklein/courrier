@@ -184,6 +184,7 @@ function messageDetail({
     ...message({ id, isRead }),
     bodyContentType: 'html',
     bodyContent: '<p>Hello</p>',
+    attachments: [],
   };
 }
 

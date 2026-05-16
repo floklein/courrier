@@ -25,6 +25,28 @@ export interface MoveMessageInput {
   destinationFolderId: string;
 }
 
+export interface LocalAttachmentFile {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+  path: string;
+}
+
+export interface ProviderSendMailInput extends Omit<SendMailInput, 'attachments'> {
+  attachments?: LocalAttachmentFile[];
+}
+
+export interface ProviderReplyToMessageInput extends Omit<ReplyToMessageInput, 'attachments'> {
+  attachments?: LocalAttachmentFile[];
+}
+
+export interface DownloadedMailAttachment {
+  name: string;
+  contentType: string;
+  content: Buffer;
+}
+
 export interface MailSubscriptionProvider {
   createMailSubscription(input: CreateMailSubscriptionInput): Promise<MailSubscription>;
   renewSubscription(input: RenewSubscriptionInput): Promise<MailSubscription>;
@@ -76,8 +98,13 @@ export interface MailProvider extends MailSubscriptionProvider {
     messageId: string,
   ): Promise<MailMessageDetail | undefined>;
   listPeople(accountId: string, query?: string): Promise<MailPersonSuggestion[]>;
-  sendMessage(accountId: string, input: SendMailInput): Promise<void>;
-  replyToMessage(accountId: string, input: ReplyToMessageInput): Promise<void>;
+  sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void>;
+  replyToMessage(accountId: string, input: ProviderReplyToMessageInput): Promise<void>;
+  downloadAttachment(
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<DownloadedMailAttachment>;
 }
 
 export interface RegisteredProvider {

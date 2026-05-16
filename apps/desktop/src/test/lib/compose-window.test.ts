@@ -10,6 +10,7 @@ describe('compose window draft schema', () => {
       accountId: '',
       toValue: '',
       subject: '',
+      attachments: [],
       editorValue: {
         html: '',
         text: '',

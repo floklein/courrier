@@ -1,6 +1,7 @@
 import type {
   FolderIcon,
   MailAddress,
+  MailAttachment,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
@@ -40,6 +41,15 @@ export interface GraphMessageDetail extends GraphMessage {
     contentType?: string | null;
     content?: string | null;
   } | null;
+  attachments?: GraphAttachment[] | null;
+}
+
+export interface GraphAttachment {
+  id?: string | null;
+  name?: string | null;
+  contentType?: string | null;
+  size?: number | null;
+  isInline?: boolean | null;
 }
 
 const wellKnownFolderOrder = [
@@ -175,6 +185,19 @@ export function mapGraphMessageDetail(
     ...summary,
     bodyContentType: contentType,
     bodyContent: message.body?.content || '',
+    attachments: (message.attachments ?? [])
+      .map(mapGraphAttachment)
+      .filter((attachment) => attachment.id && !attachment.isInline),
+  };
+}
+
+function mapGraphAttachment(attachment: GraphAttachment): MailAttachment {
+  return {
+    id: attachment.id || '',
+    name: attachment.name || 'attachment',
+    contentType: attachment.contentType || 'application/octet-stream',
+    size: attachment.size ?? 0,
+    isInline: attachment.isInline ?? false,
   };
 }
 

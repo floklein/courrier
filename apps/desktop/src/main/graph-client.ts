@@ -3,6 +3,7 @@ import {
   mapGraphMessageDetail,
   mapGraphMessageSummary,
   sortMailFolders,
+  type GraphAttachment,
   type GraphMailFolder,
   type GraphMessage,
   type GraphMessageDetail,
@@ -13,16 +14,19 @@ import type {
   MailMessageDetail,
   MailPersonSuggestion,
   PagedMessages,
-  ReplyToMessageInput,
   SendMailInput,
 } from '@/lib/mail-types';
 import { GraphRequestError } from '@/lib/graph-errors';
+import fs from 'node:fs/promises';
 import type {
   CreateMailSubscriptionInput,
+  DownloadedMailAttachment,
   MailAuthProvider,
   MailProvider,
   MailSubscription,
   MoveMessageInput,
+  ProviderReplyToMessageInput,
+  ProviderSendMailInput,
   RenewSubscriptionInput,
 } from '@/main/mail-provider';
 
@@ -104,7 +108,7 @@ export class GraphClient implements MailProvider {
         folderId,
       )}/messages/${encodeURIComponent(
         messageId,
-      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients,body`,
+      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients,body&$expand=attachments($select=id,name,contentType,size,isInline)`,
     );
 
     return mapGraphMessageDetail(folderId, data);
@@ -180,7 +184,38 @@ export class GraphClient implements MailProvider {
     return mapPeopleSuggestions(data.value ?? []);
   }
 
-  async sendMessage(accountId: string, input: SendMailInput): Promise<void> {
+  async sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void> {
+    const attachments = input.attachments ?? [];
+
+    if (attachments.length > 0) {
+      const draft = await this.fetchGraph<GraphMessageDetail>(
+        accountId,
+        `${graphBaseUrl}/me/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            subject: input.subject,
+            body: {
+              contentType: 'HTML',
+              content: input.bodyHtml,
+            },
+            toRecipients: input.toRecipients.map(formatGraphRecipient),
+          }),
+        },
+      );
+
+      if (!draft.id) {
+        throw new Error('Microsoft Graph did not return a draft ID.');
+      }
+
+      await this.addAttachmentsToDraft(accountId, draft.id, attachments);
+      await this.sendDraft(accountId, draft.id);
+      return;
+    }
+
     await this.fetchGraph(accountId, `${graphBaseUrl}/me/sendMail`, {
       method: 'POST',
       headers: {
@@ -202,7 +237,7 @@ export class GraphClient implements MailProvider {
 
   async replyToMessage(
     accountId: string,
-    input: ReplyToMessageInput,
+    input: ProviderReplyToMessageInput,
   ): Promise<void> {
     const draft = await this.fetchGraph<GraphMessageDetail>(
       accountId,
@@ -238,13 +273,33 @@ export class GraphClient implements MailProvider {
       },
     );
 
-    await this.fetchGraph(
+    await this.addAttachmentsToDraft(accountId, draft.id, input.attachments ?? []);
+    await this.sendDraft(accountId, draft.id);
+  }
+
+  async downloadAttachment(
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<DownloadedMailAttachment> {
+    const attachment = await this.fetchGraph<
+      GraphAttachment & { contentBytes?: string | null }
+    >(
       accountId,
-      `${graphBaseUrl}/me/messages/${encodeURIComponent(draft.id)}/send`,
-      {
-        method: 'POST',
-      },
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(
+        messageId,
+      )}/attachments/${encodeURIComponent(attachmentId)}`,
     );
+
+    if (!attachment.contentBytes) {
+      throw new Error('Microsoft Graph did not return attachment content.');
+    }
+
+    return {
+      name: attachment.name || 'attachment',
+      contentType: attachment.contentType || 'application/octet-stream',
+      content: Buffer.from(attachment.contentBytes, 'base64'),
+    };
   }
 
   async createMailSubscription(
@@ -417,6 +472,117 @@ export class GraphClient implements MailProvider {
     }
 
     return JSON.parse(body) as T;
+  }
+
+  private async addAttachmentsToDraft(
+    accountId: string,
+    draftId: string,
+    attachments: NonNullable<ProviderSendMailInput['attachments']>,
+  ) {
+    for (const attachment of attachments) {
+      if (attachment.size < 3 * 1024 * 1024) {
+        await this.addSmallAttachmentToDraft(accountId, draftId, attachment);
+      } else {
+        await this.addLargeAttachmentToDraft(accountId, draftId, attachment);
+      }
+    }
+  }
+
+  private async addSmallAttachmentToDraft(
+    accountId: string,
+    draftId: string,
+    attachment: NonNullable<ProviderSendMailInput['attachments']>[number],
+  ) {
+    const content = await fs.readFile(attachment.path);
+
+    await this.fetchGraph(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(draftId)}/attachments`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          name: attachment.name,
+          contentType: attachment.contentType,
+          contentBytes: content.toString('base64'),
+        }),
+      },
+    );
+  }
+
+  private async addLargeAttachmentToDraft(
+    accountId: string,
+    draftId: string,
+    attachment: NonNullable<ProviderSendMailInput['attachments']>[number],
+  ) {
+    const session = await this.fetchGraph<{ uploadUrl?: string }>(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(
+        draftId,
+      )}/attachments/createUploadSession`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          AttachmentItem: {
+            attachmentType: 'file',
+            name: attachment.name,
+            size: attachment.size,
+            contentType: attachment.contentType,
+          },
+        }),
+      },
+    );
+
+    if (!session.uploadUrl) {
+      throw new Error('Microsoft Graph did not return an attachment upload URL.');
+    }
+
+    const file = await fs.open(attachment.path, 'r');
+    const chunkSize = 327_680 * 20;
+    let offset = 0;
+
+    try {
+      while (offset < attachment.size) {
+        const length = Math.min(chunkSize, attachment.size - offset);
+        const buffer = Buffer.allocUnsafe(length);
+        const { bytesRead } = await file.read(buffer, 0, length, offset);
+        const chunk = buffer.subarray(0, bytesRead);
+        const response = await fetch(session.uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Length': String(chunk.byteLength),
+            'Content-Range': `bytes ${offset}-${offset + chunk.byteLength - 1}/${attachment.size}`,
+          },
+          body: chunk,
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Microsoft Graph attachment upload failed: ${response.status} ${await response.text()}`,
+          );
+        }
+
+        offset += chunk.byteLength;
+      }
+    } finally {
+      await file.close();
+    }
+  }
+
+  private async sendDraft(accountId: string, draftId: string) {
+    await this.fetchGraph(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(draftId)}/send`,
+      {
+        method: 'POST',
+      },
+    );
   }
 }
 

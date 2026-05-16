@@ -103,7 +103,7 @@ describe('GmailClient', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
     );
-    expect(decoded).toContain('To: "Ada Lovelace" <ada@example.com>');
+    expect(decoded).toContain('To: Ada Lovelace <ada@example.com>');
     expect(decoded).toContain('Subject: Hello');
     expect(decoded).toContain('<p>Hi</p>');
   });
