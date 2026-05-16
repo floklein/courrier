@@ -4,7 +4,7 @@ import {
   assertTrustedSender,
   createAppUrlTrustPolicy,
   isTrustedAppUrl,
-} from '../../main/security';
+} from '@/main/security';
 
 const trustPolicy = createAppUrlTrustPolicy({
   appFilePath: 'C:\\app\\index.html',

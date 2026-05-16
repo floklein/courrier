@@ -40,7 +40,7 @@ describe('api client', () => {
 
   it('forwards auth and mail calls to the preload bridge', async () => {
     const bridge = installCourrierApi();
-    const { api } = await import('../../lib/api-client');
+    const { api } = await import('@/lib/api-client');
 
     await api.auth.getSession();
     api.auth.signIn('google');
@@ -58,7 +58,7 @@ describe('api client', () => {
 
   it('wraps current-window bridge calls', async () => {
     const bridge = installCourrierApi();
-    const { api } = await import('../../lib/api-client');
+    const { api } = await import('@/lib/api-client');
 
     api.window.closeCurrent();
     api.window.getComposeDraft();

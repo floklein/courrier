@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
-import { Avatar, AvatarFallback } from '../../components/ui/avatar';
-import { getInitials, getMailAvatarColor } from '../../lib/mail/mail-utils';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { getInitials, getMailAvatarColor } from '@/lib/mail/mail-utils';
 
 interface MailAvatarProps {
   name: string;

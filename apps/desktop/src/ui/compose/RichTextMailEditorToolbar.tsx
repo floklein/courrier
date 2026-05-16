@@ -14,15 +14,15 @@ import {
   Unlink,
 } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
-import { Button } from '../../components/ui/button';
-import { ButtonGroup } from '../../components/ui/button-group';
-import { Input } from '../../components/ui/input';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '../../components/ui/popover';
-import { Toggle } from '../../components/ui/toggle';
+} from '@/components/ui/popover';
+import { Toggle } from '@/components/ui/toggle';
 
 export function RichTextMailEditorToolbar({
   editor,

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { HtmlMessageBody } from '../../ui/mail/HtmlMessageBody';
+import { HtmlMessageBody } from '@/ui/mail/HtmlMessageBody';
 
 vi.mock('virtual:darkreader-script', () => ({
   default: '',

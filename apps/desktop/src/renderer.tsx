@@ -2,12 +2,12 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
-import './index.css';
-import { api } from './lib/api-client';
-import { queryClient } from './lib/query-client';
-import { invalidateRemoteMailUpdate } from './lib/remote-mail-updates';
-import { router } from './router';
-import { ThemeProvider } from './theme/ThemeProvider';
+import '@/index.css';
+import { api } from '@/lib/api-client';
+import { queryClient } from '@/lib/query-client';
+import { invalidateRemoteMailUpdate } from '@/lib/remote-mail-updates';
+import { router } from '@/router';
+import { ThemeProvider } from '@/theme/ThemeProvider';
 
 const rootElement = document.getElementById('root');
 

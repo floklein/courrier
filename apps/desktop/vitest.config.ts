@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
     alias: {
+      '@': path.resolve(__dirname, './src'),
       'virtual:darkreader-script': path.resolve(
         __dirname,
         './src/test/fixtures/darkreader-script.ts',

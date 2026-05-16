@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { encodeRouteId } from '../../../lib/route-ids';
+import { encodeRouteId } from '@/lib/route-ids';
 import {
   formatMailDate,
   getInitials,
   parseMailPath,
-} from '../../../lib/mail/mail-utils';
+} from '@/lib/mail/mail-utils';
 
 describe('mail utils', () => {
   afterEach(() => {

@@ -1,24 +1,24 @@
 import { MouseEvent, useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2, Search, X } from 'lucide-react';
-import { Button } from '../../components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
   ContextMenuTrigger,
-} from '../../components/ui/context-menu';
-import { Input } from '../../components/ui/input';
+} from '@/components/ui/context-menu';
+import { Input } from '@/components/ui/input';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../../components/ui/tooltip';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import type { MailFolder, MailMessageSummary } from '../../lib/mail-types';
-import { cn } from '../../lib/utils';
-import { PanelStatus } from '../app/StatusViews';
-import { EmptyFolder } from './EmptyFolder';
-import { MailActionContextContent } from './MailActionMenu';
-import { MessageListItem } from './MessageListItem';
+} from '@/components/ui/tooltip';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import type { MailFolder, MailMessageSummary } from '@/lib/mail-types';
+import { cn } from '@/lib/utils';
+import { PanelStatus } from '@/ui/app/StatusViews';
+import { EmptyFolder } from '@/ui/mail/EmptyFolder';
+import { MailActionContextContent } from '@/ui/mail/MailActionMenu';
+import { MessageListItem } from '@/ui/mail/MessageListItem';
 
 const messageRowEstimate = 104;
 const loaderRowEstimate = 52;

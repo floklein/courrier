@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { authSessionQueryOptions } from '../../lib/mail/mail-query-options';
-import { AuthenticatedMailClient } from './AuthenticatedMailClient';
-import { FullScreenStatus } from './StatusViews';
-import { Onboarding } from './Onboarding';
+import { authSessionQueryOptions } from '@/lib/mail/mail-query-options';
+import { AuthenticatedMailClient } from '@/ui/app/AuthenticatedMailClient';
+import { FullScreenStatus } from '@/ui/app/StatusViews';
+import { Onboarding } from '@/ui/app/Onboarding';
 
 export function MailClient() {
   const sessionQuery = useQuery(authSessionQueryOptions());

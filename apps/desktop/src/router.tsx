@@ -7,9 +7,9 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
-import { queryClient } from './lib/query-client';
-import { ComposeWindow } from './ui/app/ComposeWindow';
-import { MailClient } from './ui/app/MailClient';
+import { queryClient } from '@/lib/query-client';
+import { ComposeWindow } from '@/ui/app/ComposeWindow';
+import { MailClient } from '@/ui/app/MailClient';
 
 interface RouterContext {
   queryClient: QueryClient;

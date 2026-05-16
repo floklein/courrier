@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   composeWindowDraftSchema,
   emptyComposeWindowDraft,
-} from '../../lib/compose-window';
+} from '@/lib/compose-window';
 
 describe('compose window draft schema', () => {
   it('accepts the empty draft shape used by new compose windows', () => {

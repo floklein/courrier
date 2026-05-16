@@ -8,13 +8,13 @@ import type {
   MailFolder,
   MailMessageDetail,
   PagedMessages,
-} from '../lib/mail-types';
+} from '@/lib/mail-types';
 import {
   mailFoldersQueryOptions,
   mailMessageQueryOptions,
   mailMessagesQueryOptions,
-} from '../lib/mail/mail-query-options';
-import { parseMailPath } from '../lib/mail/mail-utils';
+} from '@/lib/mail/mail-query-options';
+import { parseMailPath } from '@/lib/mail/mail-utils';
 
 export function useMailClientState(accountId: string) {
   const pathname = useRouterState({

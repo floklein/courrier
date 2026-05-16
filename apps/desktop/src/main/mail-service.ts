@@ -6,12 +6,12 @@ import type {
   ProviderId,
   ReplyToMessageInput,
   SendMailInput,
-} from '../lib/mail-types';
+} from '@/lib/mail-types';
 import {
   getProviderFromAccountId,
   type MailProvider,
   type MoveMessageInput,
-} from './mail-provider';
+} from '@/main/mail-provider';
 
 export class MailService {
   private readonly providersById: Map<ProviderId, MailProvider>;

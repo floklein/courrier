@@ -46,7 +46,7 @@ describe('mail query options', () => {
   it('builds the auth session query', async () => {
     const bridge = installCourrierApi();
     const { authSessionQueryOptions, mailPreloadStaleTimeMs } = await import(
-      '../../../lib/mail/mail-query-options'
+      '@/lib/mail/mail-query-options'
     );
 
     const options = authSessionQueryOptions();
@@ -63,7 +63,7 @@ describe('mail query options', () => {
       mailFoldersQueryOptions,
       mailMessageQueryOptions,
       mailPreloadStaleTimeMs,
-    } = await import('../../../lib/mail/mail-query-options');
+    } = await import('@/lib/mail/mail-query-options');
 
     const folderOptions = mailFoldersQueryOptions('account-1');
     const messageOptions = mailMessageQueryOptions(
@@ -94,7 +94,7 @@ describe('mail query options', () => {
       nextPageToken: 'next-page',
     });
     const { mailMessagesQueryOptions } = await import(
-      '../../../lib/mail/mail-query-options'
+      '@/lib/mail/mail-query-options'
     );
 
     const options = mailMessagesQueryOptions('account-1', 'inbox');
@@ -127,7 +127,7 @@ describe('mail query options', () => {
   it('keeps searched message and people queries stable after trimming', async () => {
     const bridge = installCourrierApi();
     const { mailMessagesQueryOptions, mailPeopleQueryOptions } = await import(
-      '../../../lib/mail/mail-query-options'
+      '@/lib/mail/mail-query-options'
     );
 
     const messages = mailMessagesQueryOptions('account-1', 'inbox', 'urgent');
@@ -155,7 +155,7 @@ describe('mail query options', () => {
   it('passes undefined for empty people queries', async () => {
     const bridge = installCourrierApi();
     const { mailPeopleQueryOptions } = await import(
-      '../../../lib/mail/mail-query-options'
+      '@/lib/mail/mail-query-options'
     );
 
     const options = mailPeopleQueryOptions('account-1', '   ');

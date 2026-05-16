@@ -10,7 +10,7 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
-import type { FolderIcon } from '../mail-types';
+import type { FolderIcon } from '@/lib/mail-types';
 
 export const folderIcons: Record<FolderIcon, LucideIcon> = {
   inbox: Inbox,

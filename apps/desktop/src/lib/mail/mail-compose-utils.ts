@@ -1,5 +1,5 @@
 import DP from 'dompurify';
-import type { MailComposeRecipient } from '../mail-types';
+import type { MailComposeRecipient } from '@/lib/mail-types';
 
 const outgoingMailTags = [
   'a',

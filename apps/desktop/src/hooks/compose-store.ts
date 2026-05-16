@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import {
   emptyComposeWindowDraft,
   type ComposeWindowDraft,
-} from '../lib/compose-window';
+} from '@/lib/compose-window';
 
 interface ComposeState {
   draft: ComposeWindowDraft;

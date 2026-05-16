@@ -11,10 +11,10 @@ import {
 } from 'lucide-react';
 import { useMutation, useQueries } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import GoogleIcon from '../../assets/providers/google.svg?react';
-import MicrosoftIcon from '../../assets/providers/microsoft.svg?react';
-import { Avatar, AvatarBadge } from '../../components/ui/avatar';
-import { Button } from '../../components/ui/button';
+import GoogleIcon from '@/assets/providers/google.svg?react';
+import MicrosoftIcon from '@/assets/providers/microsoft.svg?react';
+import { Avatar, AvatarBadge } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,18 +28,18 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '../../components/ui/dropdown-menu';
-import { useActiveMailAccountChange } from '../../hooks/useActiveMailAccountChange';
-import { api } from '../../lib/api-client';
-import { mailFoldersQueryOptions } from '../../lib/mail/mail-query-options';
+} from '@/components/ui/dropdown-menu';
+import { useActiveMailAccountChange } from '@/hooks/useActiveMailAccountChange';
+import { api } from '@/lib/api-client';
+import { mailFoldersQueryOptions } from '@/lib/mail/mail-query-options';
 import type {
   AuthSession,
   MailAccount,
   MailFolder,
   ProviderConfigurationStatus,
   ProviderId,
-} from '../../lib/mail-types';
-import { useTheme } from '../../theme/ThemeProvider';
+} from '@/lib/mail-types';
+import { useTheme } from '@/theme/ThemeProvider';
 
 export function UserMenu({
   accounts,

@@ -7,7 +7,7 @@ import type {
   ProviderId,
   ReplyToMessageInput,
   SendMailInput,
-} from '../lib/mail-types';
+} from '@/lib/mail-types';
 
 export interface MailAuthProvider {
   readonly id: ProviderId;

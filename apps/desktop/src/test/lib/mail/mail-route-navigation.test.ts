@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetMailRouteAfterActiveAccountChanged } from '../../../lib/mail/mail-route-navigation';
+import { resetMailRouteAfterActiveAccountChanged } from '@/lib/mail/mail-route-navigation';
 
 describe('mail route navigation', () => {
   beforeEach(() => {

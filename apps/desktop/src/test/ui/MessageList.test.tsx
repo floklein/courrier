@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { TooltipProvider } from '../../components/ui/tooltip';
-import { MessageList } from '../../ui/mail/MessageList';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { MessageList } from '@/ui/mail/MessageList';
 
 function renderMessageList(onSearch = vi.fn()) {
   render(

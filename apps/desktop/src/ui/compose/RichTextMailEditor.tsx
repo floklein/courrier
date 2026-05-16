@@ -4,9 +4,9 @@ import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Underline } from '@tiptap/extension-underline';
 import { useEffect, useState } from 'react';
-import type { ComposeEditorValue } from '../../lib/compose-window';
-import { cn } from '../../lib/utils';
-import { RichTextMailEditorToolbar } from './RichTextMailEditorToolbar';
+import type { ComposeEditorValue } from '@/lib/compose-window';
+import { cn } from '@/lib/utils';
+import { RichTextMailEditorToolbar } from '@/ui/compose/RichTextMailEditorToolbar';
 
 export type RichTextMailEditorValue = ComposeEditorValue;
 

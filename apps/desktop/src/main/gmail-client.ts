@@ -8,7 +8,7 @@ import type {
   PagedMessages,
   ReplyToMessageInput,
   SendMailInput,
-} from '../lib/mail-types';
+} from '@/lib/mail-types';
 import type {
   CreateMailSubscriptionInput,
   MailAuthProvider,
@@ -16,7 +16,7 @@ import type {
   MailSubscription,
   MoveMessageInput,
   RenewSubscriptionInput,
-} from './mail-provider';
+} from '@/main/mail-provider';
 
 const gmailBaseUrl = 'https://gmail.googleapis.com/gmail/v1';
 const peopleBaseUrl = 'https://people.googleapis.com/v1';

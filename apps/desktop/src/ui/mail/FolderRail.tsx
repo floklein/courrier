@@ -4,30 +4,30 @@ import { Link } from '@tanstack/react-router';
 import { PenLine } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { ScrollArea } from '../../components/ui/scroll-area';
-import AppIcon from '../../assets/icon.svg?react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import AppIcon from '@/assets/icon.svg?react';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../../components/ui/tooltip';
-import { useActiveMailAccountChange } from '../../hooks/useActiveMailAccountChange';
-import { api } from '../../lib/api-client';
-import { isMailMessageDragData } from '../../lib/mail/mail-drag';
-import { folderIcons } from '../../lib/mail/mail-icons';
-import { mailMessagesQueryOptions } from '../../lib/mail/mail-query-options';
+} from '@/components/ui/tooltip';
+import { useActiveMailAccountChange } from '@/hooks/useActiveMailAccountChange';
+import { api } from '@/lib/api-client';
+import { isMailMessageDragData } from '@/lib/mail/mail-drag';
+import { folderIcons } from '@/lib/mail/mail-icons';
+import { mailMessagesQueryOptions } from '@/lib/mail/mail-query-options';
 import type {
   MailAccount,
   MailFolder,
   MailMessageSummary,
   ProviderConfigurationStatus,
-} from '../../lib/mail-types';
-import { encodeRouteId } from '../../lib/route-ids';
-import { cn } from '../../lib/utils';
-import { RailStatus } from '../app/StatusViews';
-import { UserMenu } from '../primitives/UserMenu';
+} from '@/lib/mail-types';
+import { encodeRouteId } from '@/lib/route-ids';
+import { cn } from '@/lib/utils';
+import { RailStatus } from '@/ui/app/StatusViews';
+import { UserMenu } from '@/ui/primitives/UserMenu';
 
 export function FolderRail({
   accountEmail,

@@ -8,9 +8,9 @@ import {
   type MailRemoteChangeEvent,
 } from '@courrier/mail-contracts';
 import { z } from 'zod';
-import type { MailAccount, ProviderId } from '../lib/mail-types';
-import type { AuthService } from './auth-service';
-import type { MailService } from './mail-service';
+import type { MailAccount, ProviderId } from '@/lib/mail-types';
+import type { AuthService } from '@/main/auth-service';
+import type { MailService } from '@/main/mail-service';
 
 const subscriptionStateFileName = 'mail-subscription.json';
 const subscriptionDurationMs = 24 * 60 * 60 * 1000;

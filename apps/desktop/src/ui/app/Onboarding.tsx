@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import AppIcon from '../../assets/icon.svg?react';
-import GoogleIcon from '../../assets/providers/google.svg?react';
-import MicrosoftIcon from '../../assets/providers/microsoft.svg?react';
-import { Button } from '../../components/ui/button';
-import { api } from '../../lib/api-client';
-import type { AuthSession, ProviderId } from '../../lib/mail-types';
+import AppIcon from '@/assets/icon.svg?react';
+import GoogleIcon from '@/assets/providers/google.svg?react';
+import MicrosoftIcon from '@/assets/providers/microsoft.svg?react';
+import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api-client';
+import type { AuthSession, ProviderId } from '@/lib/mail-types';
 
 export function Onboarding({
   session,

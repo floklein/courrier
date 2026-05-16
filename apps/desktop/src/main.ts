@@ -13,21 +13,21 @@ import started from 'electron-squirrel-startup';
 import {
   composeWindowDraftSchema,
   type ComposeWindowDraft,
-} from './lib/compose-window';
-import { AuthRequiredError, AuthService } from './main/auth-service';
-import { GraphClient } from './main/graph-client';
-import { GmailClient } from './main/gmail-client';
-import { GoogleAuthProvider } from './main/google-auth-provider';
-import { registerIpcHandlers } from './main/ipc';
-import { MailSubscriptionManager } from './main/mail-subscription-manager';
-import { MailService } from './main/mail-service';
-import { MicrosoftAuthProvider } from './main/microsoft-auth-provider';
+} from '@/lib/compose-window';
+import { AuthRequiredError, AuthService } from '@/main/auth-service';
+import { GraphClient } from '@/main/graph-client';
+import { GmailClient } from '@/main/gmail-client';
+import { GoogleAuthProvider } from '@/main/google-auth-provider';
+import { registerIpcHandlers } from '@/main/ipc';
+import { MailSubscriptionManager } from '@/main/mail-subscription-manager';
+import { MailService } from '@/main/mail-service';
+import { MicrosoftAuthProvider } from '@/main/microsoft-auth-provider';
 import {
   assertTrustedSender,
   createAppUrlTrustPolicy,
   type AppUrlTrustPolicy,
   registerWindowNavigationGuards,
-} from './main/security';
+} from '@/main/security';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
