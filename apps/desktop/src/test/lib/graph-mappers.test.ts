@@ -134,6 +134,32 @@ describe('graph mail mappers', () => {
         contentType: 'html',
         content: '<p>Hello</p>',
       },
+      attachments: [
+        {
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          id: 'attachment-1',
+          name: 'invoice.pdf',
+          contentType: 'application/pdf',
+          size: 1234,
+          isInline: false,
+        },
+        {
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          id: 'attachment-2',
+          name: 'logo.png',
+          contentType: 'image/png',
+          size: 2345,
+          isInline: true,
+        },
+        {
+          '@odata.type': '#microsoft.graph.itemAttachment',
+          id: 'attachment-3',
+          name: 'forwarded-message.eml',
+          contentType: 'message/rfc822',
+          size: 3456,
+          isInline: false,
+        },
+      ],
     });
 
     expect(message).toMatchObject({
@@ -148,6 +174,15 @@ describe('graph mail mappers', () => {
       receivedDateTime: '',
       bodyContentType: 'html',
       bodyContent: '<p>Hello</p>',
+      attachments: [
+        {
+          id: 'attachment-1',
+          name: 'invoice.pdf',
+          contentType: 'application/pdf',
+          size: 1234,
+          isInline: false,
+        },
+      ],
     });
   });
 });

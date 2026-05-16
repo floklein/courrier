@@ -1,4 +1,10 @@
 export const api = {
+  attachments: {
+    pickLocal: () => window.courrier.attachments.pickLocal(),
+    registerDroppedFiles: window.courrier.attachments.registerDroppedFiles,
+    open: window.courrier.attachments.open,
+    download: window.courrier.attachments.download,
+  },
   auth: {
     getSession: () => window.courrier.auth.getSession(),
     signIn: window.courrier.auth.signIn,

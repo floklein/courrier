@@ -103,9 +103,80 @@ describe('GmailClient', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
     );
-    expect(decoded).toContain('To: "Ada Lovelace" <ada@example.com>');
+    expect(decoded).toContain('To: Ada Lovelace <ada@example.com>');
     expect(decoded).toContain('Subject: Hello');
     expect(decoded).toContain('<p>Hi</p>');
+  });
+
+  it('keeps attachments whose filenames contain inline', async () => {
+    mockFetch(jsonResponse({
+      id: 'message-1',
+      payload: {
+        headers: [],
+        parts: [
+          {
+            partId: '1',
+            filename: 'inline-report.pdf',
+            mimeType: 'application/pdf',
+            headers: [
+              {
+                name: 'Content-Disposition',
+                value: 'attachment; filename="inline-report.pdf"',
+              },
+            ],
+            body: {
+              attachmentId: 'attachment-1',
+              size: 123,
+            },
+          },
+        ],
+      },
+    }));
+    const client = createGmailClient();
+
+    const message = await client.getMessage(accountId, 'INBOX', 'message-1');
+
+    expect(message.attachments).toEqual([
+      {
+        id: 'attachment-1',
+        name: 'inline-report.pdf',
+        contentType: 'application/pdf',
+        size: 123,
+        isInline: false,
+      },
+    ]);
+  });
+
+  it('downloads empty Gmail attachments', async () => {
+    mockFetch(jsonResponse({
+      id: 'message-1',
+      payload: {
+        parts: [
+          {
+            filename: 'empty.txt',
+            mimeType: 'text/plain',
+            body: {
+              attachmentId: 'attachment-1',
+              data: '',
+              size: 0,
+            },
+          },
+        ],
+      },
+    }));
+    const client = createGmailClient();
+
+    const attachment = await client.downloadAttachment(
+      accountId,
+      'message-1',
+      'attachment-1',
+    );
+
+    expect(attachment).toMatchObject({
+      name: 'empty.txt',
+      contentType: 'text/plain',
+    });
+    expect(attachment.content).toHaveLength(0);
   });
 });
 

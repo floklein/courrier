@@ -1,4 +1,5 @@
-import { MailOpen, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { Download, ExternalLink, MailOpen, MoreHorizontal, Paperclip, Reply, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,11 +13,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type {
+  MailAttachment,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
   ReplyToMessageInput,
 } from '@/lib/mail-types';
+import { api } from '@/lib/api-client';
 import { formatMailDate } from '@/lib/mail/mail-utils';
 import { cn } from '@/lib/utils';
 import { PanelStatus } from '@/ui/app/StatusViews';
@@ -204,6 +207,14 @@ export function ReadingPane({
             </Badge>
           </div>
 
+          {message.attachments.length > 0 && (
+            <MessageAttachments
+              accountId={accountId}
+              messageId={message.id}
+              attachments={message.attachments}
+            />
+          )}
+
           {message.bodyContentType === 'text' ? (
             <div className="px-4 py-4">
               <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-card-foreground">
@@ -234,6 +245,98 @@ export function ReadingPane({
       )}
     </article>
   );
+}
+
+function MessageAttachments({
+  accountId,
+  messageId,
+  attachments,
+}: {
+  accountId: string;
+  messageId: string;
+  attachments: MailAttachment[];
+}) {
+  const openMutation = useMutation({
+    mutationFn: (attachmentId: string) =>
+      api.attachments.open(accountId, messageId, attachmentId),
+  });
+  const downloadMutation = useMutation({
+    mutationFn: (attachmentId: string) =>
+      api.attachments.download(accountId, messageId, attachmentId),
+  });
+  const error = openMutation.error ?? downloadMutation.error;
+
+  return (
+    <section className="border-b px-4 py-3">
+      <div className="flex flex-wrap gap-2">
+        {attachments.map((attachment) => (
+          <div
+            key={attachment.id}
+            className="flex min-h-10 min-w-0 max-w-full items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5 text-sm"
+          >
+            <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="truncate font-medium">{attachment.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatFileSize(attachment.size)}
+              </p>
+            </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Open ${attachment.name}`}
+                    disabled={openMutation.isPending || downloadMutation.isPending}
+                    onClick={() => openMutation.mutate(attachment.id)}
+                  >
+                    <ExternalLink data-icon="inline-start" />
+                  </Button>
+                }
+              />
+              <TooltipContent>Open</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Download ${attachment.name}`}
+                    disabled={openMutation.isPending || downloadMutation.isPending}
+                    onClick={() => downloadMutation.mutate(attachment.id)}
+                  >
+                    <Download data-icon="inline-start" />
+                  </Button>
+                }
+              />
+              <TooltipContent>Download</TooltipContent>
+            </Tooltip>
+          </div>
+        ))}
+      </div>
+      {error && (
+        <p className="mt-2 text-sm text-destructive">
+          {error instanceof Error ? error.message : 'Attachment action failed.'}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${Math.round(size / 1024)} KB`;
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function EmptyMessageSelection() {

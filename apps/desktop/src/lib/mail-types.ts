@@ -37,15 +37,32 @@ export interface MailPersonSuggestion {
   email: string;
 }
 
+export interface MailAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+  isInline?: boolean;
+}
+
+export interface LocalMailAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+}
+
 export interface SendMailInput {
   toRecipients: MailComposeRecipient[];
   subject: string;
   bodyHtml: string;
+  attachments?: LocalMailAttachment[];
 }
 
 export interface ReplyToMessageInput {
   messageId: string;
   bodyHtml: string;
+  attachments?: LocalMailAttachment[];
 }
 
 export interface MailMessageSummary {
@@ -64,6 +81,7 @@ export interface MailMessageSummary {
 export interface MailMessageDetail extends MailMessageSummary {
   bodyContentType: 'html' | 'text';
   bodyContent: string;
+  attachments: MailAttachment[];
 }
 
 export interface PagedMessages {

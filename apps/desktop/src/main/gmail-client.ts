@@ -1,22 +1,25 @@
 import type {
   MailAccount,
   MailAddress,
+  MailAttachment,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
   MailPersonSuggestion,
   PagedMessages,
-  ReplyToMessageInput,
-  SendMailInput,
 } from '@/lib/mail-types';
 import type {
   CreateMailSubscriptionInput,
+  DownloadedMailAttachment,
   MailAuthProvider,
   MailProvider,
   MailSubscription,
   MoveMessageInput,
+  ProviderReplyToMessageInput,
+  ProviderSendMailInput,
   RenewSubscriptionInput,
 } from '@/main/mail-provider';
+import MailComposer from 'nodemailer/lib/mail-composer';
 
 const gmailBaseUrl = 'https://gmail.googleapis.com/gmail/v1';
 const peopleBaseUrl = 'https://people.googleapis.com/v1';
@@ -61,10 +64,13 @@ interface GmailHeader {
 }
 
 interface GmailMessagePartBody {
+  attachmentId?: string;
   data?: string;
+  size?: number;
 }
 
 interface GmailMessagePart {
+  partId?: string;
   mimeType?: string;
   filename?: string;
   headers?: GmailHeader[];
@@ -84,6 +90,11 @@ interface GmailMessage extends GmailMessagePart {
 interface GmailWatchResponse {
   historyId?: string;
   expiration?: string;
+}
+
+interface GmailAttachmentResponse {
+  data?: string;
+  size?: number;
 }
 
 interface PeopleSearchResponse {
@@ -240,12 +251,13 @@ export class GmailClient implements MailProvider {
     return mapPeopleSuggestions(data);
   }
 
-  async sendMessage(accountId: string, input: SendMailInput): Promise<void> {
+  async sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void> {
     await this.fetchGmail(accountId, `${gmailBaseUrl}/users/me/messages/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        raw: createRawMail({
+        raw: await createRawMail({
+          attachments: input.attachments ?? [],
           bodyHtml: input.bodyHtml,
           subject: input.subject,
           toRecipients: input.toRecipients,
@@ -256,7 +268,7 @@ export class GmailClient implements MailProvider {
 
   async replyToMessage(
     accountId: string,
-    input: ReplyToMessageInput,
+    input: ProviderReplyToMessageInput,
   ): Promise<void> {
     const original = await this.getRawMessage(accountId, input.messageId);
     const headers = getHeaderMap(original.payload?.headers);
@@ -277,7 +289,8 @@ export class GmailClient implements MailProvider {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        raw: createRawMail({
+        raw: await createRawMail({
+          attachments: input.attachments ?? [],
           bodyHtml: input.bodyHtml,
           subject,
           toRecipients: [{ name: replyTarget.name, email: replyTarget.email }],
@@ -289,6 +302,40 @@ export class GmailClient implements MailProvider {
         threadId: original.threadId,
       }),
     });
+  }
+
+  async downloadAttachment(
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<DownloadedMailAttachment> {
+    const message = await this.getFullMessage(accountId, messageId);
+    const part = findAttachmentPart(message.payload, attachmentId);
+
+    if (!part) {
+      throw new Error('Gmail attachment was not found.');
+    }
+
+    const data =
+      part.body?.data ??
+      (
+        await this.fetchGmail<GmailAttachmentResponse>(
+          accountId,
+          `${gmailBaseUrl}/users/me/messages/${encodeURIComponent(
+            messageId,
+          )}/attachments/${encodeURIComponent(attachmentId)}`,
+        )
+      ).data;
+
+    if (data == null) {
+      throw new Error('Gmail did not return attachment content.');
+    }
+
+    return {
+      name: part.filename || 'attachment',
+      contentType: part.mimeType || 'application/octet-stream',
+      content: decodeBase64UrlBuffer(data),
+    };
   }
 
   async createMailSubscription(
@@ -381,6 +428,15 @@ export class GmailClient implements MailProvider {
       `${gmailBaseUrl}/users/me/messages/${encodeURIComponent(
         messageId,
       )}?${params.toString()}`,
+    );
+  }
+
+  private async getFullMessage(accountId: string, messageId: string) {
+    return this.fetchGmail<GmailMessage>(
+      accountId,
+      `${gmailBaseUrl}/users/me/messages/${encodeURIComponent(
+        messageId,
+      )}?format=full`,
     );
   }
 
@@ -500,6 +556,7 @@ function mapGmailMessageDetail(
     ...summary,
     bodyContentType: body.contentType,
     bodyContent: body.content,
+    attachments: collectAttachments(message.payload),
   };
 }
 
@@ -625,7 +682,7 @@ function findBodyPart(
     return undefined;
   }
 
-  if (part.mimeType === mimeType && part.body?.data) {
+  if (part.mimeType === mimeType && part.body?.data && !part.filename) {
     return part.body.data;
   }
 
@@ -645,60 +702,138 @@ function hasAttachments(part: GmailMessagePart | undefined): boolean {
     return false;
   }
 
-  if (part.filename) {
+  if (part.filename && !isInlinePart(part)) {
     return true;
   }
 
   return (part.parts ?? []).some(hasAttachments);
 }
 
+function collectAttachments(part: GmailMessagePart | undefined): MailAttachment[] {
+  if (!part) {
+    return [];
+  }
+
+  const attachments: MailAttachment[] = [];
+
+  if (part.filename && !isInlinePart(part)) {
+    attachments.push({
+      id: part.body?.attachmentId || part.partId || part.filename,
+      name: part.filename,
+      contentType: part.mimeType || 'application/octet-stream',
+      size: part.body?.size ?? 0,
+      isInline: false,
+    });
+  }
+
+  for (const child of part.parts ?? []) {
+    attachments.push(...collectAttachments(child));
+  }
+
+  return attachments;
+}
+
+function findAttachmentPart(
+  part: GmailMessagePart | undefined,
+  attachmentId: string,
+): GmailMessagePart | undefined {
+  if (!part) {
+    return undefined;
+  }
+
+  if (
+    part.filename &&
+    !isInlinePart(part) &&
+    (part.body?.attachmentId === attachmentId ||
+      part.partId === attachmentId ||
+      part.filename === attachmentId)
+  ) {
+    return part;
+  }
+
+  for (const child of part.parts ?? []) {
+    const match = findAttachmentPart(child, attachmentId);
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return undefined;
+}
+
+function isInlinePart(part: GmailMessagePart) {
+  const disposition = part.headers
+    ?.find((header) => header.name?.toLowerCase() === 'content-disposition')
+    ?.value?.toLowerCase();
+
+  return disposition?.split(';', 1)[0].trim() === 'inline';
+}
+
 function decodeBase64Url(value: string) {
+  return decodeBase64UrlBuffer(value).toString('utf8');
+}
+
+function decodeBase64UrlBuffer(value: string) {
   return Buffer.from(
     value.replaceAll('-', '+').replaceAll('_', '/'),
     'base64',
-  ).toString('utf8');
+  );
 }
 
-function createRawMail({
+async function createRawMail({
+  attachments,
   bodyHtml,
   extraHeaders = {},
   subject,
   toRecipients,
 }: {
+  attachments: NonNullable<ProviderSendMailInput['attachments']>;
   bodyHtml: string;
   extraHeaders?: Record<string, string>;
   subject: string;
-  toRecipients: SendMailInput['toRecipients'];
+  toRecipients: ProviderSendMailInput['toRecipients'];
 }) {
-  const headers = [
-    ['To', toRecipients.map(formatComposeRecipient).join(', ')],
-    ['Subject', subject],
-    ['MIME-Version', '1.0'],
-    ['Content-Type', 'text/html; charset=UTF-8'],
-    ['Content-Transfer-Encoding', '8bit'],
-    ...Object.entries(extraHeaders),
-  ];
-  const message = `${headers
-    .map(([name, value]) => `${name}: ${encodeHeaderValue(value)}`)
-    .join('\r\n')}\r\n\r\n${bodyHtml}`;
+  const composer = new MailComposer({
+    attachments: attachments.map((attachment) => ({
+      contentType: attachment.contentType,
+      filename: attachment.name,
+      path: attachment.path,
+    })),
+    headers: extraHeaders,
+    html: bodyHtml,
+    subject,
+    text: '',
+    to: toRecipients.map(formatComposeRecipient).join(', '),
+  });
+  const message = await buildMimeMessage(composer);
 
-  return Buffer.from(message, 'utf8').toString('base64url');
+  return message.toString('base64url');
 }
 
 function formatComposeRecipient(
-  recipient: SendMailInput['toRecipients'][number],
+  recipient: ProviderSendMailInput['toRecipients'][number],
 ) {
   return recipient.name
     ? `"${recipient.name.replaceAll('"', '\\"')}" <${recipient.email}>`
     : recipient.email;
 }
 
-function encodeHeaderValue(value: string) {
-  return value.replaceAll(/\r?\n/g, ' ');
-}
-
 function createReplySubject(subject: string) {
   return /^re:/i.test(subject) ? subject : `Re: ${subject || '(No subject)'}`;
+}
+
+function buildMimeMessage(composer: MailComposer) {
+  return new Promise<Buffer>((resolve, reject) => {
+    composer.compile().build((error, message) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(message);
+    });
+  });
 }
 
 function parseMailboxList(value: string) {

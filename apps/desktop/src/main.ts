@@ -2,13 +2,16 @@ import 'dotenv/config';
 import {
   app,
   BrowserWindow,
+  dialog,
   Menu,
   ipcMain,
   nativeTheme,
   session,
   shell,
 } from 'electron';
+import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import started from 'electron-squirrel-startup';
 import {
   composeWindowDraftSchema,
@@ -19,6 +22,7 @@ import { GraphClient } from '@/main/graph-client';
 import { GmailClient } from '@/main/gmail-client';
 import { GoogleAuthProvider } from '@/main/google-auth-provider';
 import { registerIpcHandlers } from '@/main/ipc';
+import { LocalAttachmentStore } from '@/main/local-attachment-store';
 import { MailSubscriptionManager } from '@/main/mail-subscription-manager';
 import { MailService } from '@/main/mail-service';
 import { MicrosoftAuthProvider } from '@/main/microsoft-auth-provider';
@@ -148,7 +152,8 @@ app.on('ready', () => {
     { auth: googleAuthProvider, mail: gmailClient },
   ];
   const authService = new AuthService(providers);
-  const mailService = new MailService([graphClient, gmailClient]);
+  const localAttachmentStore = new LocalAttachmentStore();
+  const mailService = new MailService([graphClient, gmailClient], localAttachmentStore);
   const subscriptionManager = new MailSubscriptionManager({
     authService,
     mailService,
@@ -167,6 +172,7 @@ app.on('ready', () => {
       }),
   });
   registerWindowIpcHandlers(trustPolicy);
+  registerAttachmentIpcHandlers(trustPolicy, localAttachmentStore, mailService);
   createWindow(trustPolicy);
   void startMailSubscriptions(subscriptionManager);
   app.on('before-quit', () => {
@@ -189,6 +195,104 @@ function registerWindowIpcHandlers(trustPolicy: AppUrlTrustPolicy) {
   });
 }
 
+function registerAttachmentIpcHandlers(
+  trustPolicy: AppUrlTrustPolicy,
+  localAttachmentStore: LocalAttachmentStore,
+  mailService: MailService,
+) {
+  const assertSender = (event: Electron.IpcMainInvokeEvent) =>
+    assertTrustedSender(event, trustPolicy);
+
+  ipcMain.handle('attachment:pick-local', async (event) => {
+    assertSender(event);
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const result = parent
+      ? await dialog.showOpenDialog(parent, {
+          properties: ['openFile', 'multiSelections'],
+        })
+      : await dialog.showOpenDialog({
+          properties: ['openFile', 'multiSelections'],
+        });
+
+    if (result.canceled) {
+      return [];
+    }
+
+    return localAttachmentStore.registerFiles(
+      result.filePaths.map((filePath) => ({ path: filePath })),
+    );
+  });
+
+  ipcMain.handle('attachment:register-local-files', async (event, files: unknown) => {
+    assertSender(event);
+    return localAttachmentStore.registerFiles(parseLocalFilesPayload(files));
+  });
+
+  ipcMain.handle(
+    'attachment:open',
+    async (
+      event,
+      accountId: string,
+      messageId: string,
+      attachmentId: string,
+    ) => {
+      assertSender(event);
+      const attachment = await mailService.downloadAttachment(
+        parseIpcPayload(idSchema, accountId),
+        parseIpcPayload(idSchema, messageId),
+        parseIpcPayload(idSchema, attachmentId),
+      );
+      const tempPath = path.join(
+        app.getPath('temp'),
+        'courrier-attachments',
+        randomUUID(),
+        sanitizeFileName(attachment.name),
+      );
+
+      await fs.mkdir(path.dirname(tempPath), { recursive: true });
+      await fs.writeFile(tempPath, attachment.content);
+
+      const error = await shell.openPath(tempPath);
+
+      if (error) {
+        throw new Error(error);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'attachment:download',
+    async (
+      event,
+      accountId: string,
+      messageId: string,
+      attachmentId: string,
+    ) => {
+      assertSender(event);
+      const attachment = await mailService.downloadAttachment(
+        parseIpcPayload(idSchema, accountId),
+        parseIpcPayload(idSchema, messageId),
+        parseIpcPayload(idSchema, attachmentId),
+      );
+      const parent = BrowserWindow.fromWebContents(event.sender);
+      const result = parent
+        ? await dialog.showSaveDialog(parent, {
+            defaultPath: sanitizeFileName(attachment.name),
+          })
+        : await dialog.showSaveDialog({
+            defaultPath: sanitizeFileName(attachment.name),
+          });
+
+      if (result.canceled || !result.filePath) {
+        return false;
+      }
+
+      await fs.writeFile(result.filePath, attachment.content);
+      return true;
+    },
+  );
+}
+
 function parseIpcPayload<T>(
   schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
   value: unknown,
@@ -200,6 +304,52 @@ function parseIpcPayload<T>(
   }
 
   return result.data;
+}
+
+const idSchema: {
+  safeParse: (
+    value: unknown,
+  ) => { success: true; data: string } | { success: false };
+} = {
+  safeParse(value: unknown) {
+    return typeof value === 'string' && value.length > 0 && value.length <= 2048
+      ? { success: true as const, data: value }
+      : { success: false as const };
+  },
+};
+
+function parseLocalFilesPayload(value: unknown) {
+  if (!Array.isArray(value)) {
+    throw new Error('Invalid IPC payload');
+  }
+
+  return value.map((file) => {
+    if (typeof file !== 'object' || file === null) {
+      throw new Error('Invalid IPC payload');
+    }
+
+    const candidate = file as Record<string, unknown>;
+
+    if (
+      typeof candidate.path !== 'string' ||
+      typeof candidate.name !== 'string' ||
+      typeof candidate.contentType !== 'string' ||
+      typeof candidate.size !== 'number'
+    ) {
+      throw new Error('Invalid IPC payload');
+    }
+
+    return {
+      path: candidate.path,
+      name: candidate.name,
+      contentType: candidate.contentType,
+      size: candidate.size,
+    };
+  });
+}
+
+function sanitizeFileName(name: string) {
+  return name.replaceAll(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim() || 'attachment';
 }
 
 function registerSessionPermissionGuards() {

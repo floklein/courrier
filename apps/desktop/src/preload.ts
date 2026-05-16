@@ -1,6 +1,7 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   AuthSession,
+  LocalMailAttachment,
   MailFolder,
   MailMessageDetail,
   MailPersonSuggestion,
@@ -25,6 +26,36 @@ const courrier = {
       ipcRenderer.invoke('auth:switch-account', accountId) as Promise<AuthSession>,
     signOut: (accountId?: string) =>
       ipcRenderer.invoke('auth:sign-out', accountId) as Promise<AuthSession>,
+  },
+  attachments: {
+    pickLocal: () =>
+      ipcRenderer.invoke('attachment:pick-local') as Promise<LocalMailAttachment[]>,
+    registerDroppedFiles: (files: File[]) =>
+      ipcRenderer.invoke(
+        'attachment:register-local-files',
+        files
+          .map((file) => ({
+            path: webUtils.getPathForFile(file),
+            name: file.name,
+            contentType: file.type,
+            size: file.size,
+          }))
+          .filter((file) => file.path),
+      ) as Promise<LocalMailAttachment[]>,
+    open: (accountId: string, messageId: string, attachmentId: string) =>
+      ipcRenderer.invoke(
+        'attachment:open',
+        accountId,
+        messageId,
+        attachmentId,
+      ) as Promise<void>,
+    download: (accountId: string, messageId: string, attachmentId: string) =>
+      ipcRenderer.invoke(
+        'attachment:download',
+        accountId,
+        messageId,
+        attachmentId,
+      ) as Promise<boolean>,
   },
   mail: {
     listFolders: (accountId: string) =>
