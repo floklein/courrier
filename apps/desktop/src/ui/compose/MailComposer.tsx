@@ -1,5 +1,7 @@
+import { dropTargetForExternal } from '@atlaskit/pragmatic-drag-and-drop/external/adapter';
+import { containsFiles, getFiles } from '@atlaskit/pragmatic-drag-and-drop/external/file';
 import { Paperclip, Send, X } from 'lucide-react';
-import { FormEvent, useEffect, useId, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -60,6 +62,7 @@ export function MailComposer({
   onSend: (input: SendMailInput) => void;
   useWindowHeader?: boolean;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
   const toInputId = useId();
   const subjectInputId = useId();
   const bodyInputId = useId();
@@ -81,6 +84,7 @@ export function MailComposer({
     ...(initialDraft?.editorValue ?? emptyComposeWindowDraft.editorValue),
   });
   const [validationMessage, setValidationMessage] = useState('');
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const isReply = mode === 'reply';
   const currentDraft = useMemo<ComposeWindowDraft>(
     () => ({
@@ -106,6 +110,25 @@ export function MailComposer({
 
     onDraftChange?.(currentDraft);
   }, [currentDraft, isReply, onDraftChange]);
+
+  useEffect(() => {
+    const element = formRef.current;
+
+    if (!element || isSending) {
+      return;
+    }
+
+    return dropTargetForExternal({
+      element,
+      canDrop: ({ source }) => containsFiles({ source }),
+      onDragEnter: () => setIsDraggingFiles(true),
+      onDragLeave: () => setIsDraggingFiles(false),
+      onDrop: ({ source }) => {
+        setIsDraggingFiles(false);
+        void addDroppedAttachments(getFiles({ source }));
+      },
+    });
+  }, [isSending]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -207,7 +230,11 @@ export function MailComposer({
 
   return (
     <form
-      className={cn('flex min-h-0 flex-col overflow-hidden bg-card', className)}
+      ref={formRef}
+      className={cn(
+        'relative flex min-h-0 flex-col overflow-hidden rounded-[inherit] bg-card',
+        className,
+      )}
       onSubmit={handleSubmit}
     >
       <MailComposerHeader
@@ -272,7 +299,6 @@ export function MailComposer({
             className="flex-1"
             disabled={isSending}
             initialValue={initialDraft?.editorValue}
-            onAddAttachments={(files) => void addDroppedAttachments(files)}
             onPickAttachments={() => void addPickedAttachments()}
             placeholder={isReply ? 'Write a reply' : 'Write a message'}
             onChange={setEditorValue}
@@ -334,6 +360,12 @@ export function MailComposer({
           {isSending ? 'Sending...' : 'Send'}
         </Button>
       </div>
+
+      {isDraggingFiles && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-[inherit] border-2 border-dashed border-primary bg-background/85 text-sm font-medium text-foreground">
+          Drop files to attach
+        </div>
+      )}
     </form>
   );
 }
