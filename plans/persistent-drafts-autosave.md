@@ -10,73 +10,82 @@
 
 ## Scope
 
-- Persist unsent compose state across window close, app restart, and renderer crash.
+- Persist unsent compose state in the provider's dedicated Drafts folder across window close, app restart, and renderer crash.
 - Autosave all compose modes: new message, reply, reply-all, and forward.
-- Preserve enough attachment information to restore draft UI safely, while detecting missing local files before send.
+- Restore drafts from the provider, not from a local Courrier draft store.
+- Preserve attachments by uploading them to the provider draft when autosave succeeds.
 - Avoid silently discarding dirty drafts. Closing a composer should either keep the autosaved draft or explicitly discard it.
 
-## Storage Model
+## Provider-Backed Draft Model
 
-- Add a main-process `DraftStore` under `apps/desktop/src/main/draft-store.ts`.
-- Store JSON in `app.getPath('userData')/drafts.json` or one JSON file per draft under `app.getPath('userData')/drafts/`.
-- Validate every read/write with a Zod schema in `apps/desktop/src/lib/draft-schemas.ts`.
-- Write atomically: serialize to a temporary file in the same directory, then rename it into place.
-- Draft record fields:
-  - `id`
+- Do not persist draft bodies, recipients, subjects, or draft lists in local JSON files.
+- Add provider draft APIs to `MailProvider` and `MailService`:
+  - `listDrafts(accountId): Promise<MailDraftSummary[]>`
+  - `getDraft(accountId, providerDraftId): Promise<MailDraftDetail>`
+  - `createDraft(accountId, input): Promise<MailDraftDetail>`
+  - `updateDraft(accountId, providerDraftId, input): Promise<MailDraftDetail>`
+  - `deleteDraft(accountId, providerDraftId): Promise<void>`
+  - `sendDraft(accountId, providerDraftId): Promise<void>`
+- Draft record fields exposed to the renderer:
+  - `providerDraftId`
+  - `providerDraftMessageId?: string`
   - `accountId`
   - `kind: 'new' | 'reply' | 'replyAll' | 'forward'`
   - `relatedMessageId?: string`
   - `toValue`, `ccValue`, `bccValue`
   - `subject`
   - `editorValue`
-  - `attachments: Array<{ id, name, contentType, size, sourcePath }>`
+  - `attachments: Array<{ id, name, contentType, size, providerAttachmentId?: string }>`
   - `createdAt`, `updatedAt`
-  - optional provider fields for a later provider-sync pass: `providerDraftId?: string`, `providerDraftMessageId?: string`
+- Microsoft Graph:
+  - create new-message drafts in the mailbox Drafts folder with `/me/messages`
+  - create reply/reply-all/forward drafts through the Graph draft actions, then update the draft message
+  - update recipients, subject, body, and attachments on the provider draft
+  - send with `/me/messages/{draftId}/send`
+- Gmail:
+  - create/update provider drafts with `users.drafts.create` and `users.drafts.update`
+  - keep the Gmail draft ID and underlying message ID
+  - send with `users.drafts.send`
 
 ## Autosave Flow
 
-- Extend `ComposeWindowDraft` to include `id`, `kind`, Cc/Bcc values, and `relatedMessageId`.
+- Extend `ComposeWindowDraft` to include `providerDraftId`, `providerDraftMessageId`, `kind`, Cc/Bcc values, and `relatedMessageId`.
 - Add IPC handlers:
   - `draft:list`
   - `draft:get`
   - `draft:save`
   - `draft:delete`
-  - `draft:resolve-attachments`
+  - `draft:send`
 - Debounce renderer autosave at roughly 750 ms after edits and flush immediately before minimize, detach-to-window, close, and send.
-- Keep autosave in the main process, not browser storage, so multiple windows and trusted IPC checks remain centralized.
-- On successful send/reply/forward, delete the local draft after provider send succeeds.
+- Keep autosave orchestration in the main process, not browser storage, so multiple windows and trusted IPC checks remain centralized.
+- Local renderer/main-process draft state is only an ephemeral editing cache until the provider write returns.
+- On successful send/reply/forward, send the provider draft and clear only ephemeral Courrier state.
 - If autosave fails, show an inline non-blocking error in the composer and keep the editor open.
 
-## Attachment Recovery
+## Attachment Handling
 
-- Persist original file paths and metadata for picked/dropped files.
-- On draft restore, stat each source path and show missing files as unavailable chips rather than dropping them.
-- Add a `LocalAttachmentStore.registerRestoredFiles` path that recreates valid local attachment IDs from persisted paths.
-- Block sending only when the user tries to send a draft with unavailable attachments, and offer remove/re-pick actions in the composer.
-
-## Provider-Backed Draft Sync
-
-- Phase 1 should be local persistence only because it is needed for crash/window recovery and does not require extra provider edge cases.
-- Phase 2 can sync local drafts to providers:
-  - Graph: create/update message drafts with To/Cc/Bcc/body/subject and send with `/send`.
-  - Gmail: use `users.drafts.create`, `users.drafts.update`, and `users.drafts.send`.
-- Provider sync must keep a local shadow draft as source of truth until provider writes are confirmed.
-- Do not autosave every keystroke to providers; use a longer debounce and explicit conflict handling for failures.
+- Picked/dropped local files stay in `LocalAttachmentStore` only until they are uploaded to the provider draft.
+- After upload, restored drafts should display provider attachment metadata from the draft itself.
+- Do not rely on local file paths for restart recovery.
+- If an attachment upload fails, keep the composer open and show the failed attachment as not yet saved to the provider draft.
+- Sending should use the provider draft, including the provider-stored attachments.
 
 ## Renderer Plan
 
-- Add a draft picker/recovery entry point in `FolderRail` or compose button menu when saved drafts exist.
-- When opening compose, create or reuse a draft ID immediately.
+- Add a draft picker/recovery entry point in `FolderRail` or compose button menu when provider drafts exist.
+- When opening compose, create or reuse a provider draft immediately.
 - When closing a dirty composer, change the current discard prompt into a choice between saving/closing and discard.
 - Show `Saved`/`Saving...`/`Autosave failed` state in `MailComposerHeader`.
-- Keep detached compose windows and overlay composer editing the same draft record when the user moves between them.
+- Keep detached compose windows and overlay composer editing the same provider draft when the user moves between them.
+- Invalidate the provider Drafts folder query after create, update, send, or delete.
 
 ## Tests
 
-- Unit-test `DraftStore` validation, atomic writes, corrupt-file recovery, and per-draft deletion.
-- Add IPC tests for draft payload validation and trusted sender checks.
-- Add renderer tests for debounce save, close behavior, restore behavior, and send cleanup.
-- Add attachment restore tests for valid files, missing files, and oversized files.
+- Provider tests for Graph draft create/update/delete/send, including reply draft updates and attachment upload.
+- Provider tests for Gmail `users.drafts.create`, `users.drafts.update`, `users.drafts.send`, and draft ID/message ID mapping.
+- Add IPC tests for draft payload validation, trusted sender checks, and provider error surfacing.
+- Add renderer tests for debounce save, close behavior, restore behavior, provider Drafts picker, and send cleanup.
+- Add attachment tests for upload success, upload failure, and restored provider attachment metadata.
 
 ## References
 

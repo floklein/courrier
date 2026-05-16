@@ -12,6 +12,7 @@
 
 - Add an all-folders search mode.
 - Keep current folder-scoped search available.
+- Toggle between folder search and global search with shadcn Tabs under the search bar.
 - Show which folder/label each result belongs to.
 - Preserve provider pagination and safe next-page URL validation.
 
@@ -49,7 +50,9 @@
 
 - Update `MessageList` search header:
   - default scope is current folder
-  - add a compact segmented control for `This folder` and `All mail`
+  - add shadcn `Tabs` under the search input for `This folder` and `All mail`
+  - install the shadcn `tabs` component with the shadcn CLI if it is not already present
+  - keep `TabsTrigger` elements inside `TabsList`; the message list itself remains the shared result view rather than separate tab panels
   - when in all-mail mode, use placeholder `Search all mail`
 - Do not clear global search just because the route folder changes if the user remains in search mode.
 - Show result count as loaded results, not total mailbox matches.
@@ -62,7 +65,7 @@
 - Query-option tests for folder search vs global search keys.
 - Graph tests for global search URL, `$select`, and next-link validation.
 - Gmail tests confirming global search omits `labelIds` and honors `includeSpamTrash`.
-- Renderer tests for scope toggle, placeholder text, reset behavior, and result folder badges.
+- Renderer tests for the shadcn Tabs scope toggle under the search bar, placeholder text, reset behavior, and result folder badges.
 
 ## References
 
