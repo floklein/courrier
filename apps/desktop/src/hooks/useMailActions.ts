@@ -213,15 +213,26 @@ export function useMailActions({
       const archiveFolder = folders.find(
         (folder) => folder.wellKnownName === 'archive',
       );
-
-      handleMessageRemoved(message);
-      updateCachedFolderCounts(queryClient, accountId, {
+      const removesCurrentMessage = doesArchiveRemoveFromCurrentFolder({
+        accountId,
+        folders,
         folderId: message.folderId,
-        totalDelta: -1,
-        unreadDelta: message.isRead ? 0 : -1,
       });
 
-      if (archiveFolder && archiveFolder.id !== message.folderId) {
+      if (removesCurrentMessage) {
+        handleMessageRemoved(message);
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: message.folderId,
+          totalDelta: -1,
+          unreadDelta: message.isRead ? 0 : -1,
+        });
+      }
+
+      if (
+        removesCurrentMessage &&
+        archiveFolder &&
+        archiveFolder.id !== message.folderId
+      ) {
         updateCachedFolderCounts(queryClient, accountId, {
           folderId: archiveFolder.id,
           totalDelta: 1,
@@ -296,9 +307,29 @@ export function useMailActions({
     onMutate: async ({ message, isStarred }) => {
       await queryClient.cancelQueries({ queryKey: ['mail', accountId] });
       const snapshot = createMailCacheSnapshot(queryClient);
+      const starredUpdate = getLabelFolderStateUpdate({
+        folders,
+        labelFolderId: 'STARRED',
+        message,
+        wasEnabled: Boolean(message.isStarred) || message.folderId === 'STARRED',
+        isEnabled: isStarred,
+      });
+
       updateCachedMessageState(queryClient, accountId, message.id, {
         isStarred,
       });
+
+      if (starredUpdate.shouldRemoveMessage) {
+        handleMessageRemoved(message);
+      }
+
+      if (starredUpdate.folderId) {
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: starredUpdate.folderId,
+          totalDelta: starredUpdate.totalDelta,
+          unreadDelta: starredUpdate.unreadDelta,
+        });
+      }
 
       return { snapshot };
     },
@@ -306,10 +337,20 @@ export function useMailActions({
       restoreMailCacheSnapshot(queryClient, context?.snapshot);
     },
     onSuccess: (_data, { message }) => {
-      void queryClient.invalidateQueries({
-        queryKey: ['mail', accountId, 'message', resolvedFolderId, message.id],
-        refetchType: 'none',
-      });
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'folders'],
+          refetchType: 'none',
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'messages'],
+          refetchType: 'none',
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'message', resolvedFolderId, message.id],
+          refetchType: 'none',
+        }),
+      ]);
     },
   });
   const flagMutation = useMutation({
@@ -350,10 +391,33 @@ export function useMailActions({
     onMutate: async ({ message, isImportant }) => {
       await queryClient.cancelQueries({ queryKey: ['mail', accountId] });
       const snapshot = createMailCacheSnapshot(queryClient);
+      const importantUpdate = getLabelFolderStateUpdate({
+        folders,
+        labelFolderId: 'IMPORTANT',
+        message,
+        wasEnabled:
+          Boolean(message.isImportant) ||
+          message.importance === 'high' ||
+          message.folderId === 'IMPORTANT',
+        isEnabled: isImportant,
+      });
+
       updateCachedMessageState(queryClient, accountId, message.id, {
         isImportant,
         importance: isImportant ? 'high' : 'normal',
       });
+
+      if (importantUpdate.shouldRemoveMessage) {
+        handleMessageRemoved(message);
+      }
+
+      if (importantUpdate.folderId) {
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: importantUpdate.folderId,
+          totalDelta: importantUpdate.totalDelta,
+          unreadDelta: importantUpdate.unreadDelta,
+        });
+      }
 
       return { snapshot };
     },
@@ -361,10 +425,20 @@ export function useMailActions({
       restoreMailCacheSnapshot(queryClient, context?.snapshot);
     },
     onSuccess: (_data, { message }) => {
-      void queryClient.invalidateQueries({
-        queryKey: ['mail', accountId, 'message', resolvedFolderId, message.id],
-        refetchType: 'none',
-      });
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'folders'],
+          refetchType: 'none',
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'messages'],
+          refetchType: 'none',
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail', accountId, 'message', resolvedFolderId, message.id],
+          refetchType: 'none',
+        }),
+      ]);
     },
   });
   const sendMessageMutation = useMutation({
@@ -412,4 +486,46 @@ export function useMailActions({
     sendMessageMutation,
     starMutation,
   };
+}
+
+export function getLabelFolderStateUpdate({
+  folders,
+  labelFolderId,
+  message,
+  wasEnabled,
+  isEnabled,
+}: {
+  folders: MailFolder[];
+  labelFolderId: string;
+  message: MailMessageSummary;
+  wasEnabled: boolean;
+  isEnabled: boolean;
+}) {
+  const folder = folders.find((candidate) => candidate.id === labelFolderId);
+  const delta = wasEnabled === isEnabled ? 0 : isEnabled ? 1 : -1;
+
+  return {
+    folderId: folder?.id,
+    shouldRemoveMessage: Boolean(folder && message.folderId === folder.id && !isEnabled),
+    totalDelta: delta,
+    unreadDelta: message.isRead ? 0 : delta,
+  };
+}
+
+export function doesArchiveRemoveFromCurrentFolder({
+  accountId,
+  folders,
+  folderId,
+}: {
+  accountId: string;
+  folders: MailFolder[];
+  folderId: string;
+}) {
+  if (!accountId.startsWith('google:')) {
+    return true;
+  }
+
+  const folder = folders.find((candidate) => candidate.id === folderId);
+
+  return folder?.wellKnownName === 'inbox' || folderId === 'INBOX';
 }

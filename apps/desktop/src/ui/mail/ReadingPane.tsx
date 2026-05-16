@@ -38,7 +38,10 @@ import { PanelStatus } from '@/ui/app/StatusViews';
 import { MailComposer } from '@/ui/compose/MailComposer';
 import { ToolbarButton } from '@/ui/primitives/ToolbarButton';
 import { HtmlMessageBody } from '@/ui/mail/HtmlMessageBody';
-import { MailActionDropdownContent } from '@/ui/mail/MailActionMenu';
+import {
+  isArchiveFolder,
+  MailActionDropdownContent,
+} from '@/ui/mail/MailActionMenu';
 import { MailAvatar } from '@/ui/mail/MailAvatar';
 
 export function ReadingPane({
@@ -110,6 +113,9 @@ export function ReadingPane({
   ) => void;
   className?: string;
 }) {
+  const canArchive =
+    actionCapabilities.includes('archive') && !isArchiveFolder(folders, folderId);
+
   if (isLoading) {
     return (
       <section
@@ -178,7 +184,7 @@ export function ReadingPane({
             disabled={isActionPending}
             onClick={() => onReplyToMessage(message)}
           />
-          {actionCapabilities.includes('archive') && (
+          {canArchive && (
             <ToolbarButton
               icon={Archive}
               label="Archive"
