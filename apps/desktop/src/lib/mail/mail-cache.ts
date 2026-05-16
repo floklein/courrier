@@ -5,6 +5,7 @@ import type {
 import type {
   MailFolder,
   MailMessageDetail,
+  MailMessageSummary,
   PagedMessages,
 } from '@/lib/mail-types';
 
@@ -69,6 +70,42 @@ export function removeCachedMessage(
     queryKey: ['mail', accountId, 'message'],
     exact: false,
   });
+}
+
+export function updateCachedMessageState(
+  queryClient: QueryClient,
+  accountId: string,
+  messageId: string,
+  patch: Partial<MailMessageSummary>,
+) {
+  queryClient.setQueriesData<InfiniteData<PagedMessages>>(
+    { queryKey: ['mail', accountId, 'messages'] },
+    (data) => {
+      if (!data) {
+        return data;
+      }
+
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          messages: page.messages.map((message) =>
+            message.id === messageId ? { ...message, ...patch } : message,
+          ),
+        })),
+      };
+    },
+  );
+  queryClient.setQueriesData<MailMessageDetail>(
+    { queryKey: ['mail', accountId, 'message'] },
+    (message) =>
+      message?.id === messageId
+        ? {
+            ...message,
+            ...patch,
+          }
+        : message,
+  );
 }
 
 export function updateCachedFolderCounts(

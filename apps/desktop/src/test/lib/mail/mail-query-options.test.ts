@@ -19,12 +19,18 @@ function installCourrierApi() {
     signOut: vi.fn(),
   };
   const mail = {
+    getCapabilities: vi.fn().mockResolvedValue([]),
     listFolders: vi.fn().mockResolvedValue([]),
     listMessages: vi.fn().mockResolvedValue({ messages: [] }),
     getMessage: vi.fn().mockResolvedValue({ id: 'message-1' }),
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    archiveMessage: vi.fn(),
+    markMessageJunkState: vi.fn(),
+    setMessageStarState: vi.fn(),
+    setMessageFlagState: vi.fn(),
+    setMessageImportantState: vi.fn(),
     listPeople: vi.fn().mockResolvedValue([]),
     sendMessage: vi.fn(),
     replyToMessage: vi.fn(),

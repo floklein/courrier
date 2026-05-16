@@ -334,6 +334,45 @@ describe('GraphClient write requests', () => {
     );
   });
 
+  it('archives and marks messages as junk through Microsoft Graph moves', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'message-1' }),
+      jsonResponse({ id: 'message-1' }),
+    );
+    const client = createGraphClient();
+
+    await client.archiveMessage(account.id, 'message-1', 'inbox');
+    await client.markMessageJunkState(account.id, 'message-1', true);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/move`,
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      destinationId: 'archive',
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      destinationId: 'junkemail',
+    });
+  });
+
+  it('patches Graph flag and importance state', async () => {
+    const fetchMock = mockFetch(
+      new Response(null, { status: 204 }),
+      new Response(null, { status: 204 }),
+    );
+    const client = createGraphClient();
+
+    await client.setMessageFlagState(account.id, 'message-1', true);
+    await client.setMessageImportantState(account.id, 'message-1', false);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      flag: { flagStatus: 'flagged' },
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      importance: 'normal',
+    });
+  });
+
   it('throws structured Graph errors with Microsoft error codes', async () => {
     mockFetch(
       jsonResponse({

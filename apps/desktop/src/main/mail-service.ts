@@ -1,5 +1,6 @@
 import type {
   MailFolder,
+  MailActionCapability,
   MailMessageDetail,
   MailPersonSuggestion,
   PagedMessages,
@@ -37,6 +38,10 @@ export class MailService {
 
   listFolders(accountId: string): Promise<MailFolder[]> {
     return this.getProvider(accountId).listFolders(accountId);
+  }
+
+  getCapabilities(accountId: string): Promise<MailActionCapability[]> {
+    return this.getProvider(accountId).getCapabilities(accountId);
   }
 
   listMessages(
@@ -85,6 +90,66 @@ export class MailService {
     messageId: string,
   ): Promise<MailMessageDetail | undefined> {
     return this.getProvider(accountId).deleteMessage(accountId, messageId);
+  }
+
+  archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId: string,
+  ): Promise<MailMessageDetail | undefined> {
+    return this.getProvider(accountId).archiveMessage(
+      accountId,
+      messageId,
+      sourceFolderId,
+    );
+  }
+
+  markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail | undefined> {
+    return this.getProvider(accountId).markMessageJunkState(
+      accountId,
+      messageId,
+      isJunk,
+    );
+  }
+
+  setMessageStarState(
+    accountId: string,
+    messageId: string,
+    isStarred: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageStarState(
+      accountId,
+      messageId,
+      isStarred,
+    );
+  }
+
+  setMessageFlagState(
+    accountId: string,
+    messageId: string,
+    isFlagged: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageFlagState(
+      accountId,
+      messageId,
+      isFlagged,
+    );
+  }
+
+  setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageImportantState(
+      accountId,
+      messageId,
+      isImportant,
+    );
   }
 
   listPeople(

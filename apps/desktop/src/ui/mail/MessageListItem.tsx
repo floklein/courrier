@@ -1,7 +1,7 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { disableNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/disable-native-drag-preview';
 import { Link } from '@tanstack/react-router';
-import { Paperclip } from 'lucide-react';
+import { BadgeAlert, Flag, Paperclip, Star } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { mailMessageDragType } from '@/lib/mail/mail-drag';
@@ -141,6 +141,15 @@ export function MessageListItem({
               </p>
               {message.hasAttachments && (
                 <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+              )}
+              {message.isStarred && (
+                <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-500" />
+              )}
+              {message.isFlagged && (
+                <Flag className="size-3.5 shrink-0 fill-rose-500 text-rose-500" />
+              )}
+              {message.isImportant && (
+                <BadgeAlert className="size-3.5 shrink-0 text-orange-500" />
               )}
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                 {formatMailDate(message.receivedDateTime, 'short')}

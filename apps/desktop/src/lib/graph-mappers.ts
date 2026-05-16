@@ -32,6 +32,9 @@ export interface GraphMessage {
   isRead?: boolean | null;
   hasAttachments?: boolean | null;
   importance?: string | null;
+  flag?: {
+    flagStatus?: string | null;
+  } | null;
   from?: GraphEmailAddress | null;
   toRecipients?: GraphEmailAddress[] | null;
 }
@@ -171,6 +174,8 @@ export function mapGraphMessageSummary(
     isRead: message.isRead ?? true,
     hasAttachments: message.hasAttachments ?? false,
     importance: mapImportance(message.importance),
+    isFlagged: message.flag?.flagStatus === 'flagged',
+    isImportant: mapImportance(message.importance) === 'high',
   };
 }
 

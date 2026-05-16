@@ -85,6 +85,45 @@ describe('GmailClient', () => {
     );
   });
 
+  it('archives and marks messages as junk with Gmail labels', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'message-1', labelIds: ['Label_1'] }),
+      jsonResponse({ id: 'message-1', labelIds: ['SPAM'] }),
+    );
+    const client = createGmailClient();
+
+    await client.archiveMessage(accountId, 'message-1', 'INBOX');
+    await client.markMessageJunkState(accountId, 'message-1', true);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      removeLabelIds: ['INBOX'],
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      addLabelIds: ['SPAM'],
+      removeLabelIds: ['INBOX'],
+    });
+  });
+
+  it('toggles Gmail star and important labels', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'message-1' }),
+      jsonResponse({ id: 'message-1' }),
+    );
+    const client = createGmailClient();
+
+    await client.setMessageStarState(accountId, 'message-1', true);
+    await client.setMessageImportantState(accountId, 'message-1', false);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      addLabelIds: ['STARRED'],
+      removeLabelIds: [],
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      addLabelIds: [],
+      removeLabelIds: ['IMPORTANT'],
+    });
+  });
+
   it('sends raw RFC 2822 mail through Gmail', async () => {
     const fetchMock = mockFetch(jsonResponse({ id: 'sent-1' }));
     const client = createGmailClient();

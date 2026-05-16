@@ -76,6 +76,9 @@ export interface MailMessageSummary {
   isRead: boolean;
   hasAttachments: boolean;
   importance: 'low' | 'normal' | 'high';
+  isStarred?: boolean;
+  isFlagged?: boolean;
+  isImportant?: boolean;
 }
 
 export interface MailMessageDetail extends MailMessageSummary {
@@ -88,6 +91,13 @@ export interface PagedMessages {
   messages: MailMessageSummary[];
   nextPageToken?: string;
 }
+
+export type MailActionCapability =
+  | 'archive'
+  | 'junk'
+  | 'star'
+  | 'flag'
+  | 'important';
 
 export type ProviderId = 'microsoft' | 'google';
 
