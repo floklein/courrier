@@ -10,9 +10,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useMutation, useQueries } from '@tanstack/react-query';
-import { useCallback, type CSSProperties } from 'react';
-import googleIconUrl from '../../assets/providers/google.svg';
-import microsoftIconUrl from '../../assets/providers/microsoft.svg';
+import { useCallback } from 'react';
+import GoogleIcon from '../../assets/providers/google.svg?react';
+import MicrosoftIcon from '../../assets/providers/microsoft.svg?react';
 import { Avatar, AvatarBadge } from '../../components/ui/avatar';
 import { Button } from '../../components/ui/button';
 import {
@@ -318,17 +318,13 @@ function ProviderIcon({
   providerId: ProviderId | undefined;
   className?: string;
 }) {
-  const src = providerId === 'google' ? googleIconUrl : microsoftIconUrl;
-  const maskStyle = {
-    '--provider-icon-url': `url("${src}")`,
-  } as CSSProperties;
+  const Icon = providerId === 'google' ? GoogleIcon : MicrosoftIcon;
 
   return (
-    <span
+    <Icon
       aria-hidden="true"
       data-icon="inline-start"
-      className={`${className} inline-block shrink-0 bg-current [mask:var(--provider-icon-url)_center/contain_no-repeat]`}
-      style={maskStyle}
+      className={`${className} shrink-0 text-current`}
     />
   );
 }
