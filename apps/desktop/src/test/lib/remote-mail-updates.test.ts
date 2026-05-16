@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
-import { invalidateRemoteMailUpdate } from '../../lib/remote-mail-updates';
+import { invalidateRemoteMailUpdate } from '@/lib/remote-mail-updates';
 
 describe('invalidateRemoteMailUpdate', () => {
   it('invalidates folder, message list, and selected message queries', async () => {

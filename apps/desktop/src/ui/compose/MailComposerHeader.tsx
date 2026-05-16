@@ -1,13 +1,13 @@
 import { ExternalLink, Minus, X } from 'lucide-react';
-import { Button } from '../../components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../../components/ui/tooltip';
-import type { ComposeWindowDraft } from '../../lib/compose-window';
-import type { MailMessageDetail } from '../../lib/mail-types';
-import { cn } from '../../lib/utils';
+} from '@/components/ui/tooltip';
+import type { ComposeWindowDraft } from '@/lib/compose-window';
+import type { MailMessageDetail } from '@/lib/mail-types';
+import { cn } from '@/lib/utils';
 
 export function MailComposerHeader({
   currentDraft,

@@ -15,10 +15,10 @@ import {
 import { app, shell } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { MailAccount } from '../lib/mail-types';
-import type { MailAuthProvider } from './mail-provider';
-import { AuthConfigurationError, AuthRequiredError } from './auth-service';
-import { createAuthCallbackTemplate } from './auth-callback-template';
+import type { MailAccount } from '@/lib/mail-types';
+import type { MailAuthProvider } from '@/main/mail-provider';
+import { AuthConfigurationError, AuthRequiredError } from '@/main/auth-service';
+import { createAuthCallbackTemplate } from '@/main/auth-callback-template';
 
 const authority = 'https://login.microsoftonline.com/common';
 const scopes = [

@@ -4,10 +4,10 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { app, safeStorage, shell } from 'electron';
-import type { MailAccount } from '../lib/mail-types';
-import type { MailAuthProvider } from './mail-provider';
-import { AuthConfigurationError, AuthRequiredError } from './auth-service';
-import { createAuthCallbackTemplate } from './auth-callback-template';
+import type { MailAccount } from '@/lib/mail-types';
+import type { MailAuthProvider } from '@/main/mail-provider';
+import { AuthConfigurationError, AuthRequiredError } from '@/main/auth-service';
+import { createAuthCallbackTemplate } from '@/main/auth-callback-template';
 
 const googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
 const googleTokenUrl = 'https://oauth2.googleapis.com/token';

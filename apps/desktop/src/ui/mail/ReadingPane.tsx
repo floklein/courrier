@@ -1,30 +1,30 @@
 import { MailOpen, MoreHorizontal, Reply, Trash2 } from 'lucide-react';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
-} from '../../components/ui/dropdown-menu';
-import { ScrollArea } from '../../components/ui/scroll-area';
+} from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '../../components/ui/tooltip';
+} from '@/components/ui/tooltip';
 import type {
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
   ReplyToMessageInput,
-} from '../../lib/mail-types';
-import { formatMailDate } from '../../lib/mail/mail-utils';
-import { cn } from '../../lib/utils';
-import { PanelStatus } from '../app/StatusViews';
-import { MailComposer } from '../compose/MailComposer';
-import { ToolbarButton } from '../primitives/ToolbarButton';
-import { HtmlMessageBody } from './HtmlMessageBody';
-import { MailActionDropdownContent } from './MailActionMenu';
-import { MailAvatar } from './MailAvatar';
+} from '@/lib/mail-types';
+import { formatMailDate } from '@/lib/mail/mail-utils';
+import { cn } from '@/lib/utils';
+import { PanelStatus } from '@/ui/app/StatusViews';
+import { MailComposer } from '@/ui/compose/MailComposer';
+import { ToolbarButton } from '@/ui/primitives/ToolbarButton';
+import { HtmlMessageBody } from '@/ui/mail/HtmlMessageBody';
+import { MailActionDropdownContent } from '@/ui/mail/MailActionMenu';
+import { MailAvatar } from '@/ui/mail/MailAvatar';
 
 export function ReadingPane({
   accountId,

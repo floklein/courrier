@@ -1,12 +1,12 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { z, type ZodType } from 'zod';
-import type { AuthService } from './auth-service';
-import type { MailService } from './mail-service';
-import { assertTrustedSender, type AppUrlTrustPolicy } from './security';
+import type { AuthService } from '@/main/auth-service';
+import type { MailService } from '@/main/mail-service';
+import { assertTrustedSender, type AppUrlTrustPolicy } from '@/main/security';
 import type {
   ReplyToMessageInput,
   SendMailInput,
-} from '../lib/mail-types';
+} from '@/lib/mail-types';
 import {
   ipcIdSchema,
   mailPageTokenSchema,
@@ -15,7 +15,7 @@ import {
   providerIdSchema,
   replyToMessageInputSchema,
   sendMailInputSchema,
-} from '../lib/mail-schemas';
+} from '@/lib/mail-schemas';
 
 export function registerIpcHandlers(
   authService: AuthService,

@@ -5,7 +5,7 @@ import type {
   MailMessageDetail,
   MailMessageSummary,
   PagedMessages,
-} from '../../../lib/mail-types';
+} from '@/lib/mail-types';
 import {
   createMailCacheSnapshot,
   getReadStateUnreadDelta,
@@ -13,7 +13,7 @@ import {
   restoreMailCacheSnapshot,
   updateCachedFolderCounts,
   updateCachedMessageReadState,
-} from '../../../lib/mail/mail-cache';
+} from '@/lib/mail/mail-cache';
 
 const accountId = 'microsoft:account-1';
 

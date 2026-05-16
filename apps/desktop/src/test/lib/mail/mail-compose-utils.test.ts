@@ -3,7 +3,7 @@ import {
   parseRecipients,
   serializeRecipients,
   sanitizeOutgoingMailHtml,
-} from '../../../lib/mail/mail-compose-utils';
+} from '@/lib/mail/mail-compose-utils';
 
 describe('mail compose utilities', () => {
   describe('parseRecipients', () => {

@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback } from 'react';
-import { resetMailRouteAfterActiveAccountChanged } from '../lib/mail/mail-route-navigation';
-import type { AuthSession } from '../lib/mail-types';
-import { useComposeStore } from './compose-store';
+import { resetMailRouteAfterActiveAccountChanged } from '@/lib/mail/mail-route-navigation';
+import type { AuthSession } from '@/lib/mail-types';
+import { useComposeStore } from '@/hooks/compose-store';
 
 export function useActiveMailAccountChange() {
   const navigate = useNavigate();

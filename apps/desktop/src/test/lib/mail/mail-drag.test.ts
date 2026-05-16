@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isMailMessageDragData,
   mailMessageDragType,
-} from '../../../lib/mail/mail-drag';
+} from '@/lib/mail/mail-drag';
 
 describe('mail drag payload guard', () => {
   it('accepts a mail message drag payload', () => {

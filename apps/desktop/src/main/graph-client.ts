@@ -6,7 +6,7 @@ import {
   type GraphMailFolder,
   type GraphMessage,
   type GraphMessageDetail,
-} from '../lib/graph-mappers';
+} from '@/lib/graph-mappers';
 import type {
   MailAccount,
   MailFolder,
@@ -15,8 +15,8 @@ import type {
   PagedMessages,
   ReplyToMessageInput,
   SendMailInput,
-} from '../lib/mail-types';
-import { GraphRequestError } from '../lib/graph-errors';
+} from '@/lib/mail-types';
+import { GraphRequestError } from '@/lib/graph-errors';
 import type {
   CreateMailSubscriptionInput,
   MailAuthProvider,
@@ -24,7 +24,7 @@ import type {
   MailSubscription,
   MoveMessageInput,
   RenewSubscriptionInput,
-} from './mail-provider';
+} from '@/main/mail-provider';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
 const folderSelect =

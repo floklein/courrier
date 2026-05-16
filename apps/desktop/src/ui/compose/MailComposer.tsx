@@ -1,26 +1,26 @@
 import { Send } from 'lucide-react';
 import { FormEvent, useEffect, useId, useMemo, useState } from 'react';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   emptyComposeWindowDraft,
   type ComposeWindowDraft,
-} from '../../lib/compose-window';
+} from '@/lib/compose-window';
 import type {
   MailComposeRecipient,
   MailMessageDetail,
   ReplyToMessageInput,
   SendMailInput,
-} from '../../lib/mail-types';
+} from '@/lib/mail-types';
 import {
   parseRecipients,
   sanitizeOutgoingMailHtml,
   serializeRecipients,
-} from '../../lib/mail/mail-compose-utils';
-import { cn } from '../../lib/utils';
-import { MailComposerHeader } from './MailComposerHeader';
-import { RecipientPicker } from './RecipientPicker';
-import { RichTextMailEditor, type RichTextMailEditorValue } from './RichTextMailEditor';
+} from '@/lib/mail/mail-compose-utils';
+import { cn } from '@/lib/utils';
+import { MailComposerHeader } from '@/ui/compose/MailComposerHeader';
+import { RecipientPicker } from '@/ui/compose/RecipientPicker';
+import { RichTextMailEditor, type RichTextMailEditorValue } from '@/ui/compose/RichTextMailEditor';
 
 export function MailComposer({
   accountId,

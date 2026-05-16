@@ -8,8 +8,8 @@ import type {
   ProviderId,
   ReplyToMessageInput,
   SendMailInput,
-} from './lib/mail-types';
-import type { ComposeWindowDraft } from './lib/compose-window';
+} from '@/lib/mail-types';
+import type { ComposeWindowDraft } from '@/lib/compose-window';
 import {
   mailRemoteChangeEventSchema,
   type MailRemoteChangeEvent,

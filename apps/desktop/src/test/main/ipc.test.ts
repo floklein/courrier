@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAppUrlTrustPolicy } from '../../main/security';
+import { createAppUrlTrustPolicy } from '@/main/security';
 
 const ipcHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 
@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-import { registerIpcHandlers } from '../../main/ipc';
+import { registerIpcHandlers } from '@/main/ipc';
 
 const trustedEvent = {
   senderFrame: { url: 'http://localhost:5173' },

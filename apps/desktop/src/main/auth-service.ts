@@ -3,8 +3,8 @@ import type {
   MailAccount,
   ProviderConfigurationStatus,
   ProviderId,
-} from '../lib/mail-types';
-import type { RegisteredProvider } from './mail-provider';
+} from '@/lib/mail-types';
+import type { RegisteredProvider } from '@/main/mail-provider';
 
 export class AuthConfigurationError extends Error {
   constructor(message: string) {

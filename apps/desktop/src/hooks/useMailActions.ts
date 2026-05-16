@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { announce } from '@atlaskit/pragmatic-drag-and-drop-live-region';
-import { api } from '../lib/api-client';
+import { api } from '@/lib/api-client';
 import type {
   MailFolder,
   MailMessageSummary,
   ReplyToMessageInput,
   SendMailInput,
-} from '../lib/mail-types';
-import { encodeRouteId } from '../lib/route-ids';
+} from '@/lib/mail-types';
+import { encodeRouteId } from '@/lib/route-ids';
 import {
   createMailCacheSnapshot,
   getReadStateUnreadDelta,
@@ -16,7 +16,7 @@ import {
   restoreMailCacheSnapshot,
   updateCachedFolderCounts,
   updateCachedMessageReadState,
-} from '../lib/mail/mail-cache';
+} from '@/lib/mail/mail-cache';
 
 export function useMailActions({
   accountId,

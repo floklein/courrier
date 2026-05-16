@@ -4,7 +4,7 @@ import type {
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
-} from './mail-types';
+} from '@/lib/mail-types';
 
 interface GraphEmailAddress {
   emailAddress?: {

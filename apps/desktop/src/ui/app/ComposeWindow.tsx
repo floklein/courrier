@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api-client';
-import { emptyComposeWindowDraft } from '../../lib/compose-window';
-import type { SendMailInput } from '../../lib/mail-types';
-import { MailComposer } from '../compose/MailComposer';
-import { FullScreenStatus } from './StatusViews';
+import { api } from '@/lib/api-client';
+import { emptyComposeWindowDraft } from '@/lib/compose-window';
+import type { SendMailInput } from '@/lib/mail-types';
+import { MailComposer } from '@/ui/compose/MailComposer';
+import { FullScreenStatus } from '@/ui/app/StatusViews';
 
 export function ComposeWindow() {
   const draftQuery = useQuery({

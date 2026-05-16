@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GmailClient } from '../../main/gmail-client';
+import { GmailClient } from '@/main/gmail-client';
 
 const accountId = 'google:account-1';
 

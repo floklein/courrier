@@ -8,16 +8,16 @@ import {
   useState,
 } from 'react';
 import type { ClipboardEvent, KeyboardEvent } from 'react';
-import { Button } from '../../components/ui/button';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { Button } from '@/components/ui/button';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type {
   MailComposeRecipient,
   MailPersonSuggestion,
-} from '../../lib/mail-types';
-import { mailPeopleQueryOptions } from '../../lib/mail/mail-query-options';
-import { parseRecipients } from '../../lib/mail/mail-compose-utils';
-import { cn } from '../../lib/utils';
-import { MailAvatar } from '../mail/MailAvatar';
+} from '@/lib/mail-types';
+import { mailPeopleQueryOptions } from '@/lib/mail/mail-query-options';
+import { parseRecipients } from '@/lib/mail/mail-compose-utils';
+import { cn } from '@/lib/utils';
+import { MailAvatar } from '@/ui/mail/MailAvatar';
 
 const recipientSeparators = new Set([',', ';']);
 

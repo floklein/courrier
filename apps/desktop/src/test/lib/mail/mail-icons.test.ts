@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { folderIcons } from '../../../lib/mail/mail-icons';
+import { folderIcons } from '@/lib/mail/mail-icons';
 
 describe('mail folder icons', () => {
   it('maps every supported folder icon to a renderable component', () => {

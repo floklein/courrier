@@ -17,7 +17,7 @@ import {
   createSubscriptionExpiration,
   getRenewalDelayMs,
   MailSubscriptionManager,
-} from '../../main/mail-subscription-manager';
+} from '@/main/mail-subscription-manager';
 
 const originalWebSocket = globalThis.WebSocket;
 let statePath: string;

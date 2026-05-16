@@ -1,34 +1,34 @@
 import { cleanup as cleanupLiveRegion } from '@atlaskit/pragmatic-drag-and-drop-live-region';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { TooltipProvider } from '../../components/ui/tooltip';
-import { useComposeStore } from '../../hooks/compose-store';
-import { useMailActions } from '../../hooks/useMailActions';
-import { useMailClientState } from '../../hooks/useMailClientState';
-import { api } from '../../lib/api-client';
-import type { ComposeWindowDraft } from '../../lib/compose-window';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { useComposeStore } from '@/hooks/compose-store';
+import { useMailActions } from '@/hooks/useMailActions';
+import { useMailClientState } from '@/hooks/useMailClientState';
+import { api } from '@/lib/api-client';
+import type { ComposeWindowDraft } from '@/lib/compose-window';
 import {
   isGoogleInvalidMessageIdError,
   isGraphItemNotFoundError,
   isMicrosoftSignInRequiredError,
-} from '../../lib/graph-errors';
+} from '@/lib/graph-errors';
 import type {
   AuthSession,
   MailFolder,
   MailMessageSummary,
   ReplyToMessageInput,
   SendMailInput,
-} from '../../lib/mail-types';
+} from '@/lib/mail-types';
 import {
   mailFoldersQueryOptions,
   mailMessagesQueryOptions,
-} from '../../lib/mail/mail-query-options';
-import { encodeRouteId } from '../../lib/route-ids';
-import { cn } from '../../lib/utils';
-import { NewMessageComposerOverlay } from '../compose/NewMessageComposerOverlay';
-import { FolderRail } from '../mail/FolderRail';
-import { MessageList } from '../mail/MessageList';
-import { ReadingPane } from '../mail/ReadingPane';
+} from '@/lib/mail/mail-query-options';
+import { encodeRouteId } from '@/lib/route-ids';
+import { cn } from '@/lib/utils';
+import { NewMessageComposerOverlay } from '@/ui/compose/NewMessageComposerOverlay';
+import { FolderRail } from '@/ui/mail/FolderRail';
+import { MessageList } from '@/ui/mail/MessageList';
+import { ReadingPane } from '@/ui/mail/ReadingPane';
 
 export function AuthenticatedMailClient({
   session,

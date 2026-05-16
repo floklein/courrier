@@ -4,7 +4,7 @@ import {
   isGoogleInvalidMessageIdError,
   isGraphItemNotFoundError,
   isMicrosoftSignInRequiredError,
-} from '../../lib/graph-errors';
+} from '@/lib/graph-errors';
 
 describe('isGraphItemNotFoundError', () => {
   it('detects Microsoft Graph item not found errors', () => {

@@ -6,7 +6,7 @@ import type {
   MailFolder,
   MailMessageDetail,
   PagedMessages,
-} from '../mail-types';
+} from '@/lib/mail-types';
 
 export function updateCachedMessageReadState(
   queryClient: QueryClient,

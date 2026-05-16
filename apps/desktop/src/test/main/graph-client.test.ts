@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GraphClient, getValidatedMessagePageUrl } from '../../main/graph-client';
-import type { MailAccount } from '../../lib/mail-types';
+import { GraphClient, getValidatedMessagePageUrl } from '@/main/graph-client';
+import type { MailAccount } from '@/lib/mail-types';
 import {
   GraphRequestError,
   isGraphItemNotFoundError,
-} from '../../lib/graph-errors';
+} from '@/lib/graph-errors';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
 const account: MailAccount = {

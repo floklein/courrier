@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getProviderFromAccountId } from '../../main/mail-provider';
+import { getProviderFromAccountId } from '@/main/mail-provider';
 
 describe('mail provider helpers', () => {
   it('reads the provider from supported account ids', () => {

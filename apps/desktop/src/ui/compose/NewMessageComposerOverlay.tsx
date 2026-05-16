@@ -1,10 +1,10 @@
 import { PenLine } from 'lucide-react';
-import { Button } from '../../components/ui/button';
-import { useComposeStore } from '../../hooks/compose-store';
-import type { ComposeWindowDraft } from '../../lib/compose-window';
-import type { SendMailInput } from '../../lib/mail-types';
-import { cn } from '../../lib/utils';
-import { MailComposer } from './MailComposer';
+import { Button } from '@/components/ui/button';
+import { useComposeStore } from '@/hooks/compose-store';
+import type { ComposeWindowDraft } from '@/lib/compose-window';
+import type { SendMailInput } from '@/lib/mail-types';
+import { cn } from '@/lib/utils';
+import { MailComposer } from '@/ui/compose/MailComposer';
 
 export function NewMessageComposerOverlay({
   accountId,
