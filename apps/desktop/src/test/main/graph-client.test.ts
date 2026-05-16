@@ -343,7 +343,13 @@ describe('GraphClient write requests', () => {
       jsonResponse({ id: 'reply-all-draft' }),
       new Response(null, { status: 204 }),
       new Response('', { status: 202 }),
-      jsonResponse({ id: 'forward-draft' }),
+      jsonResponse({
+        id: 'forward-draft',
+        body: {
+          contentType: 'html',
+          content: '<div>Forwarded header</div><p>Original body</p>',
+        },
+      }),
       new Response(null, { status: 204 }),
       new Response('', { status: 202 }),
     );
@@ -376,6 +382,11 @@ describe('GraphClient write requests', () => {
           },
         },
       ],
+      body: {
+        contentType: 'HTML',
+        content:
+          '<p>Forward</p><br><br><div>Forwarded header</div><p>Original body</p>',
+      },
     });
   });
 

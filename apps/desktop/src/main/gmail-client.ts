@@ -409,13 +409,20 @@ export class GmailClient implements MailProvider {
     const headers = getHeaderMap(original.payload?.headers);
     const accountEmail = await this.getAccountEmail(accountId);
     const kind = input.kind ?? 'reply';
+    const replyAllRecipients =
+      kind === 'replyAll'
+        ? getGmailReplyAllRecipients(headers, accountEmail)
+        : undefined;
     const toRecipients =
       input.toRecipients ??
       (kind === 'replyAll'
-        ? getGmailReplyAllRecipients(headers, accountEmail)
+        ? replyAllRecipients?.toRecipients ?? []
         : kind === 'forward'
           ? []
           : getGmailReplyRecipients(headers));
+    const ccRecipients =
+      input.ccRecipients ??
+      (kind === 'replyAll' ? replyAllRecipients?.ccRecipients ?? [] : []);
     const subject =
       kind === 'forward'
         ? createForwardSubject(headers.get('subject') ?? '')
@@ -440,7 +447,7 @@ export class GmailClient implements MailProvider {
               ? createForwardBodyHtml(input.bodyHtml, original)
               : input.bodyHtml,
           bccRecipients: input.bccRecipients ?? [],
-          ccRecipients: input.ccRecipients ?? [],
+          ccRecipients,
           subject,
           toRecipients,
           extraHeaders: {
@@ -1058,14 +1065,27 @@ function getGmailReplyAllRecipients(
   headers: Map<string, string>,
   accountEmail: string | undefined,
 ) {
-  return dedupeComposeRecipients([
+  const toRecipients = dedupeComposeRecipients([
     ...getGmailReplyRecipients(headers),
     ...parseMailboxList(headers.get('to') ?? ''),
-    ...parseMailboxList(headers.get('cc') ?? ''),
   ].filter((address) =>
     address.email &&
     address.email.toLowerCase() !== accountEmail?.toLowerCase(),
   ).map((address) => ({ name: address.name, email: address.email })));
+  const toEmails = new Set(
+    toRecipients.map((recipient) => recipient.email.toLowerCase()),
+  );
+  const ccRecipients = dedupeComposeRecipients(
+    parseMailboxList(headers.get('cc') ?? '')
+      .filter((address) =>
+        address.email &&
+        address.email.toLowerCase() !== accountEmail?.toLowerCase() &&
+        !toEmails.has(address.email.toLowerCase()),
+      )
+      .map((address) => ({ name: address.name, email: address.email })),
+  );
+
+  return { toRecipients, ccRecipients };
 }
 
 function dedupeComposeRecipients(

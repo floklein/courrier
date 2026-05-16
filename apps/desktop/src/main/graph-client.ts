@@ -391,7 +391,7 @@ export class GraphClient implements MailProvider {
           ...createGraphResponseRecipientPatch(input),
           body: {
             contentType: 'HTML',
-            content: input.bodyHtml,
+            content: createGraphResponseBodyContent(kind, input.bodyHtml, draft),
           },
         }),
       },
@@ -939,6 +939,20 @@ function createGraphResponseRecipientPatch(input: ProviderReplyToMessageInput) {
       ? { bccRecipients: input.bccRecipients.map(formatGraphRecipient) }
       : {}),
   };
+}
+
+function createGraphResponseBodyContent(
+  kind: ProviderReplyToMessageInput['kind'] | 'reply',
+  bodyHtml: string,
+  draft: GraphMessageDetail,
+) {
+  if (kind !== 'forward') {
+    return bodyHtml;
+  }
+
+  const forwardedBody = draft.body?.content ?? '';
+
+  return forwardedBody ? `${bodyHtml}<br><br>${forwardedBody}` : bodyHtml;
 }
 
 function createGraphOptionalRecipients(input: SendMailInput) {

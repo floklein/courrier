@@ -153,13 +153,14 @@ export function MailComposer({
     ],
   );
   const hasBody = editorValue.text.trim().length > 0 && !editorValue.isEmpty;
+  const initialDraftValueRef = useRef<string | null>(null);
+
+  if (initialDraftValueRef.current == null) {
+    initialDraftValueRef.current = serializeDraftForDirtyCheck(currentDraft);
+  }
+
   const isDirty =
-    currentDraft.toValue.trim().length > 0 ||
-    Boolean(currentDraft.ccValue?.trim()) ||
-    Boolean(currentDraft.bccValue?.trim()) ||
-    subject.trim().length > 0 ||
-    editorValue.text.trim().length > 0 ||
-    attachments.length > 0;
+    serializeDraftForDirtyCheck(currentDraft) !== initialDraftValueRef.current;
 
   useEffect(() => {
     if (isResponse) {
@@ -619,6 +620,23 @@ function isOwnRecipient(
   accountEmail: string | undefined,
 ) {
   return recipient.email.toLowerCase() === accountEmail?.toLowerCase();
+}
+
+function serializeDraftForDirtyCheck(draft: ComposeWindowDraft) {
+  return JSON.stringify({
+    toValue: draft.toValue.trim(),
+    ccValue: draft.ccValue?.trim() ?? '',
+    bccValue: draft.bccValue?.trim() ?? '',
+    subject: draft.subject.trim(),
+    editorHtml: draft.editorValue.html,
+    editorText: draft.editorValue.text.trim(),
+    attachments: draft.attachments.map((attachment) => ({
+      id: attachment.id,
+      name: attachment.name,
+      path: attachment.path,
+      size: attachment.size,
+    })),
+  });
 }
 
 function formatFileSize(size: number) {

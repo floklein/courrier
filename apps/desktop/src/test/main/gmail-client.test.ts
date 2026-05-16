@@ -243,7 +243,7 @@ describe('GmailClient', () => {
     expect(decoded.match(/^Bcc:/gm)).toHaveLength(1);
   });
 
-  it('builds Gmail reply-all recipients from Reply-To, To, and Cc', async () => {
+  it('builds Gmail reply-all recipients without moving Cc into To', async () => {
     const fetchMock = mockFetch(
       jsonResponse({
         id: 'message-1',
@@ -277,7 +277,10 @@ describe('GmailClient', () => {
       .replace(/\r\n[ \t]+/g, ' ');
 
     expect(body.threadId).toBe('thread-1');
-    expect(decoded).toContain('To: Sender <sender@example.com>, Other <other@example.com>, Copy <copy@example.com>');
+    expect(decoded).toContain(
+      'To: Sender <sender@example.com>, Other <other@example.com>',
+    );
+    expect(decoded).toContain('Cc: Copy <copy@example.com>');
     expect(decoded).not.toContain('Ada <ada@example.com>');
   });
 
