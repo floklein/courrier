@@ -12,11 +12,15 @@ import {
   type MailProvider,
   type MoveMessageInput,
 } from '@/main/mail-provider';
+import type { LocalAttachmentStore } from '@/main/local-attachment-store';
 
 export class MailService {
   private readonly providersById: Map<ProviderId, MailProvider>;
 
-  constructor(providers: MailProvider[]) {
+  constructor(
+    providers: MailProvider[],
+    private readonly localAttachmentStore?: LocalAttachmentStore,
+  ) {
     this.providersById = new Map(providers.map((provider) => [provider.id, provider]));
   }
 
@@ -90,11 +94,41 @@ export class MailService {
     return this.getProvider(accountId).listPeople(accountId, query);
   }
 
-  sendMessage(accountId: string, input: SendMailInput): Promise<void> {
-    return this.getProvider(accountId).sendMessage(accountId, input);
+  async sendMessage(accountId: string, input: SendMailInput): Promise<void> {
+    return this.getProvider(accountId).sendMessage(accountId, {
+      ...input,
+      attachments: await this.resolveLocalAttachments(input.attachments),
+    });
   }
 
-  replyToMessage(accountId: string, input: ReplyToMessageInput): Promise<void> {
-    return this.getProvider(accountId).replyToMessage(accountId, input);
+  async replyToMessage(accountId: string, input: ReplyToMessageInput): Promise<void> {
+    return this.getProvider(accountId).replyToMessage(accountId, {
+      ...input,
+      attachments: await this.resolveLocalAttachments(input.attachments),
+    });
+  }
+
+  downloadAttachment(
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ) {
+    return this.getProvider(accountId).downloadAttachment(
+      accountId,
+      messageId,
+      attachmentId,
+    );
+  }
+
+  private async resolveLocalAttachments(attachments: SendMailInput['attachments']) {
+    if (!attachments?.length) {
+      return [];
+    }
+
+    if (!this.localAttachmentStore) {
+      throw new Error('Local attachment storage is unavailable.');
+    }
+
+    return this.localAttachmentStore.resolveMany(attachments);
   }
 }

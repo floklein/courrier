@@ -5,6 +5,9 @@ import {
   GraphRequestError,
   isGraphItemNotFoundError,
 } from '@/lib/graph-errors';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
 const account: MailAccount = {
@@ -164,6 +167,94 @@ describe('GraphClient write requests', () => {
       },
       saveToSentItems: true,
     });
+  });
+
+  it('uploads large attachments with Graph upload-session byte ranges', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'courrier-test-'));
+    const filePath = path.join(tempDir, 'large.bin');
+    const content = Buffer.alloc((327_680 * 12) + 1);
+    await fs.writeFile(filePath, content);
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'draft-1' }),
+      jsonResponse({ uploadUrl: `${graphBaseUrl}/upload-session` }),
+      new Response('', { status: 202 }),
+      new Response('', { status: 201 }),
+      new Response('', { status: 202 }),
+    );
+    const client = createGraphClient();
+
+    try {
+      await client.sendMessage(account.id, {
+        subject: 'Hello',
+        bodyHtml: '<p>Hi</p>',
+        toRecipients: [{ email: 'ada@example.com' }],
+        attachments: [
+          {
+            id: 'attachment-1',
+            name: 'large.bin',
+            contentType: 'application/octet-stream',
+            size: content.byteLength,
+            path: filePath,
+          },
+        ],
+      });
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+
+    expect(fetchMock.mock.calls[2][0]).toBe(`${graphBaseUrl}/upload-session`);
+    expect(fetchMock.mock.calls[2][1]).toMatchObject({
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(327_680 * 12),
+        'Content-Range': `bytes 0-${(327_680 * 12) - 1}/${content.byteLength}`,
+      },
+    });
+    expect(fetchMock.mock.calls[3][1]).toMatchObject({
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': '1',
+        'Content-Range': `bytes ${327_680 * 12}-${327_680 * 12}/${content.byteLength}`,
+      },
+    });
+  });
+
+  it('downloads empty Microsoft Graph file attachments', async () => {
+    mockFetch(jsonResponse({
+      '@odata.type': '#microsoft.graph.fileAttachment',
+      id: 'attachment-1',
+      name: 'empty.txt',
+      contentType: 'text/plain',
+      contentBytes: '',
+    }));
+    const client = createGraphClient();
+
+    const attachment = await client.downloadAttachment(
+      account.id,
+      'message-1',
+      'attachment-1',
+    );
+
+    expect(attachment).toMatchObject({
+      name: 'empty.txt',
+      contentType: 'text/plain',
+    });
+    expect(attachment.content).toHaveLength(0);
+  });
+
+  it('rejects unsupported Microsoft Graph attachment types', async () => {
+    mockFetch(jsonResponse({
+      '@odata.type': '#microsoft.graph.itemAttachment',
+      id: 'attachment-1',
+      name: 'forwarded-message',
+    }));
+    const client = createGraphClient();
+
+    await expect(
+      client.downloadAttachment(account.id, 'message-1', 'attachment-1'),
+    ).rejects.toThrow('Microsoft Graph attachment type is not supported.');
   });
 
   it('creates, updates, and sends a reply draft in order', async () => {

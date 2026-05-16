@@ -1,3 +1,4 @@
+import type { EditorOptions } from '@tiptap/core';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
@@ -16,6 +17,7 @@ export function RichTextMailEditor({
   id,
   initialValue,
   placeholder = 'Write a message',
+  onPickAttachments,
   onChange,
 }: {
   className?: string;
@@ -23,6 +25,7 @@ export function RichTextMailEditor({
   id?: string;
   initialValue?: RichTextMailEditorValue;
   placeholder?: string;
+  onPickAttachments?: () => void;
   onChange: (value: RichTextMailEditorValue) => void;
 }) {
   const [, setEditorVersion] = useState(0);
@@ -32,6 +35,7 @@ export function RichTextMailEditor({
       StarterKit.configure({
         code: false,
         codeBlock: false,
+        dropcursor: false,
         heading: false,
         horizontalRule: false,
       }),
@@ -50,11 +54,7 @@ export function RichTextMailEditor({
       }),
     ],
     content: initialValue?.html ?? '',
-    editorProps: {
-      attributes: {
-        'aria-label': placeholder,
-      },
-    },
+    editorProps: getEditorProps(placeholder),
     onCreate: ({ editor }) => {
       onChange(getEditorValue(editor));
     },
@@ -76,11 +76,7 @@ export function RichTextMailEditor({
     }
 
     editor.setOptions({
-      editorProps: {
-        attributes: {
-          'aria-label': placeholder,
-        },
-      },
+      editorProps: getEditorProps(placeholder),
     });
   }, [editor, id, placeholder]);
 
@@ -103,7 +99,7 @@ export function RichTextMailEditor({
   return (
     <div
       className={cn(
-        'border-input focus-within:border-ring focus-within:ring-ring/50 flex min-h-36 w-full flex-col rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] md:text-sm dark:bg-input/30',
+        'border-input focus-within:border-ring focus-within:ring-ring/50 relative flex min-h-36 w-full flex-col rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] md:text-sm dark:bg-input/30',
         disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
@@ -123,6 +119,7 @@ export function RichTextMailEditor({
         <RichTextMailEditorToolbar
           editor={editor}
           disabled={disabled}
+          onPickAttachments={onPickAttachments}
         />
       </div>
       <EditorContent
@@ -135,6 +132,24 @@ export function RichTextMailEditor({
       />
     </div>
   );
+}
+
+function getEditorProps(placeholder: string): EditorOptions['editorProps'] {
+  return {
+    attributes: {
+      'aria-label': placeholder,
+    },
+    handleDOMEvents: {
+      drop: (_view, event) => {
+        if (!event.dataTransfer?.files.length) {
+          return false;
+        }
+
+        event.preventDefault();
+        return true;
+      },
+    },
+  };
 }
 
 function getEditorValue(editor: Editor): RichTextMailEditorValue {

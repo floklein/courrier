@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/react';
 import {
   Bold,
+  Paperclip,
   Italic,
   type LucideIcon,
   Link as LinkIcon,
@@ -22,14 +23,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Toggle } from '@/components/ui/toggle';
 
 export function RichTextMailEditorToolbar({
   editor,
   disabled,
+  onPickAttachments,
 }: {
   editor: Editor | null;
   disabled?: boolean;
+  onPickAttachments?: () => void;
 }) {
   const [isLinkOpen, setIsLinkOpen] = useState(false);
   const [linkHref, setLinkHref] = useState('');
@@ -183,6 +191,17 @@ export function RichTextMailEditorToolbar({
           icon={Redo2}
         />
       </ButtonGroup>
+
+      {onPickAttachments && (
+        <ButtonGroup aria-label="Attachments">
+          <ToolbarButton
+            label="Add attachment"
+            disabled={disabled}
+            onClick={onPickAttachments}
+            icon={Paperclip}
+          />
+        </ButtonGroup>
+      )}
     </div>
   );
 }
@@ -196,15 +215,21 @@ function ToolbarToggle({
   label: string;
 }) {
   return (
-    <Toggle
-      variant="outline"
-      size="icon-sm"
-      aria-label={label}
-      title={label}
-      {...props}
-    >
-      <Icon data-icon="inline-start" />
-    </Toggle>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Toggle
+            variant="outline"
+            size="icon-sm"
+            aria-label={label}
+            {...props}
+          >
+            <Icon data-icon="inline-start" />
+          </Toggle>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -217,15 +242,21 @@ function ToolbarButton({
   label: string;
 }) {
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="icon-sm"
-      aria-label={label}
-      title={label}
-      {...props}
-    >
-      <Icon data-icon="inline-start" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label={label}
+            {...props}
+          >
+            <Icon data-icon="inline-start" />
+          </Button>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }

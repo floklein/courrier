@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 function installCourrierApi() {
+  const attachments = {
+    pickLocal: vi.fn(),
+    registerDroppedFiles: vi.fn(),
+    open: vi.fn(),
+    download: vi.fn(),
+  };
   const auth = {
     getSession: vi.fn().mockResolvedValue({ status: 'unauthenticated' }),
     signIn: vi.fn(),
@@ -27,10 +33,10 @@ function installCourrierApi() {
 
   Object.defineProperty(window, 'courrier', {
     configurable: true,
-    value: { auth, mail, window: windowApi },
+    value: { attachments, auth, mail, window: windowApi },
   });
 
-  return { auth, mail, windowApi };
+  return { attachments, auth, mail, windowApi };
 }
 
 describe('api client', () => {

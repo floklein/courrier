@@ -15,13 +15,22 @@ export const mailComposeRecipientSchema = z.object({
   email: z.string().trim().email().max(320),
 });
 
+export const localMailAttachmentSchema = z.object({
+  id: z.string().min(1).max(256),
+  name: z.string().min(1).max(512),
+  contentType: z.string().max(255),
+  size: z.number().int().nonnegative().max(150 * 1024 * 1024),
+});
+
 export const sendMailInputSchema = z.object({
   toRecipients: z.array(mailComposeRecipientSchema).min(1).max(500),
   subject: z.string().max(998),
   bodyHtml: z.string().min(1).max(5_000_000),
+  attachments: z.array(localMailAttachmentSchema).max(100).optional(),
 });
 
 export const replyToMessageInputSchema = z.object({
   messageId: ipcIdSchema,
   bodyHtml: z.string().min(1).max(5_000_000),
+  attachments: z.array(localMailAttachmentSchema).max(100).optional(),
 });

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { localMailAttachmentSchema } from '@/lib/mail-schemas';
+import type { LocalMailAttachment } from '@/lib/mail-types';
 
 export interface ComposeEditorValue {
   html: string;
@@ -11,6 +13,7 @@ export interface ComposeWindowDraft {
   toValue: string;
   subject: string;
   editorValue: ComposeEditorValue;
+  attachments?: LocalMailAttachment[];
 }
 
 export const emptyComposeWindowDraft: ComposeWindowDraft = {
@@ -22,6 +25,7 @@ export const emptyComposeWindowDraft: ComposeWindowDraft = {
     text: '',
     isEmpty: true,
   },
+  attachments: [],
 };
 
 export const composeEditorValueSchema = z.object({
@@ -35,4 +39,5 @@ export const composeWindowDraftSchema = z.object({
   toValue: z.string().max(10_000),
   subject: z.string().max(998),
   editorValue: composeEditorValueSchema,
+  attachments: z.array(localMailAttachmentSchema).max(100).optional(),
 });

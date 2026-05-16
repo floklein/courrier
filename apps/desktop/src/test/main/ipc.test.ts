@@ -156,6 +156,7 @@ function createMailService() {
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    downloadAttachment: vi.fn(),
     sendMessage: vi.fn(),
     replyToMessage: vi.fn(),
   };
