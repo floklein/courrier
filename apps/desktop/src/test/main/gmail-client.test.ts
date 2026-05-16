@@ -240,6 +240,7 @@ describe('GmailClient', () => {
 
     expect(decoded).toContain('Cc: grace@example.com');
     expect(decoded).toContain('Bcc: hidden@example.com');
+    expect(decoded.match(/^Bcc:/gm)).toHaveLength(1);
   });
 
   it('builds Gmail reply-all recipients from Reply-To, To, and Cc', async () => {

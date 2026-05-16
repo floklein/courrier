@@ -328,10 +328,11 @@ export function ReadingPane({
         </div>
       </ScrollArea>
       {replyMessageId === message.id && (
-          <MailComposer
-            accountId={accountId}
-            accountEmail={accountEmail}
-            mode={responseKind}
+        <MailComposer
+          key={`${message.id}:${responseKind}`}
+          accountId={accountId}
+          accountEmail={accountEmail}
+          mode={responseKind}
           replyMessage={message}
           isSending={isSendingMessage}
           error={replyError}

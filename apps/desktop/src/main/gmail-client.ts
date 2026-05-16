@@ -990,19 +990,14 @@ async function createRawMail({
       filename: attachment.name,
       path: attachment.path,
     })),
-    headers: {
-      ...extraHeaders,
-      ...((bccRecipients?.length ?? 0) > 0
-        ? { Bcc: bccRecipients?.map(formatComposeRecipient).join(', ') }
-        : {}),
-    },
+    headers: extraHeaders,
     html: bodyHtml,
     subject,
     text: '',
     to: toRecipients.map(formatComposeRecipient).join(', '),
     cc: (ccRecipients ?? []).map(formatComposeRecipient).join(', ') || undefined,
     bcc: (bccRecipients ?? []).map(formatComposeRecipient).join(', ') || undefined,
-  } as never);
+  });
   const message = injectBccHeader(
     await buildMimeMessage(composer),
     bccRecipients ?? [],
