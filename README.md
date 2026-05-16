@@ -5,16 +5,21 @@ pnpm/Turborepo monorepo with an Electron desktop app and a Fastify relay for
 provider update notifications.
 
 The app signs in with Microsoft or Google OAuth, reads folders and messages
-through provider APIs, and provides a focused three-pane mail interface for
-browsing, searching, and triaging messages.
+through provider APIs, and provides a focused three-pane mail interface with
+separate compose windows for browsing, searching, and triaging messages.
 
 ## Features
 
 - Microsoft sign-in with MSAL and Google sign-in with installed-app OAuth
-- Outlook folder navigation and Gmail label navigation
+- Multi-account session handling for Outlook and Gmail accounts
+- Outlook folder navigation and Gmail label navigation, including nested folders
 - Message list pagination and provider search
 - HTML and plain-text message rendering with sanitized HTML content
-- Read/unread, move, compose, reply, and move-to-trash actions
+- Read/unread, move, drag-to-folder, compose, reply, and move-to-trash actions
+- Rich-text compose with recipient autocomplete and local file attachments
+- Attachment download/open support for provider-hosted attachments
+- Optional live mailbox invalidation through Microsoft Graph webhooks and Gmail
+  Pub/Sub push notifications
 - Hardened Electron bridge with context isolation and trusted IPC checks
 - Responsive layout for narrower desktop windows
 
@@ -23,13 +28,15 @@ browsing, searching, and triaging messages.
 - **Desktop shell:** Electron Forge
 - **Build tooling:** Vite and TypeScript
 - **UI:** React, Tailwind CSS, shadcn/Base UI primitives, lucide-react icons
+- **Editor:** Tiptap
 - **Data:** TanStack Query and TanStack Router
 - **Auth and mail:** MSAL Node, MSAL Node Extensions, Microsoft Graph, Gmail API
+- **Relay:** Fastify, WebSocket, and Zod
 - **Testing:** Vitest and Testing Library
 
 ## Prerequisites
 
-- Node.js and pnpm
+- Node.js and pnpm 11
 - A Microsoft account with Outlook mail access or a Google account with Gmail
 - A Microsoft Entra app registration or Google OAuth desktop client
 
@@ -57,7 +64,7 @@ GOOGLE_PUBSUB_TOPIC=projects/<project>/topics/<topic>
 ```
 
 The relay variables are optional for basic local desktop use. Add them only when
-you are running a Graph update relay.
+you are running live update relay integration.
 
 Start the app in development mode:
 
@@ -101,10 +108,12 @@ If you set `GOOGLE_PUBSUB_VERIFICATION_TOKEN` on the relay, include it as a
 | Command | Description |
 | --- | --- |
 | `pnpm start` | Run Courrier desktop in development mode. |
-| `pnpm dev` | Run workspace development tasks after dependency builds. |
+| `pnpm dev` | Run workspace development tasks. |
+| `pnpm build` | Build workspace packages and apps. |
 | `pnpm package` | Package the Electron app locally. |
 | `pnpm make` | Create distributable installers/packages. |
 | `pnpm test` | Run workspace Vitest suites. |
+| `pnpm test:coverage` | Run the desktop Vitest suite with coverage. |
 | `pnpm typecheck` | Run workspace TypeScript checks. |
 | `pnpm lint` | Run workspace ESLint checks. |
 
@@ -113,21 +122,30 @@ If you set `GOOGLE_PUBSUB_VERIFICATION_TOKEN` on the relay, include it as a
 ```text
 apps/
   desktop/      Electron desktop app
-  relay/        Fastify Graph webhook and WebSocket relay
+  relay/        Fastify provider webhook and WebSocket relay
 packages/
   mail-contracts/ Zod schemas and shared relay/desktop event types
   tsconfig/     Shared TypeScript base config
 docs/
-  oauth.md      Microsoft OAuth registration and troubleshooting guide
+  oauth.md        Microsoft OAuth registration and troubleshooting guide
   google-oauth.md Google OAuth, Gmail API, and Pub/Sub setup guide
 ```
 
-## Update Relay
+## Live Update Relay
 
 Microsoft Graph change notifications and Gmail Pub/Sub push notifications require
 a public HTTPS webhook endpoint. The desktop app keeps provider tokens locally
 and creates provider subscriptions, while `apps/relay` receives webhook POSTs and
 pushes compact invalidation events to the desktop app over WebSocket.
+
+The relay exposes:
+
+- `GET /health` for health checks
+- `POST /graph/notifications` for Microsoft Graph subscription validation and
+  notifications
+- `POST /google/pubsub` for Gmail Pub/Sub push notifications
+- a WebSocket endpoint used by the desktop app for registration and event
+  delivery
 
 The current relay is intended for a self-hosted, single-user deployment. It uses
 an in-memory store with bounded event retention, so registrations and pending
