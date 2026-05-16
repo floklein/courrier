@@ -36,6 +36,10 @@ if (started) {
 
 const composeDraftsByWebContentsId = new Map<number, ComposeWindowDraft>();
 
+function getWindowIconPath() {
+  return path.join(app.getAppPath(), 'src/assets/icon.png');
+}
+
 const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
   const titleBarOverlay = getTitleBarOverlayOptions();
   // Create the browser window.
@@ -47,6 +51,7 @@ const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 14, y: 12 },
     autoHideMenuBar: true,
+    icon: getWindowIconPath(),
     titleBarOverlay,
     webPreferences: {
       contextIsolation: true,
@@ -84,6 +89,7 @@ const createComposeWindow = (
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 14, y: 12 },
     autoHideMenuBar: true,
+    icon: getWindowIconPath(),
     titleBarOverlay: getTitleBarOverlayOptions(),
     webPreferences: {
       contextIsolation: true,

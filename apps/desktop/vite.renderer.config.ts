@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import svgr from 'vite-plugin-svgr';
 
 const require = createRequire(import.meta.url);
 const darkReaderScriptModule = 'virtual:darkreader-script';
@@ -34,6 +35,7 @@ export default defineConfig(async () => {
   return {
     plugins: [
       react(),
+      svgr(),
       tailwindcss(),
       darkReader(),
     ],

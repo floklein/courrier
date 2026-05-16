@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { ScrollArea } from '../../components/ui/scroll-area';
+import AppIcon from '../../assets/icon.svg?react';
 import {
   Tooltip,
   TooltipContent,
@@ -86,7 +87,11 @@ export function FolderRail({
       className={cn('flex min-h-0 flex-col border-r bg-card/70', className)}
     >
       <div className="app-window-header app-window-controls-start flex h-16 shrink-0 items-center justify-between gap-2 border-b px-3 max-lg:justify-center max-lg:px-2">
-        <div className="flex min-w-0 max-lg:hidden">
+        <div className="ml-2 flex min-w-0 items-center gap-2 max-lg:hidden">
+          <AppIcon
+            aria-hidden="true"
+            className="size-4 shrink-0 text-foreground"
+          />
           <span className="truncate text-sm font-semibold tracking-tight">
             Courrier
           </span>

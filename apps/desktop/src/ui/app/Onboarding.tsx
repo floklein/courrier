@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Mail } from 'lucide-react';
-import googleIconUrl from '../../assets/providers/google.svg';
-import microsoftIconUrl from '../../assets/providers/microsoft.svg';
+import { Loader2 } from 'lucide-react';
+import AppIcon from '../../assets/icon.svg?react';
+import GoogleIcon from '../../assets/providers/google.svg?react';
+import MicrosoftIcon from '../../assets/providers/microsoft.svg?react';
 import { Button } from '../../components/ui/button';
 import { api } from '../../lib/api-client';
 import type { AuthSession, ProviderId } from '../../lib/mail-types';
@@ -27,12 +28,18 @@ export function Onboarding({
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="app-window-header app-window-controls-start app-window-controls-end flex h-16 shrink-0 items-center border-b px-6">
-        <span className="text-sm font-semibold tracking-tight">Courrier</span>
-      </header>
+        <div className="flex min-w-0 items-center gap-2">
+          <AppIcon
+            aria-hidden="true"
+            className="size-4 shrink-0 text-foreground"
+          />
+          <span className="text-sm font-semibold tracking-tight">Courrier</span>
+          </div>
+        </header>
       <main className="flex min-h-0 flex-1 items-center justify-center p-6">
         <section className="w-full max-w-md">
           <div className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Mail className="size-5" />
+            <AppIcon className="size-5" aria-hidden="true" />
           </div>
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">
             Welcome to Courrier
@@ -77,15 +84,13 @@ export function Onboarding({
 }
 
 function ProviderIcon({ providerId }: { providerId: ProviderId }) {
-  const src = providerId === 'google' ? googleIconUrl : microsoftIconUrl;
+  const Icon = providerId === 'google' ? GoogleIcon : MicrosoftIcon;
 
   return (
-    <img
-      src={src}
-      alt=""
+    <Icon
       aria-hidden="true"
       data-icon="inline-start"
-      className="size-4"
+      className="size-4 text-current"
     />
   );
 }

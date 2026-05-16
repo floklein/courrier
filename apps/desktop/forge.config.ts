@@ -8,16 +8,31 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+const appIconBasePath = 'src/assets/icon';
+const appPngIconPath = 'src/assets/icon.png';
+const appWindowsIconPath = 'src/assets/icon.ico';
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    icon: appIconBasePath,
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
+    new MakerSquirrel({
+      setupIcon: appWindowsIconPath,
+    }),
     new MakerZIP({}, ['darwin']),
-    new MakerRpm({}),
-    new MakerDeb({}),
+    new MakerRpm({
+      options: {
+        icon: appPngIconPath,
+      },
+    }),
+    new MakerDeb({
+      options: {
+        icon: appPngIconPath,
+      },
+    }),
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
