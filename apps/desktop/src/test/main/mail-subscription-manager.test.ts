@@ -18,11 +18,12 @@ import {
   getRenewalDelayMs,
   MailSubscriptionManager,
 } from '@/main/mail-subscription-manager';
+import type { MailAccount } from '@/lib/mail-types';
 
 const originalWebSocket = globalThis.WebSocket;
 let statePath: string;
 let managers: MailSubscriptionManager[] = [];
-const account = {
+const account: MailAccount = {
   id: 'microsoft:account-1',
   providerId: 'microsoft' as const,
   providerAccountId: 'account-1',
