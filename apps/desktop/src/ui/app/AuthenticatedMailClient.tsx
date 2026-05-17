@@ -44,6 +44,7 @@ export function AuthenticatedMailClient({
   const closeCompose = useComposeStore((state) => state.close);
   const openCompose = useComposeStore((state) => state.open);
   const manuallyMarkedUnreadMessageId = useRef<string | undefined>(undefined);
+  const previousFolderId = useRef<string | undefined>(undefined);
   const {
     currentFolder,
     folders,
@@ -54,8 +55,10 @@ export function AuthenticatedMailClient({
     messagesQuery,
     resolvedFolderId,
     searchQuery,
+    searchScope,
     selectedMessage,
     setSearchQuery,
+    setSearchScope,
   } = useMailClientState(activeAccount.id);
   const isReadingMessage = Boolean(messageId);
   const {
@@ -124,11 +127,23 @@ export function AuthenticatedMailClient({
   ]);
 
   useEffect(() => {
-    setSearchQuery('');
+    const didChangeFolder =
+      previousFolderId.current !== undefined &&
+      previousFolderId.current !== resolvedFolderId;
+    previousFolderId.current = resolvedFolderId;
+
+    if (!didChangeFolder) {
+      return;
+    }
+
+    if (searchScope === 'folder') {
+      setSearchQuery('');
+    }
+
     setReplyMessageId(undefined);
     closeCompose();
     manuallyMarkedUnreadMessageId.current = undefined;
-  }, [closeCompose, resolvedFolderId]);
+  }, [closeCompose, resolvedFolderId, searchScope, setSearchQuery]);
 
   useEffect(() => {
     if (!messageId || !messageQuery.error) {
@@ -239,7 +254,7 @@ export function AuthenticatedMailClient({
     void navigate({
       to: '/mail/$folderId/$messageId',
       params: {
-        folderId: encodeRouteId(resolvedFolderId),
+        folderId: encodeRouteId(message.folderId || resolvedFolderId),
         messageId: encodeRouteId(message.id),
       },
       replace: true,
@@ -283,6 +298,10 @@ export function AuthenticatedMailClient({
 
   function handleSearch(query: string) {
     setSearchQuery(query);
+  }
+
+  function handleSearchScopeChange(scope: typeof searchScope) {
+    setSearchScope(scope);
   }
 
   return (
@@ -329,7 +348,9 @@ export function AuthenticatedMailClient({
           onToggleMessageImportant={handleToggleMessageImportant}
           onToggleMessageStar={handleToggleMessageStar}
           onSearch={handleSearch}
+          onSearchScopeChange={handleSearchScopeChange}
           searchQuery={searchQuery}
+          searchScope={searchScope}
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
         <ReadingPane

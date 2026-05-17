@@ -7,6 +7,7 @@ import type {
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
+  SearchMessagesInput,
   SendMailInput,
 } from '@/lib/mail-types';
 
@@ -84,6 +85,7 @@ export interface MailProvider extends MailSubscriptionProvider {
     nextPageToken?: string,
     searchQuery?: string,
   ): Promise<PagedMessages>;
+  searchMessages(accountId: string, input: SearchMessagesInput): Promise<PagedMessages>;
   getMessage(
     accountId: string,
     folderId: string,

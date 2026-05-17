@@ -34,6 +34,7 @@ export function MessageListItem({
   const isActionPendingRef = useRef(isActionPending);
   const folderIdRef = useRef(folderId);
   const messageRef = useRef(message);
+  const effectiveFolderId = message.folderId || folderId;
   const [isDragging, setIsDragging] = useState(false);
   const [dragPreview, setDragPreview] = useState<DragPreviewState>();
 
@@ -48,9 +49,9 @@ export function MessageListItem({
   }, [isActionPending]);
 
   useEffect(() => {
-    folderIdRef.current = folderId;
+    folderIdRef.current = effectiveFolderId;
     messageRef.current = message;
-  }, [folderId, message]);
+  }, [effectiveFolderId, message]);
 
   useEffect(() => {
     return clearDragState;
@@ -120,7 +121,7 @@ export function MessageListItem({
         draggable={false}
         to="/mail/$folderId/$messageId"
         params={{
-          folderId: encodeRouteId(folderId),
+          folderId: encodeRouteId(effectiveFolderId),
           messageId: encodeRouteId(message.id),
         }}
         className={cn(
@@ -179,6 +180,11 @@ export function MessageListItem({
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
               {message.preview}
             </p>
+            {message.folderLabel && (
+              <p className="mt-2 w-fit max-w-full truncate rounded-sm bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {message.folderLabel}
+              </p>
+            )}
           </div>
         </div>
       </Link>

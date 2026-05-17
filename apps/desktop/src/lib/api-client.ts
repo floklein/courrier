@@ -16,6 +16,7 @@ export const api = {
     listFolders: window.courrier.mail.listFolders,
     listMessages: window.courrier.mail.listMessages,
     getMessage: window.courrier.mail.getMessage,
+    searchMessages: window.courrier.mail.searchMessages,
     markMessageReadState: window.courrier.mail.markMessageReadState,
     moveMessage: window.courrier.mail.moveMessage,
     deleteMessage: window.courrier.mail.deleteMessage,

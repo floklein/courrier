@@ -16,6 +16,7 @@ import type {
   MailPersonSuggestion,
   PagedMessages,
   SendMailInput,
+  SearchMessagesInput,
 } from '@/lib/mail-types';
 import { GraphRequestError } from '@/lib/graph-errors';
 import fs from 'node:fs/promises';
@@ -98,6 +99,49 @@ export class GraphClient implements MailProvider {
       messages: (data.value ?? [])
         .filter((message) => Boolean(message.id))
         .map((message) => mapGraphMessageSummary(folderId, message)),
+      nextPageToken: data['@odata.nextLink'],
+    };
+  }
+
+  async searchMessages(
+    accountId: string,
+    input: SearchMessagesInput,
+  ): Promise<PagedMessages> {
+    if (input.scope === 'folder') {
+      return this.listMessages(
+        accountId,
+        input.folderId ?? 'inbox',
+        input.nextPageToken,
+        input.query,
+      );
+    }
+
+    const url =
+      getValidatedGlobalMessagePageUrl(input.nextPageToken) ??
+      createGlobalMessagesUrl(input.query);
+    const [data, folders] = await Promise.all([
+      this.fetchGraph<GraphCollection<GraphMessage>>(accountId, url),
+      this.listFolders(accountId),
+    ]);
+    const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
+
+    return {
+      messages: (data.value ?? [])
+        .filter((message) => Boolean(message.id))
+        .map((message) => {
+          const folder = message.parentFolderId
+            ? foldersById.get(message.parentFolderId)
+            : undefined;
+
+          return {
+            ...mapGraphMessageSummary(
+              message.parentFolderId || input.folderId || 'inbox',
+              message,
+            ),
+            folderLabel: folder?.label,
+            folderWellKnownName: folder?.wellKnownName,
+          };
+        }),
       nextPageToken: data['@odata.nextLink'],
     };
   }
@@ -727,6 +771,54 @@ function createMessagesUrl(folderId: string, search?: string) {
   return `${graphBaseUrl}/me/mailFolders/${encodeURIComponent(
     folderId,
   )}/messages?${params.toString()}`;
+}
+
+function createGlobalMessagesUrl(search: string) {
+  const params = new URLSearchParams({
+    $top: '25',
+    $select:
+      'id,parentFolderId,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients',
+    $search: `"${search.trim().replaceAll('"', '\\"')}"`,
+  });
+
+  return `${graphBaseUrl}/me/messages?${params.toString()}`;
+}
+
+export function getValidatedGlobalMessagePageUrl(nextPageUrl?: string) {
+  if (!nextPageUrl) {
+    return undefined;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(nextPageUrl);
+  } catch {
+    throw new Error(
+      `Refusing to fetch an unexpected Microsoft Graph page URL: ${describeRejectedMessagePageUrl(
+        nextPageUrl,
+      )}`,
+    );
+  }
+
+  const graphBase = new URL(graphBaseUrl);
+  const pathSegments = url.pathname.split('/');
+  const isExpectedMessagePage =
+    url.origin === graphBase.origin &&
+    pathSegments[1] === 'v1.0' &&
+    pathSegments[2] === 'me' &&
+    pathSegments[3] === 'messages' &&
+    pathSegments.length === 4;
+
+  if (!isExpectedMessagePage) {
+    throw new Error(
+      `Refusing to fetch an unexpected Microsoft Graph page URL: ${describeRejectedMessagePageUrl(
+        nextPageUrl,
+      )}`,
+    );
+  }
+
+  return nextPageUrl;
 }
 
 export function getValidatedMessagePageUrl(

@@ -16,6 +16,16 @@ export const mailPageTokenSchema = z.string().min(1).max(8192).optional();
 
 export const mailSearchQuerySchema = z.string().max(512).optional();
 
+export const mailSearchScopeSchema = z.enum(['folder', 'all']);
+
+export const searchMessagesInputSchema = z.object({
+  query: z.string().trim().min(1).max(512),
+  scope: mailSearchScopeSchema,
+  folderId: ipcIdSchema.optional(),
+  nextPageToken: mailPageTokenSchema,
+  includeSpamTrash: z.boolean().optional(),
+});
+
 export const mailPeopleQuerySchema = z.string().trim().max(128).optional();
 
 export const mailComposeRecipientSchema = z.object({

@@ -6,6 +6,7 @@ import type {
   MailFolder,
   MailMessageDetail,
   MailPersonSuggestion,
+  SearchMessagesInput,
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
@@ -86,6 +87,12 @@ const courrier = {
         folderId,
         messageId,
       ) as Promise<MailMessageDetail | undefined>,
+    searchMessages: (accountId: string, input: SearchMessagesInput) =>
+      ipcRenderer.invoke(
+        'mail:search-messages',
+        accountId,
+        input,
+      ) as Promise<PagedMessages>,
     markMessageReadState: (
       accountId: string,
       messageId: string,
