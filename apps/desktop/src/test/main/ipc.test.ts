@@ -122,6 +122,41 @@ describe('IPC mail handlers', () => {
     expect(mailService.markMessageReadState).not.toHaveBeenCalled();
   });
 
+  it('validates and forwards triage action payloads', async () => {
+    const authService = {
+      signIn: vi.fn(),
+      getSession: vi.fn(),
+      signOut: vi.fn(),
+    };
+    const mailService = createMailService();
+
+    registerIpcHandlers(authService as never, mailService as never, { trustPolicy });
+
+    await invokeIpc(
+      'mail:set-message-star-state',
+      trustedEvent,
+      'google:account-1',
+      'message-1',
+      true,
+    );
+    await expect(
+      invokeIpc(
+        'mail:set-message-important-state',
+        trustedEvent,
+        'google:account-1',
+        'message-1',
+        'yes',
+      ),
+    ).rejects.toThrow('Invalid IPC payload');
+
+    expect(mailService.setMessageStarState).toHaveBeenCalledWith(
+      'google:account-1',
+      'message-1',
+      true,
+    );
+    expect(mailService.setMessageImportantState).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed send-message payloads before calling Graph', async () => {
     const authService = {
       signIn: vi.fn(),
@@ -150,12 +185,18 @@ describe('IPC mail handlers', () => {
 
 function createMailService() {
   return {
+    getCapabilities: vi.fn(),
     listFolders: vi.fn(),
     listMessages: vi.fn(),
     getMessage: vi.fn(),
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    archiveMessage: vi.fn(),
+    markMessageJunkState: vi.fn(),
+    setMessageStarState: vi.fn(),
+    setMessageFlagState: vi.fn(),
+    setMessageImportantState: vi.fn(),
     downloadAttachment: vi.fn(),
     sendMessage: vi.fn(),
     replyToMessage: vi.fn(),

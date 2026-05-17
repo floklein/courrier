@@ -5,9 +5,9 @@ describe('mail folder icons', () => {
   it('maps every supported folder icon to a renderable component', () => {
     expect(Object.keys(folderIcons).sort()).toEqual([
       'archive',
-      'clock',
       'file',
       'folder',
+      'important',
       'inbox',
       'mail-x',
       'send',

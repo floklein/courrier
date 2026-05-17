@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   AuthSession,
   LocalMailAttachment,
+  MailActionCapability,
   MailFolder,
   MailMessageDetail,
   MailPersonSuggestion,
@@ -58,6 +59,11 @@ const courrier = {
       ) as Promise<boolean>,
   },
   mail: {
+    getCapabilities: (accountId: string) =>
+      ipcRenderer.invoke(
+        'mail:get-capabilities',
+        accountId,
+      ) as Promise<MailActionCapability[]>,
     listFolders: (accountId: string) =>
       ipcRenderer.invoke('mail:list-folders', accountId) as Promise<MailFolder[]>,
     listMessages: (
@@ -110,6 +116,61 @@ const courrier = {
         accountId,
         messageId,
       ) as Promise<MailMessageDetail>,
+    archiveMessage: (
+      accountId: string,
+      messageId: string,
+      sourceFolderId: string,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:archive-message',
+        accountId,
+        messageId,
+        sourceFolderId,
+      ) as Promise<MailMessageDetail | undefined>,
+    markMessageJunkState: (
+      accountId: string,
+      messageId: string,
+      isJunk: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:mark-message-junk-state',
+        accountId,
+        messageId,
+        isJunk,
+      ) as Promise<MailMessageDetail | undefined>,
+    setMessageStarState: (
+      accountId: string,
+      messageId: string,
+      isStarred: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:set-message-star-state',
+        accountId,
+        messageId,
+        isStarred,
+      ) as Promise<void>,
+    setMessageFlagState: (
+      accountId: string,
+      messageId: string,
+      isFlagged: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:set-message-flag-state',
+        accountId,
+        messageId,
+        isFlagged,
+      ) as Promise<void>,
+    setMessageImportantState: (
+      accountId: string,
+      messageId: string,
+      isImportant: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:set-message-important-state',
+        accountId,
+        messageId,
+        isImportant,
+      ) as Promise<void>,
     listPeople: (accountId: string, query?: string) =>
       ipcRenderer.invoke(
         'mail:list-people',

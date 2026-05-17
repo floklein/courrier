@@ -59,14 +59,20 @@ export function AuthenticatedMailClient({
   } = useMailClientState(activeAccount.id);
   const isReadingMessage = Boolean(messageId);
   const {
+    actionCapabilities,
+    archiveMutation,
     deleteMutation,
+    flagMutation,
+    importantMutation,
     isActionPending,
     isSendingMessage,
+    junkMutation,
     markReadMutation,
     moveMutation,
     queryClient,
     replyToMessageMutation,
     sendMessageMutation,
+    starMutation,
   } = useMailActions({
     accountId: activeAccount.id,
     folders,
@@ -189,6 +195,38 @@ export function AuthenticatedMailClient({
     deleteMutation.mutate({ message });
   }
 
+  function handleArchiveMessage(message: MailMessageSummary) {
+    archiveMutation.mutate({ message });
+  }
+
+  function handleMarkMessageJunkState(
+    message: MailMessageSummary,
+    isJunk: boolean,
+  ) {
+    junkMutation.mutate({ message, isJunk });
+  }
+
+  function handleToggleMessageStar(
+    message: MailMessageSummary,
+    isStarred: boolean,
+  ) {
+    starMutation.mutate({ message, isStarred });
+  }
+
+  function handleToggleMessageFlag(
+    message: MailMessageSummary,
+    isFlagged: boolean,
+  ) {
+    flagMutation.mutate({ message, isFlagged });
+  }
+
+  function handleToggleMessageImportant(
+    message: MailMessageSummary,
+    isImportant: boolean,
+  ) {
+    importantMutation.mutate({ message, isImportant });
+  }
+
   function handleReplyToMessage(message: MailMessageSummary) {
     closeCompose();
     replyToMessageMutation.reset();
@@ -269,6 +307,7 @@ export function AuthenticatedMailClient({
           folderId={resolvedFolderId}
           folderLabel={currentFolder?.label ?? 'Inbox'}
           folders={folders}
+          actionCapabilities={actionCapabilities}
           messages={messages}
           selectedMessageId={messageId}
           isLoading={messagesQuery.isPending || foldersQuery.isPending}
@@ -280,10 +319,15 @@ export function AuthenticatedMailClient({
             void messagesQuery.fetchNextPage();
           }}
           onDeleteMessage={handleDeleteMessage}
+          onArchiveMessage={handleArchiveMessage}
           onDragActiveChange={setIsMailDragActive}
+          onMarkMessageJunkState={handleMarkMessageJunkState}
           onMarkMessageReadState={handleMarkMessageReadState}
           onMoveMessage={handleMoveMessage}
           onReplyToMessage={handleReplyToMessage}
+          onToggleMessageFlag={handleToggleMessageFlag}
+          onToggleMessageImportant={handleToggleMessageImportant}
+          onToggleMessageStar={handleToggleMessageStar}
           onSearch={handleSearch}
           searchQuery={searchQuery}
           className={cn(isReadingMessage && 'max-md:hidden')}
@@ -292,6 +336,7 @@ export function AuthenticatedMailClient({
           accountId={activeAccount.id}
           folderId={resolvedFolderId}
           folders={folders}
+          actionCapabilities={actionCapabilities}
           isActionPending={isActionPending}
           message={selectedMessage}
           replyMessageId={replyMessageId}
@@ -302,10 +347,15 @@ export function AuthenticatedMailClient({
           isMailDragActive={isMailDragActive}
           onCloseReply={handleCloseReply}
           onDeleteMessage={handleDeleteMessage}
+          onArchiveMessage={handleArchiveMessage}
+          onMarkMessageJunkState={handleMarkMessageJunkState}
           onMarkMessageReadState={handleMarkMessageReadState}
           onMoveMessage={handleMoveMessage}
           onReplyToMessage={handleReplyToMessage}
           onReplyToMessageBody={handleReplyToMessageBody}
+          onToggleMessageFlag={handleToggleMessageFlag}
+          onToggleMessageImportant={handleToggleMessageImportant}
+          onToggleMessageStar={handleToggleMessageStar}
           className={cn(isReadingMessage && 'max-md:col-span-2')}
         />
         {isComposingNew && (

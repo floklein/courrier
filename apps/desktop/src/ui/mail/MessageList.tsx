@@ -13,7 +13,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import type { MailFolder, MailMessageSummary } from '@/lib/mail-types';
+import type {
+  MailActionCapability,
+  MailFolder,
+  MailMessageSummary,
+} from '@/lib/mail-types';
 import { cn } from '@/lib/utils';
 import { PanelStatus } from '@/ui/app/StatusViews';
 import { EmptyFolder } from '@/ui/mail/EmptyFolder';
@@ -28,6 +32,7 @@ export function MessageList({
   folderId,
   folderLabel,
   folders,
+  actionCapabilities,
   messages,
   selectedMessageId,
   isLoading,
@@ -37,10 +42,15 @@ export function MessageList({
   isActionPending,
   onLoadMore,
   onDeleteMessage,
+  onArchiveMessage,
   onDragActiveChange,
+  onMarkMessageJunkState,
   onMarkMessageReadState,
   onMoveMessage,
   onReplyToMessage,
+  onToggleMessageFlag,
+  onToggleMessageImportant,
+  onToggleMessageStar,
   onSearch,
   searchQuery,
   className,
@@ -48,6 +58,7 @@ export function MessageList({
   folderId: string;
   folderLabel: string;
   folders: MailFolder[];
+  actionCapabilities: MailActionCapability[];
   messages: MailMessageSummary[];
   selectedMessageId: string | undefined;
   isLoading: boolean;
@@ -57,7 +68,12 @@ export function MessageList({
   isActionPending: boolean;
   onLoadMore: () => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
+  onArchiveMessage: (message: MailMessageSummary) => void;
   onDragActiveChange: (isActive: boolean) => void;
+  onMarkMessageJunkState: (
+    message: MailMessageSummary,
+    isJunk: boolean,
+  ) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
     isRead: boolean,
@@ -67,6 +83,18 @@ export function MessageList({
     destinationFolderId: string,
   ) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onToggleMessageFlag: (
+    message: MailMessageSummary,
+    isFlagged: boolean,
+  ) => void;
+  onToggleMessageImportant: (
+    message: MailMessageSummary,
+    isImportant: boolean,
+  ) => void;
+  onToggleMessageStar: (
+    message: MailMessageSummary,
+    isStarred: boolean,
+  ) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
   className?: string;
@@ -319,13 +347,19 @@ export function MessageList({
           {contextMessage && (
             <MailActionContextContent
               currentFolderId={folderId}
+              actionCapabilities={actionCapabilities}
               folders={folders}
               isBusy={isActionPending}
               message={contextMessage}
+              onArchive={onArchiveMessage}
               onDelete={onDeleteMessage}
+              onMarkJunk={onMarkMessageJunkState}
               onMarkReadState={onMarkMessageReadState}
               onMove={onMoveMessage}
               onReply={onReplyToMessage}
+              onToggleFlag={onToggleMessageFlag}
+              onToggleImportant={onToggleMessageImportant}
+              onToggleStar={onToggleMessageStar}
             />
           )}
         </ContextMenu>
