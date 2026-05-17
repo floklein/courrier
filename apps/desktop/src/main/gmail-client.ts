@@ -31,6 +31,7 @@ const detailHeaders = [
   'From',
   'Reply-To',
   'To',
+  'Cc',
   'Subject',
   'Date',
   'Message-ID',
@@ -388,6 +389,8 @@ export class GmailClient implements MailProvider {
         raw: await createRawMail({
           attachments: input.attachments ?? [],
           bodyHtml: input.bodyHtml,
+          bccRecipients: input.bccRecipients ?? [],
+          ccRecipients: input.ccRecipients ?? [],
           subject: input.subject,
           toRecipients: input.toRecipients,
         }),
@@ -399,18 +402,37 @@ export class GmailClient implements MailProvider {
     accountId: string,
     input: ProviderReplyToMessageInput,
   ): Promise<void> {
-    const original = await this.getRawMessage(accountId, input.messageId);
+    const original =
+      (input.kind ?? 'reply') === 'forward'
+        ? await this.getFullMessage(accountId, input.messageId)
+        : await this.getRawMessage(accountId, input.messageId);
     const headers = getHeaderMap(original.payload?.headers);
-    const replyTarget =
-      parseMailboxList(headers.get('reply-to') ?? '')[0] ??
-      parseMailbox(headers.get('from') ?? '');
-    const subject = createReplySubject(headers.get('subject') ?? '');
+    const accountEmail = await this.getAccountEmail(accountId);
+    const kind = input.kind ?? 'reply';
+    const replyAllRecipients =
+      kind === 'replyAll'
+        ? getGmailReplyAllRecipients(headers, accountEmail)
+        : undefined;
+    const toRecipients =
+      input.toRecipients ??
+      (kind === 'replyAll'
+        ? replyAllRecipients?.toRecipients ?? []
+        : kind === 'forward'
+          ? []
+          : getGmailReplyRecipients(headers));
+    const ccRecipients =
+      input.ccRecipients ??
+      (kind === 'replyAll' ? replyAllRecipients?.ccRecipients ?? [] : []);
+    const subject =
+      kind === 'forward'
+        ? createForwardSubject(headers.get('subject') ?? '')
+        : createReplySubject(headers.get('subject') ?? '');
     const messageId = headers.get('message-id');
     const references = [headers.get('references'), messageId]
       .filter(Boolean)
       .join(' ');
 
-    if (!replyTarget.email) {
+    if (toRecipients.length === 0) {
       throw new Error('Gmail reply target is missing a sender address.');
     }
 
@@ -420,15 +442,20 @@ export class GmailClient implements MailProvider {
       body: JSON.stringify({
         raw: await createRawMail({
           attachments: input.attachments ?? [],
-          bodyHtml: input.bodyHtml,
+          bodyHtml:
+            kind === 'forward'
+              ? createForwardBodyHtml(input.bodyHtml, original)
+              : input.bodyHtml,
+          bccRecipients: input.bccRecipients ?? [],
+          ccRecipients,
           subject,
-          toRecipients: [{ name: replyTarget.name, email: replyTarget.email }],
+          toRecipients,
           extraHeaders: {
-            ...(messageId ? { 'In-Reply-To': messageId } : {}),
-            ...(references ? { References: references } : {}),
+            ...(kind !== 'forward' && messageId ? { 'In-Reply-To': messageId } : {}),
+            ...(kind !== 'forward' && references ? { References: references } : {}),
           },
         }),
-        threadId: original.threadId,
+        ...(kind === 'forward' ? {} : { threadId: original.threadId }),
       }),
     });
   }
@@ -569,6 +596,11 @@ export class GmailClient implements MailProvider {
     );
   }
 
+  private async getAccountEmail(accountId: string) {
+    const accounts = await this.authProvider.getAccounts();
+    return accounts.find((account) => account.id === accountId)?.email;
+  }
+
   private async getLabel(accountId: string, labelId: string) {
     return this.fetchGmail<GmailLabel>(
       accountId,
@@ -665,6 +697,8 @@ function mapGmailMessageSummary(
     folderId,
     sender: sender.email ? sender : { name: sender.name || 'Unknown sender', email: '' },
     recipients: parseMailboxList(headers.get('to') ?? '').map(formatAddress),
+    ccRecipients: parseMailboxList(headers.get('cc') ?? '').map(formatAddress),
+    replyTo: parseMailboxList(headers.get('reply-to') ?? ''),
     subject: headers.get('subject') || '(No subject)',
     preview: message.snippet ?? '',
     receivedDateTime: mapGmailDate(message, headers),
@@ -674,6 +708,8 @@ function mapGmailMessageSummary(
     isStarred: (message.labelIds ?? []).includes('STARRED'),
     isImportant: (message.labelIds ?? []).includes('IMPORTANT'),
     matchedFolderIds: message.labelIds ?? [],
+    internetMessageId: headers.get('message-id') || undefined,
+    threadId: message.threadId,
   };
 }
 
@@ -940,13 +976,17 @@ function decodeBase64UrlBuffer(value: string) {
 
 async function createRawMail({
   attachments,
+  bccRecipients,
   bodyHtml,
+  ccRecipients,
   extraHeaders = {},
   subject,
   toRecipients,
 }: {
   attachments: NonNullable<ProviderSendMailInput['attachments']>;
+  bccRecipients?: ProviderSendMailInput['bccRecipients'];
   bodyHtml: string;
+  ccRecipients?: ProviderSendMailInput['ccRecipients'];
   extraHeaders?: Record<string, string>;
   subject: string;
   toRecipients: ProviderSendMailInput['toRecipients'];
@@ -962,10 +1002,37 @@ async function createRawMail({
     subject,
     text: '',
     to: toRecipients.map(formatComposeRecipient).join(', '),
+    cc: (ccRecipients ?? []).map(formatComposeRecipient).join(', ') || undefined,
+    bcc: (bccRecipients ?? []).map(formatComposeRecipient).join(', ') || undefined,
   });
-  const message = await buildMimeMessage(composer);
+  const message = injectBccHeader(
+    await buildMimeMessage(composer),
+    bccRecipients ?? [],
+  );
 
   return message.toString('base64url');
+}
+
+function injectBccHeader(
+  message: Buffer,
+  recipients: ProviderSendMailInput['bccRecipients'],
+) {
+  if (!recipients?.length) {
+    return message;
+  }
+
+  const source = message.toString('utf8');
+  const bccHeader = `Bcc: ${recipients.map(formatComposeRecipient).join(', ')}\r\n`;
+  const headerEndIndex = source.indexOf('\r\n\r\n');
+
+  if (headerEndIndex === -1) {
+    return Buffer.from(`${bccHeader}${source}`, 'utf8');
+  }
+
+  return Buffer.from(
+    `${source.slice(0, headerEndIndex)}\r\n${bccHeader}${source.slice(headerEndIndex + 2)}`,
+    'utf8',
+  );
 }
 
 function formatComposeRecipient(
@@ -978,6 +1045,92 @@ function formatComposeRecipient(
 
 function createReplySubject(subject: string) {
   return /^re:/i.test(subject) ? subject : `Re: ${subject || '(No subject)'}`;
+}
+
+function createForwardSubject(subject: string) {
+  return /^fwd:/i.test(subject) ? subject : `Fwd: ${subject || '(No subject)'}`;
+}
+
+function getGmailReplyRecipients(headers: Map<string, string>) {
+  const replyTarget =
+    parseMailboxList(headers.get('reply-to') ?? '')[0] ??
+    parseMailbox(headers.get('from') ?? '');
+
+  return replyTarget.email
+    ? [{ name: replyTarget.name, email: replyTarget.email }]
+    : [];
+}
+
+function getGmailReplyAllRecipients(
+  headers: Map<string, string>,
+  accountEmail: string | undefined,
+) {
+  const toRecipients = dedupeComposeRecipients([
+    ...getGmailReplyRecipients(headers),
+    ...parseMailboxList(headers.get('to') ?? ''),
+  ].filter((address) =>
+    address.email &&
+    address.email.toLowerCase() !== accountEmail?.toLowerCase(),
+  ).map((address) => ({ name: address.name, email: address.email })));
+  const toEmails = new Set(
+    toRecipients.map((recipient) => recipient.email.toLowerCase()),
+  );
+  const ccRecipients = dedupeComposeRecipients(
+    parseMailboxList(headers.get('cc') ?? '')
+      .filter((address) =>
+        address.email &&
+        address.email.toLowerCase() !== accountEmail?.toLowerCase() &&
+        !toEmails.has(address.email.toLowerCase()),
+      )
+      .map((address) => ({ name: address.name, email: address.email })),
+  );
+
+  return { toRecipients, ccRecipients };
+}
+
+function dedupeComposeRecipients(
+  recipients: ProviderSendMailInput['toRecipients'],
+) {
+  const deduped: ProviderSendMailInput['toRecipients'] = [];
+  const seen = new Set<string>();
+
+  for (const recipient of recipients) {
+    const email = recipient.email.toLowerCase();
+
+    if (seen.has(email)) {
+      continue;
+    }
+
+    seen.add(email);
+    deduped.push(recipient);
+  }
+
+  return deduped;
+}
+
+function createForwardBodyHtml(bodyHtml: string, original: GmailMessage) {
+  const headers = getHeaderMap(original.payload?.headers);
+  const originalBody = extractBody(original.payload);
+  const escapedPreview =
+    originalBody.contentType === 'text'
+      ? `<pre>${escapeHtml(originalBody.content)}</pre>`
+      : originalBody.content;
+
+  return `${bodyHtml}<br><br><blockquote><p>---------- Forwarded message ---------</p><p><strong>From:</strong> ${escapeHtml(
+    headers.get('from') ?? '',
+  )}<br><strong>Date:</strong> ${escapeHtml(
+    headers.get('date') ?? '',
+  )}<br><strong>Subject:</strong> ${escapeHtml(
+    headers.get('subject') ?? '',
+  )}<br><strong>To:</strong> ${escapeHtml(headers.get('to') ?? '')}</p>${escapedPreview}</blockquote>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 function buildMimeMessage(composer: MailComposer) {

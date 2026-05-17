@@ -38,6 +38,11 @@ export interface GraphMessage {
   parentFolderId?: string | null;
   from?: GraphEmailAddress | null;
   toRecipients?: GraphEmailAddress[] | null;
+  ccRecipients?: GraphEmailAddress[] | null;
+  bccRecipients?: GraphEmailAddress[] | null;
+  replyTo?: GraphEmailAddress[] | null;
+  internetMessageId?: string | null;
+  conversationId?: string | null;
 }
 
 export interface GraphMessageDetail extends GraphMessage {
@@ -171,6 +176,10 @@ export function mapGraphMessageSummary(
     folderWellKnownName: undefined,
     sender: mapAddress(message.from, 'Unknown sender'),
     recipients: (message.toRecipients ?? []).map(formatRecipient),
+    ccRecipients: (message.ccRecipients ?? []).map(formatRecipient),
+    replyTo: (message.replyTo ?? []).map((recipient) =>
+      mapAddress(recipient, 'Unknown recipient'),
+    ),
     subject: message.subject || '(No subject)',
     preview: message.bodyPreview || '',
     receivedDateTime: message.receivedDateTime || '',
@@ -179,6 +188,8 @@ export function mapGraphMessageSummary(
     importance: mapImportance(message.importance),
     isFlagged: message.flag?.flagStatus === 'flagged',
     isImportant: mapImportance(message.importance) === 'high',
+    internetMessageId: message.internetMessageId || undefined,
+    conversationId: message.conversationId || undefined,
   };
 }
 

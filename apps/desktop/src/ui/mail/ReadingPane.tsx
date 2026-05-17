@@ -1,14 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import {
-  Archive,
   Download,
   ExternalLink,
-  Flag,
+  Forward,
   MailOpen,
   MoreHorizontal,
   Paperclip,
   Reply,
-  Star,
   Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +27,7 @@ import type {
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
+  MailResponseKind,
   ReplyToMessageInput,
 } from '@/lib/mail-types';
 import { api } from '@/lib/api-client';
@@ -38,20 +37,19 @@ import { PanelStatus } from '@/ui/app/StatusViews';
 import { MailComposer } from '@/ui/compose/MailComposer';
 import { ToolbarButton } from '@/ui/primitives/ToolbarButton';
 import { HtmlMessageBody } from '@/ui/mail/HtmlMessageBody';
-import {
-  isArchiveFolder,
-  MailActionDropdownContent,
-} from '@/ui/mail/MailActionMenu';
+import { MailActionDropdownContent } from '@/ui/mail/MailActionMenu';
 import { MailAvatar } from '@/ui/mail/MailAvatar';
 
 export function ReadingPane({
   accountId,
+  accountEmail,
   folderId,
   folders,
   actionCapabilities,
   isActionPending,
   message,
   replyMessageId,
+  responseKind,
   isSendingMessage,
   replyError,
   isLoading,
@@ -63,7 +61,9 @@ export function ReadingPane({
   onMarkMessageJunkState,
   onMarkMessageReadState,
   onMoveMessage,
+  onForwardMessage,
   onReplyToMessage,
+  onReplyAllToMessage,
   onReplyToMessageBody,
   onToggleMessageFlag,
   onToggleMessageImportant,
@@ -71,12 +71,14 @@ export function ReadingPane({
   className,
 }: {
   accountId: string;
+  accountEmail?: string;
   folderId: string;
   folders: MailFolder[];
   actionCapabilities: MailActionCapability[];
   isActionPending: boolean;
   message: MailMessageDetail | undefined;
   replyMessageId: string | undefined;
+  responseKind: MailResponseKind;
   isSendingMessage: boolean;
   replyError: Error | null;
   isLoading: boolean;
@@ -97,7 +99,9 @@ export function ReadingPane({
     message: MailMessageSummary,
     destinationFolderId: string,
   ) => void;
+  onForwardMessage: (message: MailMessageSummary) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onReplyAllToMessage: (message: MailMessageSummary) => void;
   onReplyToMessageBody: (input: ReplyToMessageInput) => void;
   onToggleMessageFlag: (
     message: MailMessageSummary,
@@ -113,9 +117,6 @@ export function ReadingPane({
   ) => void;
   className?: string;
 }) {
-  const canArchive =
-    actionCapabilities.includes('archive') && !isArchiveFolder(folders, folderId);
-
   if (isLoading) {
     return (
       <section
@@ -184,30 +185,12 @@ export function ReadingPane({
             disabled={isActionPending}
             onClick={() => onReplyToMessage(message)}
           />
-          {canArchive && (
-            <ToolbarButton
-              icon={Archive}
-              label="Archive"
-              disabled={isActionPending}
-              onClick={() => onArchiveMessage(message)}
-            />
-          )}
-          {actionCapabilities.includes('star') && (
-            <ToolbarButton
-              icon={Star}
-              label={message.isStarred ? 'Unstar' : 'Star'}
-              disabled={isActionPending}
-              onClick={() => onToggleMessageStar(message, !message.isStarred)}
-            />
-          )}
-          {actionCapabilities.includes('flag') && (
-            <ToolbarButton
-              icon={Flag}
-              label={message.isFlagged ? 'Clear flag' : 'Flag'}
-              disabled={isActionPending}
-              onClick={() => onToggleMessageFlag(message, !message.isFlagged)}
-            />
-          )}
+          <ToolbarButton
+            icon={Forward}
+            label="Transfer"
+            disabled={isActionPending}
+            onClick={() => onForwardMessage(message)}
+          />
           <ToolbarButton
             icon={Trash2}
             label="Move to trash"
@@ -245,7 +228,9 @@ export function ReadingPane({
               onMarkJunk={onMarkMessageJunkState}
               onMarkReadState={onMarkMessageReadState}
               onMove={onMoveMessage}
+              onForward={onForwardMessage}
               onReply={onReplyToMessage}
+              onReplyAll={onReplyAllToMessage}
               onToggleFlag={onToggleMessageFlag}
               onToggleImportant={onToggleMessageImportant}
               onToggleStar={onToggleMessageStar}
@@ -303,9 +288,11 @@ export function ReadingPane({
         </div>
       </ScrollArea>
       {replyMessageId === message.id && (
-          <MailComposer
-            accountId={accountId}
-            mode="reply"
+        <MailComposer
+          key={`${message.id}:${responseKind}`}
+          accountId={accountId}
+          accountEmail={accountEmail}
+          mode={responseKind}
           replyMessage={message}
           isSending={isSendingMessage}
           error={replyError}
