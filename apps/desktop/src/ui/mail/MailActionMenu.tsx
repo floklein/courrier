@@ -5,7 +5,9 @@ import {
   FolderInput,
   Mail,
   MailOpen,
+  Forward,
   Reply,
+  ReplyAll,
   Star,
   Trash2,
 } from 'lucide-react';
@@ -46,6 +48,8 @@ interface MailActionMenuProps {
   onMarkReadState: (message: MailMessageSummary, isRead: boolean) => void;
   onMove: (message: MailMessageSummary, destinationFolderId: string) => void;
   onReply: (message: MailMessageSummary) => void;
+  onReplyAll: (message: MailMessageSummary) => void;
+  onForward: (message: MailMessageSummary) => void;
   onToggleFlag: (message: MailMessageSummary, isFlagged: boolean) => void;
   onToggleImportant: (message: MailMessageSummary, isImportant: boolean) => void;
   onToggleStar: (message: MailMessageSummary, isStarred: boolean) => void;
@@ -65,14 +69,39 @@ export function MailActionDropdownContent(props: MailActionMenuProps) {
       </DropdownMenuItem>
       <DropdownMenuItem
         disabled={props.isBusy}
+        onClick={() => props.onReplyAll(props.message)}
+      >
+        <ReplyAll />
+        Reply all
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onForward(props.message)}
+      >
+        <Forward />
+        Forward
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        disabled={props.isBusy}
         onClick={() => props.onMarkReadState(props.message, !props.message.isRead)}
       >
         <MarkIcon />
         {markLabel}
       </DropdownMenuItem>
       <TriageDropdownItems {...props} />
-      <DropdownMoveSubmenu {...props} />
       <DropdownMenuSeparator />
+      {can(props, 'archive') &&
+        !isArchiveFolder(props.folders, props.currentFolderId) && (
+          <DropdownMenuItem
+            disabled={props.isBusy}
+            onClick={() => props.onArchive(props.message)}
+          >
+            <Archive />
+            Archive
+          </DropdownMenuItem>
+        )}
+      <DropdownMoveSubmenu {...props} />
       <DropdownMenuItem
         disabled={props.isBusy}
         variant="destructive"
@@ -99,14 +128,39 @@ export function MailActionContextContent(props: MailActionMenuProps) {
       </ContextMenuItem>
       <ContextMenuItem
         disabled={props.isBusy}
+        onClick={() => props.onReplyAll(props.message)}
+      >
+        <ReplyAll />
+        Reply all
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onForward(props.message)}
+      >
+        <Forward />
+        Forward
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem
+        disabled={props.isBusy}
         onClick={() => props.onMarkReadState(props.message, !props.message.isRead)}
       >
         <MarkIcon />
         {markLabel}
       </ContextMenuItem>
       <TriageContextItems {...props} />
-      <ContextMoveSubmenu {...props} />
       <ContextMenuSeparator />
+      {can(props, 'archive') &&
+        !isArchiveFolder(props.folders, props.currentFolderId) && (
+          <ContextMenuItem
+            disabled={props.isBusy}
+            onClick={() => props.onArchive(props.message)}
+          >
+            <Archive />
+            Archive
+          </ContextMenuItem>
+        )}
+      <ContextMoveSubmenu {...props} />
       <ContextMenuItem
         disabled={props.isBusy}
         variant="destructive"
@@ -176,16 +230,6 @@ function TriageDropdownItems(props: MailActionMenuProps) {
 
   return (
     <>
-      {can(props, 'archive') &&
-        !isArchiveFolder(props.folders, props.currentFolderId) && (
-          <DropdownMenuItem
-            disabled={props.isBusy}
-            onClick={() => props.onArchive(props.message)}
-          >
-            <Archive />
-            Archive
-          </DropdownMenuItem>
-        )}
       {can(props, 'star') && (
         <DropdownMenuItem
           disabled={props.isBusy}
@@ -237,16 +281,6 @@ function TriageContextItems(props: MailActionMenuProps) {
 
   return (
     <>
-      {can(props, 'archive') &&
-        !isArchiveFolder(props.folders, props.currentFolderId) && (
-          <ContextMenuItem
-            disabled={props.isBusy}
-            onClick={() => props.onArchive(props.message)}
-          >
-            <Archive />
-            Archive
-          </ContextMenuItem>
-        )}
       {can(props, 'star') && (
         <ContextMenuItem
           disabled={props.isBusy}

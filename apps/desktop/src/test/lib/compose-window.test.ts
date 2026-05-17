@@ -8,7 +8,10 @@ describe('compose window draft schema', () => {
   it('accepts the empty draft shape used by new compose windows', () => {
     expect(emptyComposeWindowDraft).toEqual({
       accountId: '',
+      kind: 'new',
       toValue: '',
+      ccValue: '',
+      bccValue: '',
       subject: '',
       attachments: [],
       editorValue: {
@@ -23,7 +26,11 @@ describe('compose window draft schema', () => {
     expect(
       composeWindowDraftSchema.parse({
         accountId: 'microsoft:user-1',
+        kind: 'forward',
+        relatedMessageId: 'message-1',
         toValue: '"Ada Lovelace" <ada@example.com>',
+        ccValue: 'grace@example.com',
+        bccValue: 'hidden@example.com',
         subject: 'Notes',
         editorValue: {
           html: '<p>Hello</p>',
@@ -33,7 +40,11 @@ describe('compose window draft schema', () => {
       }),
     ).toEqual({
       accountId: 'microsoft:user-1',
+      kind: 'forward',
+      relatedMessageId: 'message-1',
       toValue: '"Ada Lovelace" <ada@example.com>',
+      ccValue: 'grace@example.com',
+      bccValue: 'hidden@example.com',
       subject: 'Notes',
       editorValue: {
         html: '<p>Hello</p>',

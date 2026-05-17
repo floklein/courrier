@@ -38,7 +38,7 @@ export function MailComposerHeader({
     >
       <div className="min-w-0">
         <h2 className="truncate text-base font-semibold">
-          {isReply ? `Reply to ${replyMessage?.sender.name ?? 'message'}` : 'New message'}
+          {getComposerTitle(currentDraft, replyMessage)}
         </h2>
         {isReply && replyMessage && (
           <p className="truncate text-xs text-muted-foreground">
@@ -107,4 +107,23 @@ export function MailComposerHeader({
       </div>
     </div>
   );
+}
+
+function getComposerTitle(
+  draft: ComposeWindowDraft,
+  replyMessage: MailMessageDetail | undefined,
+) {
+  if (draft.kind === 'replyAll') {
+    return `Reply all to ${replyMessage?.sender.name ?? 'message'}`;
+  }
+
+  if (draft.kind === 'forward') {
+    return `Forward ${replyMessage?.sender.name ?? 'message'}`;
+  }
+
+  if (draft.kind === 'reply') {
+    return `Reply to ${replyMessage?.sender.name ?? 'message'}`;
+  }
+
+  return 'New message';
 }

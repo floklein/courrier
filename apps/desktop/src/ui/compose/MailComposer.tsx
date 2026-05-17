@@ -15,6 +15,7 @@ import {
   type ComposeWindowDraft,
 } from '@/lib/compose-window';
 import type {
+  MailAddress,
   MailComposeRecipient,
   LocalMailAttachment,
   MailMessageDetail,
@@ -33,6 +34,7 @@ import { RichTextMailEditor, type RichTextMailEditorValue } from '@/ui/compose/R
 
 export function MailComposer({
   accountId,
+  accountEmail,
   mode,
   isSending,
   error,
@@ -48,7 +50,8 @@ export function MailComposer({
   useWindowHeader,
 }: {
   accountId: string;
-  mode: 'new' | 'reply';
+  accountEmail?: string;
+  mode: 'new' | 'reply' | 'replyAll' | 'forward';
   isSending: boolean;
   error: Error | null;
   replyMessage?: MailMessageDetail;
@@ -64,19 +67,57 @@ export function MailComposer({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const toInputId = useId();
+  const ccInputId = useId();
+  const bccInputId = useId();
   const subjectInputId = useId();
   const bodyInputId = useId();
   const initialRecipients = useMemo(
-    () => parseRecipients(initialDraft?.toValue ?? ''),
-    [initialDraft?.toValue],
+    () =>
+      parseRecipients(
+        initialDraft?.toValue ??
+          getInitialResponseRecipients(mode, replyMessage, accountEmail).toValue,
+      ),
+    [accountEmail, initialDraft?.toValue, mode, replyMessage],
+  );
+  const initialCcRecipients = useMemo(
+    () =>
+      parseRecipients(
+        initialDraft?.ccValue ??
+          getInitialResponseRecipients(mode, replyMessage, accountEmail).ccValue,
+      ),
+    [accountEmail, initialDraft?.ccValue, mode, replyMessage],
+  );
+  const initialBccRecipients = useMemo(
+    () => parseRecipients(initialDraft?.bccValue ?? ''),
+    [initialDraft?.bccValue],
   );
   const [toRecipients, setToRecipients] = useState<MailComposeRecipient[]>(
     initialRecipients.valid,
   );
+  const [ccRecipients, setCcRecipients] = useState<MailComposeRecipient[]>(
+    initialCcRecipients.valid,
+  );
+  const [bccRecipients, setBccRecipients] = useState<MailComposeRecipient[]>(
+    initialBccRecipients.valid,
+  );
   const [toInputValue, setToInputValue] = useState(
     initialRecipients.invalid.join(', '),
   );
-  const [subject, setSubject] = useState(initialDraft?.subject ?? '');
+  const [ccInputValue, setCcInputValue] = useState(
+    initialCcRecipients.invalid.join(', '),
+  );
+  const [bccInputValue, setBccInputValue] = useState(
+    initialBccRecipients.invalid.join(', '),
+  );
+  const [isCcVisible, setIsCcVisible] = useState(
+    Boolean(initialDraft?.ccValue) ||
+      initialCcRecipients.valid.length > 0 ||
+      initialCcRecipients.invalid.length > 0,
+  );
+  const [isBccVisible, setIsBccVisible] = useState(Boolean(initialDraft?.bccValue));
+  const [subject, setSubject] = useState(
+    initialDraft?.subject ?? getInitialResponseSubject(mode, replyMessage),
+  );
   const [attachments, setAttachments] = useState<LocalMailAttachment[]>(
     initialDraft?.attachments ?? [],
   );
@@ -85,31 +126,51 @@ export function MailComposer({
   });
   const [validationMessage, setValidationMessage] = useState('');
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
-  const isReply = mode === 'reply';
+  const isResponse = mode !== 'new';
   const currentDraft = useMemo<ComposeWindowDraft>(
     () => ({
       accountId,
+      kind: mode,
+      relatedMessageId: replyMessage?.id,
       toValue: serializeRecipients(toRecipients, toInputValue),
+      ccValue: serializeRecipients(ccRecipients, ccInputValue),
+      bccValue: serializeRecipients(bccRecipients, bccInputValue),
       subject,
       editorValue,
       attachments,
     }),
-    [accountId, attachments, editorValue, subject, toInputValue, toRecipients],
+    [
+      accountId,
+      attachments,
+      bccInputValue,
+      bccRecipients,
+      ccInputValue,
+      ccRecipients,
+      editorValue,
+      mode,
+      replyMessage?.id,
+      subject,
+      toInputValue,
+      toRecipients,
+    ],
   );
   const hasBody = editorValue.text.trim().length > 0 && !editorValue.isEmpty;
+  const initialDraftValueRef = useRef<string | null>(null);
+
+  if (initialDraftValueRef.current == null) {
+    initialDraftValueRef.current = serializeDraftForDirtyCheck(currentDraft);
+  }
+
   const isDirty =
-    currentDraft.toValue.trim().length > 0 ||
-    subject.trim().length > 0 ||
-    editorValue.text.trim().length > 0 ||
-    attachments.length > 0;
+    serializeDraftForDirtyCheck(currentDraft) !== initialDraftValueRef.current;
 
   useEffect(() => {
-    if (isReply) {
+    if (isResponse) {
       return;
     }
 
     onDraftChange?.(currentDraft);
-  }, [currentDraft, isReply, onDraftChange]);
+  }, [currentDraft, isResponse, onDraftChange]);
 
   useEffect(() => {
     const element = formRef.current;
@@ -141,39 +202,61 @@ export function MailComposer({
 
     const bodyHtml = sanitizeOutgoingMailHtml(editorValue.html);
 
-    if (isReply) {
+    const toResult = parsePendingRecipients(toRecipients, toInputValue, 'recipient');
+    const ccResult = parsePendingRecipients(ccRecipients, ccInputValue, 'Cc recipient');
+    const bccResult = parsePendingRecipients(
+      bccRecipients,
+      bccInputValue,
+      'Bcc recipient',
+    );
+
+    if (!toResult.ok) {
+      setValidationMessage(toResult.error);
+      return;
+    }
+
+    if (!ccResult.ok) {
+      setValidationMessage(ccResult.error);
+      return;
+    }
+
+    if (!bccResult.ok) {
+      setValidationMessage(bccResult.error);
+      return;
+    }
+
+    if (mode !== 'new') {
       if (!replyMessage) {
-        setValidationMessage('Select a message before replying.');
+        setValidationMessage('Select a message before responding.');
+        return;
+      }
+
+      if (mode === 'forward' && toResult.recipients.length === 0) {
+        setValidationMessage('Add at least one recipient.');
         return;
       }
 
       onReply({
+        kind: mode,
         messageId: replyMessage.id,
         bodyHtml,
+        toRecipients: toResult.recipients,
+        ccRecipients: ccResult.recipients,
+        bccRecipients: bccResult.recipients,
         attachments,
       });
       return;
     }
 
-    const pendingRecipients = parseRecipients(toInputValue);
-
-    if (pendingRecipients.invalid.length > 0) {
-      setValidationMessage(`Check recipient: ${pendingRecipients.invalid[0]}`);
-      return;
-    }
-
-    const recipients = dedupeRecipients([
-      ...toRecipients,
-      ...pendingRecipients.valid,
-    ]);
-
-    if (recipients.length === 0) {
+    if (toResult.recipients.length === 0) {
       setValidationMessage('Add at least one recipient.');
       return;
     }
 
     onSend({
-      toRecipients: recipients,
+      toRecipients: toResult.recipients,
+      ccRecipients: ccResult.recipients,
+      bccRecipients: bccResult.recipients,
       subject: subject.trim(),
       bodyHtml,
       attachments,
@@ -239,7 +322,7 @@ export function MailComposer({
     >
       <MailComposerHeader
         currentDraft={currentDraft}
-        isReply={isReply}
+        isReply={isResponse}
         isSending={isSending}
         replyMessage={replyMessage}
         useWindowHeader={useWindowHeader}
@@ -248,16 +331,43 @@ export function MailComposer({
         onMoveToWindow={onMoveToWindow}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-        {!isReply && (
+      <div
+        className={cn(
+          'flex min-h-0 flex-col gap-3 overflow-y-auto p-4',
+          !isResponse && 'flex-1',
+        )}
+      >
+        {mode !== 'reply' && (
           <>
             <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor={toInputId}
-                className="text-xs font-medium text-muted-foreground"
-              >
-                To
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor={toInputId}
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  To
+                </label>
+                <div className="flex gap-2 text-xs">
+                  {!isCcVisible && (
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setIsCcVisible(true)}
+                    >
+                      Cc
+                    </button>
+                  )}
+                  {!isBccVisible && (
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setIsBccVisible(true)}
+                    >
+                      Bcc
+                    </button>
+                  )}
+                </div>
+              </div>
               <RecipientPicker
                 accountId={accountId}
                 id={toInputId}
@@ -269,6 +379,46 @@ export function MailComposer({
                 onInputChange={setToInputValue}
               />
             </div>
+            {isCcVisible && (
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor={ccInputId}
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Cc
+                </label>
+                <RecipientPicker
+                  accountId={accountId}
+                  id={ccInputId}
+                  value={ccRecipients}
+                  inputValue={ccInputValue}
+                  disabled={isSending}
+                  invalid={validationMessage.startsWith('Check Cc recipient')}
+                  onChange={setCcRecipients}
+                  onInputChange={setCcInputValue}
+                />
+              </div>
+            )}
+            {isBccVisible && (
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor={bccInputId}
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Bcc
+                </label>
+                <RecipientPicker
+                  accountId={accountId}
+                  id={bccInputId}
+                  value={bccRecipients}
+                  inputValue={bccInputValue}
+                  disabled={isSending}
+                  invalid={validationMessage.startsWith('Check Bcc recipient')}
+                  onChange={setBccRecipients}
+                  onInputChange={setBccInputValue}
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor={subjectInputId}
@@ -276,18 +426,24 @@ export function MailComposer({
               >
                 Subject
               </label>
-              <Input
-                id={subjectInputId}
-                value={subject}
-                onChange={(event) => setSubject(event.target.value)}
-                placeholder="Subject"
-                disabled={isSending}
-              />
+              {mode === 'new' ? (
+                <Input
+                  id={subjectInputId}
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
+                  placeholder="Subject"
+                  disabled={isSending}
+                />
+              ) : (
+                <p id={subjectInputId} className="truncate text-sm text-foreground">
+                  {subject}
+                </p>
+              )}
             </div>
           </>
         )}
 
-        <div className={cn('flex min-h-0 flex-col gap-1.5', !isReply && 'flex-1')}>
+        <div className={cn('flex min-h-0 flex-col gap-1.5', !isResponse && 'flex-1')}>
           <label
             htmlFor={bodyInputId}
             className="text-xs font-medium text-muted-foreground"
@@ -296,11 +452,12 @@ export function MailComposer({
           </label>
           <RichTextMailEditor
             id={bodyInputId}
-            className="flex-1"
+            className={cn(!isResponse && 'flex-1')}
             disabled={isSending}
+            fill={!isResponse}
             initialValue={initialDraft?.editorValue}
             onPickAttachments={() => void addPickedAttachments()}
-            placeholder={isReply ? 'Write a reply' : 'Write a message'}
+            placeholder={isResponse ? 'Write a response' : 'Write a message'}
             onChange={setEditorValue}
           />
         </div>
@@ -386,6 +543,107 @@ function dedupeRecipients(recipients: MailComposeRecipient[]) {
   }
 
   return deduped;
+}
+
+function parsePendingRecipients(
+  recipients: MailComposeRecipient[],
+  inputValue: string,
+  label: string,
+):
+  | { ok: true; recipients: MailComposeRecipient[] }
+  | { ok: false; error: string } {
+  const pendingRecipients = parseRecipients(inputValue);
+
+  if (pendingRecipients.invalid.length > 0) {
+    return {
+      ok: false,
+      error: `Check ${label}: ${pendingRecipients.invalid[0]}`,
+    };
+  }
+
+  return {
+    ok: true,
+    recipients: dedupeRecipients([...recipients, ...pendingRecipients.valid]),
+  };
+}
+
+function getInitialResponseSubject(
+  mode: 'new' | 'reply' | 'replyAll' | 'forward',
+  message: MailMessageDetail | undefined,
+) {
+  if (!message || mode === 'new') {
+    return '';
+  }
+
+  if (mode === 'forward') {
+    return /^fwd:/i.test(message.subject)
+      ? message.subject
+      : `Fwd: ${message.subject || '(No subject)'}`;
+  }
+
+  return /^re:/i.test(message.subject)
+    ? message.subject
+    : `Re: ${message.subject || '(No subject)'}`;
+}
+
+function getInitialResponseRecipients(
+  mode: 'new' | 'reply' | 'replyAll' | 'forward',
+  message: MailMessageDetail | undefined,
+  accountEmail: string | undefined,
+) {
+  if (!message || mode === 'new' || mode === 'forward') {
+    return { toValue: '', ccValue: '' };
+  }
+
+  const replyTargets =
+    (message.replyTo?.length ?? 0) > 0 ? (message.replyTo ?? []) : [message.sender];
+  const toRecipients =
+    mode === 'replyAll'
+      ? dedupeRecipients([
+          ...toComposeRecipients(replyTargets),
+          ...parseRecipients(message.recipients.join(', ')).valid,
+        ]).filter((recipient) => !isOwnRecipient(recipient, accountEmail))
+      : toComposeRecipients(replyTargets);
+  const ccRecipients =
+    mode === 'replyAll'
+      ? parseRecipients((message.ccRecipients ?? []).join(', ')).valid.filter(
+          (recipient) => !isOwnRecipient(recipient, accountEmail),
+        )
+      : [];
+
+  return {
+    toValue: serializeRecipients(toRecipients),
+    ccValue: serializeRecipients(ccRecipients),
+  };
+}
+
+function toComposeRecipients(addresses: MailAddress[]) {
+  return addresses
+    .filter((address) => address.email)
+    .map((address) => ({ name: address.name, email: address.email }));
+}
+
+function isOwnRecipient(
+  recipient: MailComposeRecipient,
+  accountEmail: string | undefined,
+) {
+  return recipient.email.toLowerCase() === accountEmail?.toLowerCase();
+}
+
+function serializeDraftForDirtyCheck(draft: ComposeWindowDraft) {
+  return JSON.stringify({
+    toValue: draft.toValue.trim(),
+    ccValue: draft.ccValue?.trim() ?? '',
+    bccValue: draft.bccValue?.trim() ?? '',
+    subject: draft.subject.trim(),
+    editorHtml: draft.editorValue.html,
+    editorText: draft.editorValue.text.trim(),
+    attachments: (draft.attachments ?? []).map((attachment) => ({
+      id: attachment.id,
+      name: attachment.name,
+      size: attachment.size,
+    })),
+  });
 }
 
 function formatFileSize(size: number) {

@@ -12,6 +12,8 @@ declare module 'nodemailer/lib/mail-composer' {
     subject?: string;
     text?: string;
     to?: string;
+    cc?: string;
+    bcc?: string;
   }
 
   export default class MailComposer {

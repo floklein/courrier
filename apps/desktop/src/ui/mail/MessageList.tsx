@@ -49,7 +49,9 @@ export function MessageList({
   onMarkMessageJunkState,
   onMarkMessageReadState,
   onMoveMessage,
+  onForwardMessage,
   onReplyToMessage,
+  onReplyAllToMessage,
   onToggleMessageFlag,
   onToggleMessageImportant,
   onToggleMessageStar,
@@ -86,7 +88,9 @@ export function MessageList({
     message: MailMessageSummary,
     destinationFolderId: string,
   ) => void;
+  onForwardMessage: (message: MailMessageSummary) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onReplyAllToMessage: (message: MailMessageSummary) => void;
   onToggleMessageFlag: (
     message: MailMessageSummary,
     isFlagged: boolean,
@@ -403,7 +407,9 @@ export function MessageList({
               onMarkJunk={onMarkMessageJunkState}
               onMarkReadState={onMarkMessageReadState}
               onMove={onMoveMessage}
+              onForward={onForwardMessage}
               onReply={onReplyToMessage}
+              onReplyAll={onReplyAllToMessage}
               onToggleFlag={onToggleMessageFlag}
               onToggleImportant={onToggleMessageImportant}
               onToggleStar={onToggleMessageStar}

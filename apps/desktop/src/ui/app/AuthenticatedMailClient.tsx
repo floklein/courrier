@@ -16,6 +16,7 @@ import type {
   AuthSession,
   MailFolder,
   MailMessageSummary,
+  MailResponseKind,
   ReplyToMessageInput,
   SendMailInput,
 } from '@/lib/mail-types';
@@ -38,6 +39,7 @@ export function AuthenticatedMailClient({
   const activeAccount = session.activeAccount;
   const navigate = useNavigate();
   const [replyMessageId, setReplyMessageId] = useState<string>();
+  const [responseKind, setResponseKind] = useState<MailResponseKind>('reply');
   const [isOpeningComposeWindow, setIsOpeningComposeWindow] = useState(false);
   const [isMailDragActive, setIsMailDragActive] = useState(false);
   const isComposingNew = useComposeStore((state) => state.isOpen);
@@ -242,9 +244,13 @@ export function AuthenticatedMailClient({
     importantMutation.mutate({ message, isImportant });
   }
 
-  function handleReplyToMessage(message: MailMessageSummary) {
+  function handleRespondToMessage(
+    message: MailMessageSummary,
+    kind: MailResponseKind,
+  ) {
     closeCompose();
     replyToMessageMutation.reset();
+    setResponseKind(kind);
     setReplyMessageId(message.id);
 
     if (message.id === messageId) {
@@ -259,6 +265,18 @@ export function AuthenticatedMailClient({
       },
       replace: true,
     });
+  }
+
+  function handleReplyToMessage(message: MailMessageSummary) {
+    handleRespondToMessage(message, 'reply');
+  }
+
+  function handleReplyAllToMessage(message: MailMessageSummary) {
+    handleRespondToMessage(message, 'replyAll');
+  }
+
+  function handleForwardMessage(message: MailMessageSummary) {
+    handleRespondToMessage(message, 'forward');
   }
 
   function handleCloseReply() {
@@ -343,7 +361,9 @@ export function AuthenticatedMailClient({
           onMarkMessageJunkState={handleMarkMessageJunkState}
           onMarkMessageReadState={handleMarkMessageReadState}
           onMoveMessage={handleMoveMessage}
+          onForwardMessage={handleForwardMessage}
           onReplyToMessage={handleReplyToMessage}
+          onReplyAllToMessage={handleReplyAllToMessage}
           onToggleMessageFlag={handleToggleMessageFlag}
           onToggleMessageImportant={handleToggleMessageImportant}
           onToggleMessageStar={handleToggleMessageStar}
@@ -355,12 +375,14 @@ export function AuthenticatedMailClient({
         />
         <ReadingPane
           accountId={activeAccount.id}
+          accountEmail={activeAccount.email}
           folderId={resolvedFolderId}
           folders={folders}
           actionCapabilities={actionCapabilities}
           isActionPending={isActionPending}
           message={selectedMessage}
           replyMessageId={replyMessageId}
+          responseKind={responseKind}
           isSendingMessage={isSendingMessage}
           replyError={replyToMessageMutation.error as Error | null}
           isLoading={messageQuery.isPending && Boolean(messageId)}
@@ -372,7 +394,9 @@ export function AuthenticatedMailClient({
           onMarkMessageJunkState={handleMarkMessageJunkState}
           onMarkMessageReadState={handleMarkMessageReadState}
           onMoveMessage={handleMoveMessage}
+          onForwardMessage={handleForwardMessage}
           onReplyToMessage={handleReplyToMessage}
+          onReplyAllToMessage={handleReplyAllToMessage}
           onReplyToMessageBody={handleReplyToMessageBody}
           onToggleMessageFlag={handleToggleMessageFlag}
           onToggleMessageImportant={handleToggleMessageImportant}
