@@ -14,12 +14,18 @@ function installCourrierApi() {
     signOut: vi.fn(),
   };
   const mail = {
+    getCapabilities: vi.fn(),
     listFolders: vi.fn(),
     listMessages: vi.fn(),
     getMessage: vi.fn(),
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    archiveMessage: vi.fn(),
+    markMessageJunkState: vi.fn(),
+    setMessageStarState: vi.fn(),
+    setMessageFlagState: vi.fn(),
+    setMessageImportantState: vi.fn(),
     listPeople: vi.fn(),
     sendMessage: vi.fn(),
     replyToMessage: vi.fn(),
@@ -50,10 +56,12 @@ describe('api client', () => {
 
     await api.auth.getSession();
     api.auth.signIn('google');
+    api.mail.getCapabilities('account-1');
     api.mail.moveMessage('account-1', 'message-1', 'inbox', 'archive');
 
     expect(bridge.auth.getSession).toHaveBeenCalledOnce();
     expect(bridge.auth.signIn).toHaveBeenCalledWith('google');
+    expect(bridge.mail.getCapabilities).toHaveBeenCalledWith('account-1');
     expect(bridge.mail.moveMessage).toHaveBeenCalledWith(
       'account-1',
       'message-1',

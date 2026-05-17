@@ -1,5 +1,6 @@
 import type {
   MailAccount,
+  MailActionCapability,
   MailAddress,
   MailAttachment,
   MailFolder,
@@ -112,6 +113,10 @@ export class GmailClient implements MailProvider {
 
   constructor(private readonly authProvider: MailAuthProvider) {}
 
+  async getCapabilities(): Promise<MailActionCapability[]> {
+    return ['archive', 'junk', 'star', 'important'];
+  }
+
   async listFolders(accountId: string): Promise<MailFolder[]> {
     const data = await this.fetchGmail<GmailListLabelsResponse>(
       accountId,
@@ -146,6 +151,10 @@ export class GmailClient implements MailProvider {
     }
 
     params.append('labelIds', folderId);
+
+    if (isGmailInboxCategory(folderId)) {
+      params.append('labelIds', 'INBOX');
+    }
 
     if (search) {
       params.set('q', search);
@@ -226,6 +235,62 @@ export class GmailClient implements MailProvider {
       { method: 'POST' },
     );
     return undefined;
+  }
+
+  async archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId?: string,
+  ): Promise<MailMessageDetail> {
+    const removeLabelId = getGmailArchiveSourceLabel(sourceFolderId);
+    const message = await this.modifyMessage(accountId, messageId, {
+      removeLabelIds: [removeLabelId],
+    });
+
+    return mapGmailMessageDetail(
+      message.labelIds?.find((labelId) => labelId !== removeLabelId) ??
+        removeLabelId,
+      message,
+    );
+  }
+
+  async markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail> {
+    const message = await this.modifyMessage(accountId, messageId, {
+      addLabelIds: isJunk ? ['SPAM'] : ['INBOX'],
+      removeLabelIds: isJunk ? ['INBOX'] : ['SPAM'],
+    });
+
+    return mapGmailMessageDetail(isJunk ? 'SPAM' : 'INBOX', message);
+  }
+
+  async setMessageStarState(
+    accountId: string,
+    messageId: string,
+    isStarred: boolean,
+  ): Promise<void> {
+    await this.modifyMessage(accountId, messageId, {
+      addLabelIds: isStarred ? ['STARRED'] : [],
+      removeLabelIds: isStarred ? [] : ['STARRED'],
+    });
+  }
+
+  async setMessageFlagState(): Promise<void> {
+    throw new Error('Flag is not supported for Gmail accounts.');
+  }
+
+  async setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void> {
+    await this.modifyMessage(accountId, messageId, {
+      addLabelIds: isImportant ? ['IMPORTANT'] : [],
+      removeLabelIds: isImportant ? [] : ['IMPORTANT'],
+    });
   }
 
   async listPeople(
@@ -542,6 +607,8 @@ function mapGmailMessageSummary(
     isRead: !(message.labelIds ?? []).includes('UNREAD'),
     hasAttachments: hasAttachments(message.payload),
     importance: (message.labelIds ?? []).includes('IMPORTANT') ? 'high' : 'normal',
+    isStarred: (message.labelIds ?? []).includes('STARRED'),
+    isImportant: (message.labelIds ?? []).includes('IMPORTANT'),
   };
 }
 
@@ -629,7 +696,7 @@ function getGmailFolderIcon(id: string): MailFolder['icon'] {
     TRASH: 'trash',
     SPAM: 'mail-x',
     STARRED: 'star',
-    IMPORTANT: 'clock',
+    IMPORTANT: 'important',
   };
 
   return map[id] ?? 'folder';
@@ -637,6 +704,22 @@ function getGmailFolderIcon(id: string): MailFolder['icon'] {
 
 function isHiddenGmailLabel(id: string | undefined) {
   return id === 'CHAT' || id === 'UNREAD';
+}
+
+function isGmailInboxCategory(id: string) {
+  return id.startsWith('CATEGORY_');
+}
+
+function getGmailArchiveSourceLabel(sourceFolderId: string | undefined) {
+  if (
+    !sourceFolderId ||
+    sourceFolderId === 'INBOX' ||
+    isGmailInboxCategory(sourceFolderId)
+  ) {
+    return 'INBOX';
+  }
+
+  return sourceFolderId;
 }
 
 function getHeaderMap(headers: GmailHeader[] | undefined) {

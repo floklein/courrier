@@ -1,5 +1,16 @@
 import { useMutation } from '@tanstack/react-query';
-import { Download, ExternalLink, MailOpen, MoreHorizontal, Paperclip, Reply, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  Download,
+  ExternalLink,
+  Flag,
+  MailOpen,
+  MoreHorizontal,
+  Paperclip,
+  Reply,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +25,7 @@ import {
 } from '@/components/ui/tooltip';
 import type {
   MailAttachment,
+  MailActionCapability,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
@@ -26,13 +38,17 @@ import { PanelStatus } from '@/ui/app/StatusViews';
 import { MailComposer } from '@/ui/compose/MailComposer';
 import { ToolbarButton } from '@/ui/primitives/ToolbarButton';
 import { HtmlMessageBody } from '@/ui/mail/HtmlMessageBody';
-import { MailActionDropdownContent } from '@/ui/mail/MailActionMenu';
+import {
+  isArchiveFolder,
+  MailActionDropdownContent,
+} from '@/ui/mail/MailActionMenu';
 import { MailAvatar } from '@/ui/mail/MailAvatar';
 
 export function ReadingPane({
   accountId,
   folderId,
   folders,
+  actionCapabilities,
   isActionPending,
   message,
   replyMessageId,
@@ -42,16 +58,22 @@ export function ReadingPane({
   error,
   isMailDragActive,
   onCloseReply,
+  onArchiveMessage,
   onDeleteMessage,
+  onMarkMessageJunkState,
   onMarkMessageReadState,
   onMoveMessage,
   onReplyToMessage,
   onReplyToMessageBody,
+  onToggleMessageFlag,
+  onToggleMessageImportant,
+  onToggleMessageStar,
   className,
 }: {
   accountId: string;
   folderId: string;
   folders: MailFolder[];
+  actionCapabilities: MailActionCapability[];
   isActionPending: boolean;
   message: MailMessageDetail | undefined;
   replyMessageId: string | undefined;
@@ -61,7 +83,12 @@ export function ReadingPane({
   error: Error | null;
   isMailDragActive: boolean;
   onCloseReply: () => void;
+  onArchiveMessage: (message: MailMessageSummary) => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
+  onMarkMessageJunkState: (
+    message: MailMessageSummary,
+    isJunk: boolean,
+  ) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
     isRead: boolean,
@@ -72,8 +99,23 @@ export function ReadingPane({
   ) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
   onReplyToMessageBody: (input: ReplyToMessageInput) => void;
+  onToggleMessageFlag: (
+    message: MailMessageSummary,
+    isFlagged: boolean,
+  ) => void;
+  onToggleMessageImportant: (
+    message: MailMessageSummary,
+    isImportant: boolean,
+  ) => void;
+  onToggleMessageStar: (
+    message: MailMessageSummary,
+    isStarred: boolean,
+  ) => void;
   className?: string;
 }) {
+  const canArchive =
+    actionCapabilities.includes('archive') && !isArchiveFolder(folders, folderId);
+
   if (isLoading) {
     return (
       <section
@@ -142,6 +184,30 @@ export function ReadingPane({
             disabled={isActionPending}
             onClick={() => onReplyToMessage(message)}
           />
+          {canArchive && (
+            <ToolbarButton
+              icon={Archive}
+              label="Archive"
+              disabled={isActionPending}
+              onClick={() => onArchiveMessage(message)}
+            />
+          )}
+          {actionCapabilities.includes('star') && (
+            <ToolbarButton
+              icon={Star}
+              label={message.isStarred ? 'Unstar' : 'Star'}
+              disabled={isActionPending}
+              onClick={() => onToggleMessageStar(message, !message.isStarred)}
+            />
+          )}
+          {actionCapabilities.includes('flag') && (
+            <ToolbarButton
+              icon={Flag}
+              label={message.isFlagged ? 'Clear flag' : 'Flag'}
+              disabled={isActionPending}
+              onClick={() => onToggleMessageFlag(message, !message.isFlagged)}
+            />
+          )}
           <ToolbarButton
             icon={Trash2}
             label="Move to trash"
@@ -170,13 +236,19 @@ export function ReadingPane({
             </Tooltip>
             <MailActionDropdownContent
               currentFolderId={folderId}
+              actionCapabilities={actionCapabilities}
               folders={folders}
               isBusy={isActionPending}
               message={message}
+              onArchive={onArchiveMessage}
               onDelete={onDeleteMessage}
+              onMarkJunk={onMarkMessageJunkState}
               onMarkReadState={onMarkMessageReadState}
               onMove={onMoveMessage}
               onReply={onReplyToMessage}
+              onToggleFlag={onToggleMessageFlag}
+              onToggleImportant={onToggleMessageImportant}
+              onToggleStar={onToggleMessageStar}
             />
           </DropdownMenu>
         </div>

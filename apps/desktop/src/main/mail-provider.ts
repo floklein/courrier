@@ -1,5 +1,6 @@
 import type {
   MailAccount,
+  MailActionCapability,
   MailFolder,
   MailMessageDetail,
   MailPersonSuggestion,
@@ -75,6 +76,7 @@ export interface MailSubscription {
 
 export interface MailProvider extends MailSubscriptionProvider {
   readonly id: ProviderId;
+  getCapabilities(accountId: string): Promise<MailActionCapability[]>;
   listFolders(accountId: string): Promise<MailFolder[]>;
   listMessages(
     accountId: string,
@@ -97,6 +99,31 @@ export interface MailProvider extends MailSubscriptionProvider {
     accountId: string,
     messageId: string,
   ): Promise<MailMessageDetail | undefined>;
+  archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId: string,
+  ): Promise<MailMessageDetail | undefined>;
+  markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail | undefined>;
+  setMessageStarState(
+    accountId: string,
+    messageId: string,
+    isStarred: boolean,
+  ): Promise<void>;
+  setMessageFlagState(
+    accountId: string,
+    messageId: string,
+    isFlagged: boolean,
+  ): Promise<void>;
+  setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void>;
   listPeople(accountId: string, query?: string): Promise<MailPersonSuggestion[]>;
   sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void>;
   replyToMessage(accountId: string, input: ProviderReplyToMessageInput): Promise<void>;

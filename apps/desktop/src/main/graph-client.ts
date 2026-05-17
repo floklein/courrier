@@ -10,6 +10,7 @@ import {
 } from '@/lib/graph-mappers';
 import type {
   MailAccount,
+  MailActionCapability,
   MailFolder,
   MailMessageDetail,
   MailPersonSuggestion,
@@ -63,6 +64,10 @@ export class GraphClient implements MailProvider {
 
   constructor(private readonly authProvider: MailAuthProvider) {}
 
+  async getCapabilities(): Promise<MailActionCapability[]> {
+    return ['archive', 'junk', 'flag', 'important'];
+  }
+
   async listFolders(accountId: string): Promise<MailFolder[]> {
     const folders = await this.fetchFolders(
       accountId,
@@ -108,7 +113,7 @@ export class GraphClient implements MailProvider {
         folderId,
       )}/messages/${encodeURIComponent(
         messageId,
-      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients,body&$expand=attachments($select=id,name,contentType,size,isInline,@odata.type)`,
+      )}?$select=id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,flag,from,toRecipients,body&$expand=attachments($select=id,name,contentType,size,isInline,@odata.type)`,
     );
 
     return mapGraphMessageDetail(folderId, data);
@@ -162,6 +167,54 @@ export class GraphClient implements MailProvider {
     });
   }
 
+  archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId: string,
+  ): Promise<MailMessageDetail> {
+    return this.moveMessage(accountId, {
+      messageId,
+      sourceFolderId,
+      destinationFolderId: 'archive',
+    });
+  }
+
+  markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail> {
+    return this.moveMessage(accountId, {
+      messageId,
+      sourceFolderId: '',
+      destinationFolderId: isJunk ? 'junkemail' : 'inbox',
+    });
+  }
+
+  async setMessageStarState(): Promise<void> {
+    throw new Error('Star is not supported for Microsoft accounts.');
+  }
+
+  async setMessageFlagState(
+    accountId: string,
+    messageId: string,
+    isFlagged: boolean,
+  ): Promise<void> {
+    await this.patchMessage(accountId, messageId, {
+      flag: { flagStatus: isFlagged ? 'flagged' : 'notFlagged' },
+    });
+  }
+
+  async setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void> {
+    await this.patchMessage(accountId, messageId, {
+      importance: isImportant ? 'high' : 'normal',
+    });
+  }
+
   async listPeople(
     accountId: string,
     query?: string,
@@ -182,6 +235,24 @@ export class GraphClient implements MailProvider {
     );
 
     return mapPeopleSuggestions(data.value ?? []);
+  }
+
+  private async patchMessage(
+    accountId: string,
+    messageId: string,
+    body: Record<string, unknown>,
+  ): Promise<void> {
+    await this.fetchGraph(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(messageId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      },
+    );
   }
 
   async sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void> {
@@ -644,7 +715,7 @@ function createMessagesUrl(folderId: string, search?: string) {
   const params = new URLSearchParams({
     $top: '25',
     $select:
-      'id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients',
+      'id,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,flag,from,toRecipients',
   });
 
   if (search) {
