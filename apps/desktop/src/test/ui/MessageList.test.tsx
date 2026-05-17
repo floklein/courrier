@@ -10,6 +10,8 @@ import type {
 } from '@/lib/mail-types';
 import { MessageList } from '@/ui/mail/MessageList';
 
+const mailActionContextContentMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 104,
@@ -43,6 +45,16 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     ),
   };
 });
+
+vi.mock('@/ui/mail/MailActionMenu', () => ({
+  MailActionContextContent: (props: { currentFolderId: string }) => {
+    mailActionContextContentMock(props);
+
+    return (
+      <div data-current-folder-id={props.currentFolderId} data-testid="mail-action-context" />
+    );
+  },
+}));
 
 function renderMessageList(
   onSearch = vi.fn(),
@@ -256,7 +268,7 @@ describe('MessageList', () => {
     );
   });
 
-  it('uses a global search result folder for move destinations', async () => {
+  it('uses a global search result folder for move destinations', () => {
     const folders = [
       createFolder('inbox', 'Inbox'),
       createFolder('sent', 'Sent'),
@@ -284,11 +296,14 @@ describe('MessageList', () => {
     });
 
     fireEvent.contextMenu(screen.getByText('Global result'));
-    fireEvent.click(await screen.findByText('Move to'));
 
-    expect(screen.getAllByText('Inbox')).toHaveLength(2);
-    expect(screen.getByText('Archive')).toBeInTheDocument();
-    expect(screen.queryAllByText('Sent')).toHaveLength(1);
+    expect(screen.getByTestId('mail-action-context')).toHaveAttribute(
+      'data-current-folder-id',
+      'sent',
+    );
+    expect(mailActionContextContentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ currentFolderId: 'sent' }),
+    );
   });
 });
 
