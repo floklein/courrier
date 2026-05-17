@@ -157,6 +157,34 @@ describe('IPC mail handlers', () => {
     expect(mailService.setMessageImportantState).not.toHaveBeenCalled();
   });
 
+  it('validates and forwards search messages payloads', async () => {
+    const authService = {
+      signIn: vi.fn(),
+      getSession: vi.fn(),
+      signOut: vi.fn(),
+    };
+    const mailService = createMailService();
+
+    registerIpcHandlers(authService as never, mailService as never, { trustPolicy });
+
+    await invokeIpc('mail:search-messages', trustedEvent, 'google:account-1', {
+      query: 'hello',
+      scope: 'all',
+    });
+    await expect(
+      invokeIpc('mail:search-messages', trustedEvent, 'google:account-1', {
+        query: '',
+        scope: 'all',
+      }),
+    ).rejects.toThrow('Invalid IPC payload');
+
+    expect(mailService.searchMessages).toHaveBeenCalledWith('google:account-1', {
+      query: 'hello',
+      scope: 'all',
+    });
+    expect(mailService.searchMessages).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects malformed send-message payloads before calling Graph', async () => {
     const authService = {
       signIn: vi.fn(),
@@ -189,6 +217,7 @@ function createMailService() {
     listFolders: vi.fn(),
     listMessages: vi.fn(),
     getMessage: vi.fn(),
+    searchMessages: vi.fn(),
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
     deleteMessage: vi.fn(),

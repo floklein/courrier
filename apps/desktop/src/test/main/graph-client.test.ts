@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GraphClient, getValidatedMessagePageUrl } from '@/main/graph-client';
+import {
+  GraphClient,
+  getValidatedGlobalMessagePageUrl,
+  getValidatedMessagePageUrl,
+} from '@/main/graph-client';
 import type { MailAccount } from '@/lib/mail-types';
 import {
   GraphRequestError,
@@ -45,6 +49,18 @@ describe('Graph message pagination URL validation', () => {
       getValidatedMessagePageUrl(
         'inbox',
         'https://graph.microsoft.com/v1.0/me/mailFolders/archive/messages?$top=25',
+      ),
+    ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
+  });
+
+  it('accepts only the global messages collection for global search pages', () => {
+    const nextLink =
+      'https://graph.microsoft.com/v1.0/me/messages?$top=25&$skiptoken=next';
+
+    expect(getValidatedGlobalMessagePageUrl(nextLink)).toBe(nextLink);
+    expect(() =>
+      getValidatedGlobalMessagePageUrl(
+        'https://graph.microsoft.com/v1.0/me/messages/message-1/attachments',
       ),
     ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
   });
@@ -370,6 +386,38 @@ describe('GraphClient write requests', () => {
     });
     expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
       importance: 'normal',
+    });
+  });
+
+  it('searches all Microsoft Graph messages without a folder path', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        value: [
+          {
+            id: 'message-1',
+            parentFolderId: 'archive-id',
+            subject: 'Hello',
+            from: { emailAddress: { name: 'Ada', address: 'ada@example.com' } },
+          },
+        ],
+      }),
+      jsonResponse({ value: [] }),
+      ...Array.from({ length: 6 }, () => jsonResponse({}, 404)),
+    );
+    const client = createGraphClient();
+
+    const result = await client.searchMessages(account.id, {
+      query: 'hello',
+      scope: 'all',
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toContain(`${graphBaseUrl}/me/messages?`);
+    expect(fetchMock.mock.calls[0][0]).toContain('%22hello%22');
+    expect(fetchMock.mock.calls[0][0]).toContain('parentFolderId');
+    expect(result.messages[0]).toMatchObject({
+      id: 'message-1',
+      folderId: 'archive-id',
+      sender: { name: 'Ada', email: 'ada@example.com' },
     });
   });
 

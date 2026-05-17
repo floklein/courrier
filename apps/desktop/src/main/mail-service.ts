@@ -6,6 +6,7 @@ import type {
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
+  SearchMessagesInput,
   SendMailInput,
 } from '@/lib/mail-types';
 import {
@@ -56,6 +57,13 @@ export class MailService {
       nextPageToken,
       searchQuery,
     );
+  }
+
+  searchMessages(
+    accountId: string,
+    input: SearchMessagesInput,
+  ): Promise<PagedMessages> {
+    return this.getProvider(accountId).searchMessages(accountId, input);
   }
 
   getMessage(

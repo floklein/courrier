@@ -35,6 +35,7 @@ export interface GraphMessage {
   flag?: {
     flagStatus?: string | null;
   } | null;
+  parentFolderId?: string | null;
   from?: GraphEmailAddress | null;
   toRecipients?: GraphEmailAddress[] | null;
 }
@@ -166,6 +167,8 @@ export function mapGraphMessageSummary(
   return {
     id: message.id || '',
     folderId,
+    folderLabel: undefined,
+    folderWellKnownName: undefined,
     sender: mapAddress(message.from, 'Unknown sender'),
     recipients: (message.toRecipients ?? []).map(formatRecipient),
     subject: message.subject || '(No subject)',

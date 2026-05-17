@@ -68,6 +68,9 @@ export interface ReplyToMessageInput {
 export interface MailMessageSummary {
   id: string;
   folderId: string;
+  folderLabel?: string;
+  folderWellKnownName?: string;
+  matchedFolderIds?: string[];
   sender: MailAddress;
   recipients: string[];
   subject: string;
@@ -98,6 +101,16 @@ export type MailActionCapability =
   | 'star'
   | 'flag'
   | 'important';
+
+export type MailSearchScope = 'folder' | 'all';
+
+export interface SearchMessagesInput {
+  query: string;
+  scope: MailSearchScope;
+  folderId?: string;
+  nextPageToken?: string;
+  includeSpamTrash?: boolean;
+}
 
 export type ProviderId = 'microsoft' | 'google';
 

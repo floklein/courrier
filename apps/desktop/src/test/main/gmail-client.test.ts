@@ -158,6 +158,46 @@ describe('GmailClient', () => {
     });
   });
 
+  it('searches all Gmail messages without labelIds and maps result labels', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ messages: [{ id: 'message-1' }] }),
+      jsonResponse({
+        labels: [
+          { id: 'INBOX', name: 'Inbox' },
+          { id: 'STARRED', name: 'Starred' },
+        ],
+      }),
+      jsonResponse({ id: 'INBOX', name: 'Inbox' }),
+      jsonResponse({ id: 'STARRED', name: 'Starred' }),
+      jsonResponse({
+        id: 'message-1',
+        labelIds: ['INBOX', 'STARRED'],
+        payload: {
+          headers: [
+            { name: 'From', value: 'Ada <ada@example.com>' },
+            { name: 'Subject', value: 'Hello' },
+          ],
+        },
+      }),
+    );
+    const client = createGmailClient();
+
+    const result = await client.searchMessages(accountId, {
+      query: 'hello',
+      scope: 'all',
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=hello',
+    );
+    expect(result.messages[0]).toMatchObject({
+      id: 'message-1',
+      folderId: 'INBOX',
+      folderLabel: 'Inbox',
+      matchedFolderIds: ['INBOX', 'STARRED'],
+    });
+  });
+
   it('sends raw RFC 2822 mail through Gmail', async () => {
     const fetchMock = mockFetch(jsonResponse({ id: 'sent-1' }));
     const client = createGmailClient();

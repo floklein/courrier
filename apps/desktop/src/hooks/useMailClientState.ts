@@ -8,6 +8,7 @@ import type {
   MailFolder,
   MailMessageDetail,
   PagedMessages,
+  MailSearchScope,
 } from '@/lib/mail-types';
 import {
   mailFoldersQueryOptions,
@@ -25,6 +26,7 @@ export function useMailClientState(accountId: string) {
     messageId,
   } = parseMailPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchScope, setSearchScope] = useState<MailSearchScope>('folder');
   const foldersQuery = useQuery(mailFoldersQueryOptions(accountId));
   const folders = (foldersQuery.data ?? []) as MailFolder[];
   const currentFolder =
@@ -33,7 +35,12 @@ export function useMailClientState(accountId: string) {
     folders[0];
   const resolvedFolderId = currentFolder?.id ?? folderId;
   const messagesQuery = useInfiniteQuery({
-    ...mailMessagesQueryOptions(accountId, resolvedFolderId, searchQuery),
+    ...mailMessagesQueryOptions(
+      accountId,
+      resolvedFolderId,
+      searchQuery,
+      searchScope,
+    ),
     enabled: Boolean(currentFolder),
   });
   const messages =
@@ -56,7 +63,9 @@ export function useMailClientState(accountId: string) {
     messagesQuery,
     resolvedFolderId,
     searchQuery,
+    searchScope,
     selectedMessage,
     setSearchQuery,
+    setSearchScope,
   };
 }
