@@ -71,7 +71,10 @@ export function MessageList({
   isFetchingNextPage: boolean;
   isActionPending: boolean;
   onLoadMore: () => void;
-  onDeleteMessage: (message: MailMessageSummary) => void;
+  onDeleteMessage: (
+    message: MailMessageSummary,
+    removedMessageIds?: Set<string>,
+  ) => void;
   onDragActiveChange: (isActive: boolean) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
@@ -80,6 +83,7 @@ export function MessageList({
   onMoveMessage: (
     message: MailMessageSummary,
     destinationFolderId: string,
+    removedMessageIds?: Set<string>,
   ) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
   onSearch: (query: string) => void;
@@ -223,10 +227,10 @@ export function MessageList({
     onSearch('');
   }
 
-  function clearSelection() {
+  function clearSelection(nextActiveId?: string) {
     setSelectedIds(new Set());
-    setAnchorId(undefined);
-    setActiveId(undefined);
+    setAnchorId(nextActiveId);
+    setActiveId(nextActiveId);
   }
 
   function selectRange(fromId: string, toId: string, mode: 'replace' | 'add') {
@@ -280,7 +284,7 @@ export function MessageList({
       return;
     }
 
-    clearSelection();
+    clearSelection(message.id);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -335,26 +339,42 @@ export function MessageList({
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
+      if (isActionPending) {
+        return;
+      }
       deleteSelectedMessages();
       return;
     }
 
     if (event.key.toLowerCase() === 'e' && archiveFolder) {
       event.preventDefault();
+      if (isActionPending) {
+        return;
+      }
       moveSelectedMessages(archiveFolder.id);
       return;
     }
   }
 
   function deleteSelectedMessages() {
+    if (isActionPending) {
+      return;
+    }
+
+    const removedMessageIds = new Set(selectedMessages.map((message) => message.id));
+
     for (const message of selectedMessages) {
-      onDeleteMessage(message);
+      onDeleteMessage(message, removedMessageIds);
     }
 
     clearSelection();
   }
 
   function markSelectedMessagesReadState(isRead: boolean) {
+    if (isActionPending) {
+      return;
+    }
+
     for (const message of selectedMessages) {
       onMarkMessageReadState(message, isRead);
     }
@@ -363,8 +383,14 @@ export function MessageList({
   }
 
   function moveSelectedMessages(destinationFolderId: string) {
+    if (isActionPending) {
+      return;
+    }
+
+    const removedMessageIds = new Set(selectedMessages.map((message) => message.id));
+
     for (const message of selectedMessages) {
-      onMoveMessage(message, destinationFolderId);
+      onMoveMessage(message, destinationFolderId, removedMessageIds);
     }
 
     clearSelection();
@@ -526,7 +552,7 @@ export function MessageList({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={clearSelection}
+            onClick={() => clearSelection()}
           >
             Clear
           </Button>

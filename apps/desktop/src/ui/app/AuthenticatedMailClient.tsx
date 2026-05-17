@@ -181,12 +181,16 @@ export function AuthenticatedMailClient({
   function handleMoveMessage(
     message: MailMessageSummary,
     destinationFolderId: string,
+    removedMessageIds?: Set<string>,
   ) {
-    moveMutation.mutate({ message, destinationFolderId });
+    moveMutation.mutate({ message, destinationFolderId, removedMessageIds });
   }
 
-  function handleDeleteMessage(message: MailMessageSummary) {
-    deleteMutation.mutate({ message });
+  function handleDeleteMessage(
+    message: MailMessageSummary,
+    removedMessageIds?: Set<string>,
+  ) {
+    deleteMutation.mutate({ message, removedMessageIds });
   }
 
   function handleReplyToMessage(message: MailMessageSummary) {

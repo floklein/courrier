@@ -185,7 +185,7 @@ describe('MessageList', () => {
       messages: [message({ id: 'message-1' }), message({ id: 'message-2' })],
     });
 
-    fireEvent.click(screen.getByText('Subject message-1').closest('a')!, {
+    fireEvent.click(getMessageLink('message-1'), {
       ctrlKey: true,
     });
 
@@ -227,17 +227,79 @@ describe('MessageList', () => {
       onMoveMessage,
     });
 
-    fireEvent.click(screen.getByText('Subject message-1').closest('a')!, {
+    fireEvent.click(getMessageLink('message-1'), {
       ctrlKey: true,
     });
     fireEvent.click(screen.getByRole('button', { name: 'Archive selected' }));
 
     expect(onMoveMessage).toHaveBeenCalledTimes(1);
+    const removedMessageIds = onMoveMessage.mock.calls[0]?.[2];
+
+    expect(removedMessageIds).toBeInstanceOf(Set);
+    if (!(removedMessageIds instanceof Set)) {
+      throw new Error('Expected bulk archive to include selected message ids.');
+    }
+
     expect(onMoveMessage).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'message-1' }),
       'archive',
+      removedMessageIds,
     );
+    expect([...removedMessageIds]).toEqual(['message-1']);
     expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
+  });
+
+  it('suppresses keyboard bulk actions while an action is pending', () => {
+    const onDeleteMessage = vi.fn();
+    renderMessageList({
+      isActionPending: true,
+      messages: [message({ id: 'message-1' })],
+      onDeleteMessage,
+    });
+
+    fireEvent.click(getMessageLink('message-1'), {
+      ctrlKey: true,
+    });
+    fireEvent.keyDown(getMessageListScroller(), { key: 'Delete' });
+
+    expect(onDeleteMessage).not.toHaveBeenCalled();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
+  it('uses a normal row click as the starting point for keyboard range selection', () => {
+    const onMoveMessage = vi.fn();
+    renderMessageList({
+      folders: [folder({ id: 'archive', wellKnownName: 'archive' })],
+      messages: [
+        message({ id: 'message-1' }),
+        message({ id: 'message-2' }),
+        message({ id: 'message-3' }),
+      ],
+      onMoveMessage,
+    });
+
+    fireEvent.click(getMessageLink('message-2'));
+    fireEvent.keyDown(getMessageListScroller(), {
+      key: 'ArrowDown',
+      shiftKey: true,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Archive selected' }));
+
+    expect(onMoveMessage).toHaveBeenCalledTimes(2);
+    expect(onMoveMessage.mock.calls.map(([message]) => message.id)).toEqual([
+      'message-2',
+      'message-3',
+    ]);
+    const removedMessageIds = onMoveMessage.mock.calls[0]?.[2];
+
+    expect(removedMessageIds).toBeInstanceOf(Set);
+    if (!(removedMessageIds instanceof Set)) {
+      throw new Error('Expected keyboard range archive to include selected message ids.');
+    }
+    expect([...removedMessageIds]).toEqual([
+      'message-2',
+      'message-3',
+    ]);
   });
 });
 
@@ -284,4 +346,12 @@ function folder({
     hasChildren: false,
     depth: 0,
   };
+}
+
+function getMessageLink(id: string) {
+  return screen.getByText(`Subject ${id}`).closest('a')!;
+}
+
+function getMessageListScroller() {
+  return screen.getByText('Subject message-1').closest('[tabindex="0"]')!;
 }

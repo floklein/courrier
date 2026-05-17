@@ -40,17 +40,24 @@ export function useMailActions({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  function handleMessageRemoved(message: MailMessageSummary) {
+  function handleMessageRemoved(
+    message: MailMessageSummary,
+    removedMessageIds = new Set([message.id]),
+  ) {
     removeCachedMessage(queryClient, accountId, message.id);
     onReplyMessageIdChange((current) =>
-      current === message.id ? undefined : current,
+      current && removedMessageIds.has(current) ? undefined : current,
     );
 
     if (message.id !== messageId) {
       return;
     }
 
-    const nextMessage = messages.find((item) => item.id !== message.id);
+    const nextMessage = findNextVisibleMessageAfterRemoval(
+      messages,
+      message.id,
+      removedMessageIds,
+    );
 
     if (nextMessage) {
       void navigate({
@@ -124,6 +131,7 @@ export function useMailActions({
     }: {
       message: MailMessageSummary;
       destinationFolderId: string;
+      removedMessageIds?: Set<string>;
     }) =>
       api.mail.moveMessage(
         accountId,
@@ -131,11 +139,11 @@ export function useMailActions({
         message.folderId,
         destinationFolderId,
       ),
-    onMutate: async ({ message, destinationFolderId }) => {
+    onMutate: async ({ message, destinationFolderId, removedMessageIds }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
 
-      handleMessageRemoved(message);
+      handleMessageRemoved(message, removedMessageIds);
       updateCachedFolderCounts(queryClient, accountId, {
         folderId: message.folderId,
         totalDelta: -1,
@@ -165,16 +173,19 @@ export function useMailActions({
     },
   });
   const deleteMutation = useMutation({
-    mutationFn: ({ message }: { message: MailMessageSummary }) =>
+    mutationFn: ({ message }: {
+      message: MailMessageSummary;
+      removedMessageIds?: Set<string>;
+    }) =>
       api.mail.deleteMessage(accountId, message.id),
-    onMutate: async ({ message }) => {
+    onMutate: async ({ message, removedMessageIds }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
       const trashFolder = folders.find(
         (folder) => folder.wellKnownName === 'deleteditems',
       );
 
-      handleMessageRemoved(message);
+      handleMessageRemoved(message, removedMessageIds);
       updateCachedFolderCounts(queryClient, accountId, {
         folderId: message.folderId,
         totalDelta: -1,
@@ -232,4 +243,28 @@ export function useMailActions({
     replyToMessageMutation,
     sendMessageMutation,
   };
+}
+
+function findNextVisibleMessageAfterRemoval(
+  messages: MailMessageSummary[],
+  removedMessageId: string,
+  removedMessageIds: Set<string>,
+) {
+  const removedIndex = messages.findIndex(
+    (message) => message.id === removedMessageId,
+  );
+
+  if (removedIndex === -1) {
+    return messages.find((message) => !removedMessageIds.has(message.id));
+  }
+
+  return (
+    messages
+      .slice(removedIndex + 1)
+      .find((message) => !removedMessageIds.has(message.id)) ??
+    messages
+      .slice(0, removedIndex)
+      .reverse()
+      .find((message) => !removedMessageIds.has(message.id))
+  );
 }
