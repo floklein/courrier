@@ -110,7 +110,9 @@ export function MailComposer({
     initialBccRecipients.invalid.join(', '),
   );
   const [isCcVisible, setIsCcVisible] = useState(
-    mode !== 'new' || Boolean(initialDraft?.ccValue),
+    Boolean(initialDraft?.ccValue) ||
+      initialCcRecipients.valid.length > 0 ||
+      initialCcRecipients.invalid.length > 0,
   );
   const [isBccVisible, setIsBccVisible] = useState(Boolean(initialDraft?.bccValue));
   const [subject, setSubject] = useState(
