@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MailMessageSummary } from '@/lib/mail-types';
 import { useMailActions } from '@/hooks/useMailActions';
+import { encodeRouteId } from '@/lib/route-ids';
 
 const navigateMock = vi.hoisted(() => vi.fn());
 const mailApiMock = vi.hoisted(() => ({
@@ -58,8 +59,8 @@ describe('useMailActions', () => {
       expect(navigateMock).toHaveBeenCalledWith({
         to: '/mail/$folderId/$messageId',
         params: {
-          folderId: 'sent',
-          messageId: 'message-2',
+          folderId: encodeRouteId('sent'),
+          messageId: encodeRouteId('message-2'),
         },
         replace: true,
       });
