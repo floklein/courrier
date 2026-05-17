@@ -81,6 +81,7 @@ function createReadingPane(responseKind: MailResponseKind) {
         accountEmail="ada@example.com"
         folderId="inbox"
         folders={[]}
+        actionCapabilities={[]}
         isActionPending={false}
         message={message}
         replyMessageId={message.id}
@@ -91,13 +92,18 @@ function createReadingPane(responseKind: MailResponseKind) {
         error={null}
         isMailDragActive={false}
         onCloseReply={vi.fn()}
+        onArchiveMessage={vi.fn()}
         onDeleteMessage={vi.fn()}
+        onMarkMessageJunkState={vi.fn()}
         onMarkMessageReadState={vi.fn()}
         onMoveMessage={vi.fn()}
         onForwardMessage={vi.fn()}
         onReplyToMessage={vi.fn()}
         onReplyAllToMessage={vi.fn()}
         onReplyToMessageBody={vi.fn()}
+        onToggleMessageFlag={vi.fn()}
+        onToggleMessageImportant={vi.fn()}
+        onToggleMessageStar={vi.fn()}
       />
     </TooltipProvider>
   );

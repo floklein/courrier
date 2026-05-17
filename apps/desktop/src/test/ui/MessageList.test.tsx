@@ -178,7 +178,9 @@ function renderControlledScopeMessageList() {
           onMarkMessageJunkState={vi.fn()}
           onMarkMessageReadState={vi.fn()}
           onMoveMessage={vi.fn()}
+          onForwardMessage={vi.fn()}
           onReplyToMessage={vi.fn()}
+          onReplyAllToMessage={vi.fn()}
           onToggleMessageFlag={vi.fn()}
           onToggleMessageImportant={vi.fn()}
           onToggleMessageStar={vi.fn()}

@@ -630,10 +630,9 @@ function serializeDraftForDirtyCheck(draft: ComposeWindowDraft) {
     subject: draft.subject.trim(),
     editorHtml: draft.editorValue.html,
     editorText: draft.editorValue.text.trim(),
-    attachments: draft.attachments.map((attachment) => ({
+    attachments: (draft.attachments ?? []).map((attachment) => ({
       id: attachment.id,
       name: attachment.name,
-      path: attachment.path,
       size: attachment.size,
     })),
   });
