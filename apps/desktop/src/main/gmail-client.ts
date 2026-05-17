@@ -306,7 +306,7 @@ export class GmailClient implements MailProvider {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: await createGmailDraftMessage(input),
+          message: await this.createGmailDraftMessage(accountId, input),
         }),
       },
     );
@@ -327,7 +327,7 @@ export class GmailClient implements MailProvider {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: providerDraftId,
-          message: await createGmailDraftMessage(input),
+          message: await this.createGmailDraftMessage(accountId, input),
         }),
       },
     );
@@ -349,6 +349,52 @@ export class GmailClient implements MailProvider {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: providerDraftId }),
     });
+  }
+
+  private async createGmailDraftMessage(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ) {
+    return {
+      raw: await createRawMail({
+        attachments: await this.resolveDraftAttachments(accountId, input),
+        bodyHtml: input.bodyHtml,
+        subject: input.subject,
+        toRecipients: input.toRecipients,
+      }),
+      ...(input.providerDraftMessageId
+        ? { id: input.providerDraftMessageId }
+        : {}),
+    };
+  }
+
+  private async resolveDraftAttachments(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<RawMailAttachment[]> {
+    const attachments: RawMailAttachment[] = [];
+
+    for (const attachment of input.attachments ?? []) {
+      if (isLocalAttachmentFile(attachment)) {
+        attachments.push(attachment);
+        continue;
+      }
+
+      if (attachment.providerAttachmentId && input.providerDraftMessageId) {
+        const downloaded = await this.downloadAttachment(
+          accountId,
+          input.providerDraftMessageId,
+          attachment.providerAttachmentId,
+        );
+        attachments.push({
+          name: downloaded.name,
+          contentType: downloaded.contentType,
+          content: downloaded.content,
+        });
+      }
+    }
+
+    return attachments;
   }
 
   async sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void> {
@@ -660,20 +706,6 @@ function mapGmailMessageDetail(
   };
 }
 
-async function createGmailDraftMessage(input: ProviderDraftSaveInput) {
-  return {
-    raw: await createRawMail({
-      attachments: (input.attachments ?? []).filter(isLocalAttachmentFile),
-      bodyHtml: input.bodyHtml,
-      subject: input.subject,
-      toRecipients: input.toRecipients,
-    }),
-    ...(input.providerDraftMessageId
-      ? { id: input.providerDraftMessageId }
-      : {}),
-  };
-}
-
 function mapGmailDraft(accountId: string, draft: GmailDraft): MailDraftDetail {
   const message = draft.message ?? {};
   const headers = getHeaderMap(message.payload?.headers);
@@ -940,7 +972,7 @@ async function createRawMail({
   subject,
   toRecipients,
 }: {
-  attachments: NonNullable<ProviderSendMailInput['attachments']>;
+  attachments: RawMailAttachment[];
   bodyHtml: string;
   extraHeaders?: Record<string, string>;
   subject: string;
@@ -948,6 +980,7 @@ async function createRawMail({
 }) {
   const composer = new MailComposer({
     attachments: attachments.map((attachment) => ({
+      content: attachment.content,
       contentType: attachment.contentType,
       filename: attachment.name,
       path: attachment.path,
@@ -961,6 +994,13 @@ async function createRawMail({
   const message = await buildMimeMessage(composer);
 
   return message.toString('base64url');
+}
+
+interface RawMailAttachment {
+  name: string;
+  contentType: string;
+  path?: string;
+  content?: Buffer;
 }
 
 function formatComposeRecipient(

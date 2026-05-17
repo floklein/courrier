@@ -224,6 +224,7 @@ export function useMailActions({
 
   return {
     deleteMutation,
+    invalidateMailLists,
     isActionPending,
     isSendingMessage,
     markReadMutation,

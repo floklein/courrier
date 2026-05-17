@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import { emptyComposeWindowDraft } from '@/lib/compose-window';
 import type { SendMailInput } from '@/lib/mail-types';
@@ -6,6 +6,7 @@ import { MailComposer } from '@/ui/compose/MailComposer';
 import { FullScreenStatus } from '@/ui/app/StatusViews';
 
 export function ComposeWindow() {
+  const queryClient = useQueryClient();
   const draftQuery = useQuery({
     queryKey: ['window', 'compose-draft'],
     queryFn: api.window.getComposeDraft,
@@ -38,6 +39,24 @@ export function ComposeWindow() {
           void api.window.closeCurrent();
         }}
         onReply={() => undefined}
+        onProviderDraftSent={() =>
+          Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: [
+                'mail',
+                draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId,
+                'folders',
+              ],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: [
+                'mail',
+                draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId,
+                'messages',
+              ],
+            }),
+          ]).then(() => undefined)
+        }
         onSend={(input) => sendMessageMutation.mutate(input)}
         useWindowHeader
       />

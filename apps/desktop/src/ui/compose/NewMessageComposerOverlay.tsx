@@ -12,6 +12,7 @@ export function NewMessageComposerOverlay({
   error,
   onClose,
   onMoveToWindow,
+  onProviderDraftSent,
   onSend,
 }: {
   accountId: string;
@@ -19,6 +20,7 @@ export function NewMessageComposerOverlay({
   error: Error | null;
   onClose: () => void;
   onMoveToWindow: (draft: ComposeWindowDraft) => void;
+  onProviderDraftSent?: () => Promise<void> | void;
   onSend: (input: SendMailInput) => void;
 }) {
   const draftSubject = useComposeStore((state) => state.draft.subject);
@@ -48,6 +50,7 @@ export function NewMessageComposerOverlay({
           onDraftChange={setDraft}
           onMinimize={() => setMinimized(true)}
           onMoveToWindow={onMoveToWindow}
+          onProviderDraftSent={onProviderDraftSent}
           onReply={() => undefined}
           onSend={onSend}
         />

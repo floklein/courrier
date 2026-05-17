@@ -396,6 +396,60 @@ describe('GraphClient write requests', () => {
       subject: 'Hello',
     });
   });
+
+  it('removes deleted provider attachments when updating Graph drafts', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        id: 'draft-1',
+        subject: 'Hello',
+        bodyPreview: 'Hello',
+        body: { contentType: 'html', content: '<p>Hello</p>' },
+        toRecipients: [
+          { emailAddress: { address: 'ada@example.com' } },
+        ],
+        attachments: [
+          {
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            id: 'attachment-1',
+            name: 'old.pdf',
+            contentType: 'application/pdf',
+            size: 1234,
+            isInline: false,
+          },
+        ],
+      }),
+      new Response(null, { status: 204 }),
+      new Response(null, { status: 204 }),
+      jsonResponse({
+        id: 'draft-1',
+        subject: 'Hello',
+        bodyPreview: 'Hello',
+        body: { contentType: 'html', content: '<p>Hello</p>' },
+        toRecipients: [
+          { emailAddress: { address: 'ada@example.com' } },
+        ],
+        attachments: [],
+      }),
+    );
+    const client = createGraphClient();
+
+    await client.updateDraft(account.id, 'draft-1', {
+      kind: 'new',
+      toRecipients: [{ email: 'ada@example.com' }],
+      toValue: 'ada@example.com',
+      subject: 'Hello',
+      bodyHtml: '<p>Hello</p>',
+      editorValue: { html: '<p>Hello</p>', text: 'Hello', isEmpty: false },
+      attachments: [],
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/me/messages/draft-1?');
+    expect(fetchMock.mock.calls[1][0]).toBe(`${graphBaseUrl}/me/messages/draft-1`);
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      `${graphBaseUrl}/me/messages/draft-1/attachments/attachment-1`,
+    );
+    expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'DELETE' });
+  });
 });
 
 function createGraphClient() {

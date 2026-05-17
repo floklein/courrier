@@ -1,7 +1,15 @@
 import { dropTargetForExternal } from '@atlaskit/pragmatic-drag-and-drop/external/adapter';
 import { containsFiles, getFiles } from '@atlaskit/pragmatic-drag-and-drop/external/file';
 import { Paperclip, Send, X } from 'lucide-react';
-import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,6 +25,7 @@ import {
 import type {
   MailComposeRecipient,
   LocalMailAttachment,
+  MailDraftSaveInput,
   MailMessageDetail,
   ReplyToMessageInput,
   SendMailInput,
@@ -43,6 +52,7 @@ export function MailComposer({
   onDraftChange,
   onMinimize,
   onMoveToWindow,
+  onProviderDraftSent,
   onReply,
   onSend,
   useWindowHeader,
@@ -58,11 +68,18 @@ export function MailComposer({
   onDraftChange?: (draft: ComposeWindowDraft) => void;
   onMinimize?: () => void;
   onMoveToWindow?: (draft: ComposeWindowDraft) => void;
+  onProviderDraftSent?: () => Promise<void> | void;
   onReply: (input: ReplyToMessageInput) => void;
   onSend: (input: SendMailInput) => void;
   useWindowHeader?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const lastSavedDraftSignatureRef = useRef(
+    initialDraft?.providerDraftId
+      ? getComposeDraftSignature(initialDraft)
+      : undefined,
+  );
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const toInputId = useId();
   const subjectInputId = useId();
   const bodyInputId = useId();
@@ -86,6 +103,14 @@ export function MailComposer({
   const [providerDraftMessageId, setProviderDraftMessageId] = useState(
     initialDraft?.providerDraftMessageId,
   );
+  const [providerDraftAccountId, setProviderDraftAccountId] = useState(
+    initialDraft?.providerDraftId ? initialDraft.accountId : undefined,
+  );
+  const providerDraftIdRef = useRef(initialDraft?.providerDraftId);
+  const providerDraftMessageIdRef = useRef(initialDraft?.providerDraftMessageId);
+  const providerDraftAccountIdRef = useRef(
+    initialDraft?.providerDraftId ? initialDraft.accountId : undefined,
+  );
   const [editorValue, setEditorValue] = useState<RichTextMailEditorValue>({
     ...(initialDraft?.editorValue ?? emptyComposeWindowDraft.editorValue),
   });
@@ -96,11 +121,15 @@ export function MailComposer({
   const [isSendingDraft, setIsSendingDraft] = useState(false);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const isReply = mode === 'reply';
+  const scopedProviderDraftId =
+    providerDraftAccountId === accountId ? providerDraftId : undefined;
+  const scopedProviderDraftMessageId =
+    providerDraftAccountId === accountId ? providerDraftMessageId : undefined;
   const currentDraft = useMemo<ComposeWindowDraft>(
     () => ({
       accountId,
-      providerDraftId,
-      providerDraftMessageId,
+      providerDraftId: scopedProviderDraftId,
+      providerDraftMessageId: scopedProviderDraftMessageId,
       kind: isReply ? 'reply' : 'new',
       relatedMessageId: replyMessage?.id,
       toValue: serializeRecipients(toRecipients, toInputValue),
@@ -113,9 +142,9 @@ export function MailComposer({
       attachments,
       editorValue,
       isReply,
-      providerDraftId,
-      providerDraftMessageId,
       replyMessage?.id,
+      scopedProviderDraftId,
+      scopedProviderDraftMessageId,
       subject,
       toInputValue,
       toRecipients,
@@ -128,6 +157,91 @@ export function MailComposer({
     editorValue.text.trim().length > 0 ||
     attachments.length > 0;
 
+  const getDraftSaveInput = useCallback((): MailDraftSaveInput => {
+    const pendingRecipients = parseRecipients(toInputValue);
+    const draftBelongsToAccount =
+      providerDraftAccountIdRef.current === accountId;
+
+    return {
+      providerDraftId: draftBelongsToAccount
+        ? providerDraftIdRef.current
+        : undefined,
+      providerDraftMessageId: draftBelongsToAccount
+        ? providerDraftMessageIdRef.current
+        : undefined,
+      kind: isReply ? 'reply' : 'new',
+      relatedMessageId: replyMessage?.id,
+      toRecipients: dedupeRecipients([
+        ...toRecipients,
+        ...pendingRecipients.valid,
+      ]),
+      toValue: currentDraft.toValue,
+      subject: subject.trim(),
+      bodyHtml: sanitizeOutgoingMailHtml(editorValue.html),
+      editorValue,
+      attachments,
+    };
+  }, [
+    accountId,
+    attachments,
+    currentDraft.toValue,
+    editorValue,
+    isReply,
+    replyMessage?.id,
+    subject,
+    toInputValue,
+    toRecipients,
+  ]);
+
+  const runSaveDraft = useCallback(async ({ force = false } = {}) => {
+    if (!isDirty || !accountId || isReply) {
+      return undefined;
+    }
+
+    const draftInput = getDraftSaveInput();
+    const draftSignature = getDraftSaveInputSignature(draftInput);
+
+    if (!force && draftSignature === lastSavedDraftSignatureRef.current) {
+      return undefined;
+    }
+
+    setAutosaveStatus('saving');
+
+    try {
+      const savedDraft = await api.drafts.save(accountId, draftInput);
+
+      providerDraftIdRef.current = savedDraft.providerDraftId;
+      providerDraftMessageIdRef.current = savedDraft.providerDraftMessageId;
+      providerDraftAccountIdRef.current = accountId;
+      setProviderDraftId(savedDraft.providerDraftId);
+      setProviderDraftMessageId(savedDraft.providerDraftMessageId);
+      setProviderDraftAccountId(accountId);
+      setAttachments(savedDraft.attachments);
+      lastSavedDraftSignatureRef.current = getDraftSaveInputSignature({
+        ...draftInput,
+        attachments: savedDraft.attachments,
+      });
+      setAutosaveStatus('saved');
+      return savedDraft;
+    } catch {
+      setAutosaveStatus('failed');
+      return undefined;
+    }
+  }, [accountId, getDraftSaveInput, isDirty, isReply]);
+
+  const saveDraft = useCallback(
+    (options: { force?: boolean } = {}) => {
+      const queuedSave = saveQueueRef.current.then(
+        () => runSaveDraft(options),
+        () => runSaveDraft(options),
+      );
+
+      saveQueueRef.current = queuedSave.catch(() => undefined);
+      return queuedSave;
+    },
+    [runSaveDraft],
+  );
+
   useEffect(() => {
     if (isReply) {
       return;
@@ -137,7 +251,25 @@ export function MailComposer({
   }, [currentDraft, isReply, onDraftChange]);
 
   useEffect(() => {
-    if (!isDirty || !accountId || isSending || isSendingDraft) {
+    if (!providerDraftAccountId || providerDraftAccountId === accountId) {
+      return;
+    }
+
+    providerDraftIdRef.current = undefined;
+    providerDraftMessageIdRef.current = undefined;
+    providerDraftAccountIdRef.current = undefined;
+    lastSavedDraftSignatureRef.current = undefined;
+    setProviderDraftId(undefined);
+    setProviderDraftMessageId(undefined);
+    setProviderDraftAccountId(undefined);
+    setAutosaveStatus('idle');
+    setAttachments((current) =>
+      current.filter((attachment) => !attachment.providerAttachmentId),
+    );
+  }, [accountId, providerDraftAccountId]);
+
+  useEffect(() => {
+    if (!isDirty || !accountId || isReply || isSending || isSendingDraft) {
       return;
     }
 
@@ -146,7 +278,15 @@ export function MailComposer({
     }, 750);
 
     return () => window.clearTimeout(timeout);
-  }, [accountId, currentDraft, isDirty, isSending, isSendingDraft]);
+  }, [
+    accountId,
+    currentDraft,
+    isDirty,
+    isReply,
+    isSending,
+    isSendingDraft,
+    saveDraft,
+  ]);
 
   useEffect(() => {
     const element = formRef.current;
@@ -184,11 +324,6 @@ export function MailComposer({
         return;
       }
 
-      if (providerDraftId) {
-        await sendProviderDraft();
-        return;
-      }
-
       onReply({ messageId: replyMessage.id, bodyHtml, attachments });
       return;
     }
@@ -210,7 +345,7 @@ export function MailComposer({
       return;
     }
 
-    if (providerDraftId) {
+    if (scopedProviderDraftId) {
       await sendProviderDraft();
       return;
     }
@@ -218,54 +353,24 @@ export function MailComposer({
     onSend({ toRecipients: recipients, subject: subject.trim(), bodyHtml, attachments });
   }
 
-  async function saveDraft() {
-    if (!isDirty || !accountId) {
-      return undefined;
-    }
-
-    setAutosaveStatus('saving');
-
-    try {
-      const pendingRecipients = parseRecipients(toInputValue);
-      const savedDraft = await api.drafts.save(accountId, {
-        providerDraftId,
-        providerDraftMessageId,
-        kind: isReply ? 'reply' : 'new',
-        relatedMessageId: replyMessage?.id,
-        toRecipients: dedupeRecipients([
-          ...toRecipients,
-          ...pendingRecipients.valid,
-        ]),
-        toValue: currentDraft.toValue,
-        subject: subject.trim(),
-        bodyHtml: sanitizeOutgoingMailHtml(editorValue.html),
-        editorValue,
-        attachments,
-      });
-
-      setProviderDraftId(savedDraft.providerDraftId);
-      setProviderDraftMessageId(savedDraft.providerDraftMessageId);
-      setAttachments(savedDraft.attachments);
-      setAutosaveStatus('saved');
-      return savedDraft;
-    } catch {
-      setAutosaveStatus('failed');
-      return undefined;
-    }
-  }
-
   async function sendProviderDraft() {
-    const savedDraft = await saveDraft();
-
-    if (!savedDraft?.providerDraftId) {
-      setValidationMessage('Autosave failed. Keep the composer open and try again.');
+    if (isSendingDraft) {
       return;
     }
 
     setIsSendingDraft(true);
 
     try {
-      await api.drafts.send(accountId, savedDraft.providerDraftId);
+      const savedDraft = await saveDraft({ force: true });
+      const draftId = savedDraft?.providerDraftId;
+
+      if (!draftId) {
+        setValidationMessage('Autosave failed. Keep the composer open and try again.');
+        return;
+      }
+
+      await api.drafts.send(accountId, draftId);
+      await onProviderDraftSent?.();
       onClose();
     } catch (error) {
       setValidationMessage(getErrorMessage(error));
@@ -312,7 +417,16 @@ export function MailComposer({
   }
 
   async function handleClose() {
-    if (isDirty && !providerDraftId) {
+    if (isReply) {
+      if (isDirty && !window.confirm('Discard this unsent reply?')) {
+        return;
+      }
+
+      onClose();
+      return;
+    }
+
+    if (isDirty && !scopedProviderDraftId) {
       const savedDraft = await saveDraft();
 
       if (!savedDraft && !window.confirm('Autosave failed. Discard this unsent message?')) {
@@ -320,8 +434,12 @@ export function MailComposer({
       }
     }
 
-    if (isDirty && providerDraftId && window.confirm('Discard this saved draft?')) {
-      await api.drafts.delete(accountId, providerDraftId);
+    if (
+      isDirty &&
+      scopedProviderDraftId &&
+      window.confirm('Discard this saved draft?')
+    ) {
+      await api.drafts.delete(accountId, scopedProviderDraftId);
       onClose();
       return;
     }
@@ -500,6 +618,44 @@ function formatFileSize(size: number) {
   }
 
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getComposeDraftSignature(draft: ComposeWindowDraft) {
+  return JSON.stringify({
+    kind: draft.kind ?? 'new',
+    relatedMessageId: draft.relatedMessageId,
+    toValue: draft.toValue,
+    ccValue: draft.ccValue,
+    bccValue: draft.bccValue,
+    subject: draft.subject.trim(),
+    editorValue: draft.editorValue,
+    attachments: getAttachmentSignature(draft.attachments ?? []),
+  });
+}
+
+function getDraftSaveInputSignature(input: MailDraftSaveInput) {
+  return JSON.stringify({
+    kind: input.kind,
+    relatedMessageId: input.relatedMessageId,
+    toRecipients: input.toRecipients,
+    toValue: input.toValue,
+    ccValue: input.ccValue,
+    bccValue: input.bccValue,
+    subject: input.subject.trim(),
+    bodyHtml: input.bodyHtml,
+    editorValue: input.editorValue,
+    attachments: getAttachmentSignature(input.attachments ?? []),
+  });
+}
+
+function getAttachmentSignature(attachments: LocalMailAttachment[]) {
+  return attachments.map((attachment) => ({
+    id: attachment.id,
+    providerAttachmentId: attachment.providerAttachmentId,
+    name: attachment.name,
+    contentType: attachment.contentType,
+    size: attachment.size,
+  }));
 }
 
 function getAttachmentErrorMessage(error: unknown) {

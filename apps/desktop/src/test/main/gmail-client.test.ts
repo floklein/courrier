@@ -227,6 +227,83 @@ describe('GmailClient', () => {
       subject: 'Hello',
     });
   });
+
+  it('preserves retained Gmail provider attachments when updating drafts', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        id: 'message-1',
+        payload: {
+          mimeType: 'multipart/mixed',
+          parts: [
+            {
+              partId: '1',
+              filename: 'old.pdf',
+              mimeType: 'application/pdf',
+              body: {
+                attachmentId: 'attachment-1',
+                data: Buffer.from('file content').toString('base64url'),
+                size: 12,
+              },
+            },
+          ],
+        },
+      }),
+      jsonResponse({
+        id: 'draft-1',
+        message: {
+          id: 'message-2',
+          snippet: 'Updated',
+          payload: {
+            headers: [
+              { name: 'To', value: 'ada@example.com' },
+              { name: 'Subject', value: 'Updated' },
+              { name: 'Date', value: 'Sat, 16 May 2026 10:00:00 +0000' },
+            ],
+            body: {
+              data: Buffer.from('<p>Updated</p>').toString('base64url'),
+            },
+            mimeType: 'text/html',
+          },
+        },
+      }),
+    );
+    const client = createGmailClient();
+
+    await client.updateDraft(accountId, 'draft-1', {
+      providerDraftMessageId: 'message-1',
+      kind: 'new',
+      toRecipients: [{ email: 'ada@example.com' }],
+      toValue: 'ada@example.com',
+      subject: 'Updated',
+      bodyHtml: '<p>Updated</p>',
+      editorValue: { html: '<p>Updated</p>', text: 'Updated', isEmpty: false },
+      attachments: [
+        {
+          id: 'attachment-1',
+          providerAttachmentId: 'attachment-1',
+          name: 'old.pdf',
+          contentType: 'application/pdf',
+          size: 12,
+        },
+      ],
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/message-1?format=full',
+    );
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/drafts/draft-1',
+    );
+
+    const updateBody = JSON.parse(fetchMock.mock.calls[1][1]?.body as string);
+    const rawMessage = Buffer.from(
+      updateBody.message.raw.replaceAll('-', '+').replaceAll('_', '/'),
+      'base64',
+    ).toString('utf8');
+    expect(rawMessage).toContain('old.pdf');
+    expect(rawMessage).toContain(Buffer.from('file content').toString('base64'));
+    expect(rawMessage).toContain('<p>Updated</p>');
+  });
 });
 
 function createGmailClient() {

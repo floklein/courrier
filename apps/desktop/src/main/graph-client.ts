@@ -233,7 +233,7 @@ export class GraphClient implements MailProvider {
       throw new Error('Microsoft Graph did not return a draft ID.');
     }
 
-    return this.updateDraft(accountId, draft.id, input);
+    return this.saveDraftToExistingMessage(accountId, draft.id, input, []);
   }
 
   async updateDraft(
@@ -241,6 +241,23 @@ export class GraphClient implements MailProvider {
     providerDraftId: string,
     input: ProviderDraftSaveInput,
   ): Promise<MailDraftDetail> {
+    const existingDraft = await this.getDraft(accountId, providerDraftId);
+
+    return this.saveDraftToExistingMessage(
+      accountId,
+      providerDraftId,
+      input,
+      existingDraft.attachments,
+    );
+  }
+
+  private async saveDraftToExistingMessage(
+    accountId: string,
+    providerDraftId: string,
+    input: ProviderDraftSaveInput,
+    existingAttachments: MailDraftDetail['attachments'],
+  ): Promise<MailDraftDetail> {
+
     await this.fetchGraph(
       accountId,
       `${graphBaseUrl}/me/messages/${encodeURIComponent(providerDraftId)}`,
@@ -249,6 +266,12 @@ export class GraphClient implements MailProvider {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(graphDraftPayload(input)),
       },
+    );
+    await this.deleteRemovedDraftAttachments(
+      accountId,
+      providerDraftId,
+      existingAttachments,
+      input.attachments ?? [],
     );
     await this.addAttachmentsToDraft(
       accountId,
@@ -583,6 +606,50 @@ export class GraphClient implements MailProvider {
         await this.addLargeAttachmentToDraft(accountId, draftId, attachment);
       }
     }
+  }
+
+  private async deleteRemovedDraftAttachments(
+    accountId: string,
+    draftId: string,
+    existingAttachments: MailDraftDetail['attachments'],
+    nextAttachments: NonNullable<ProviderDraftSaveInput['attachments']>,
+  ) {
+    const retainedProviderAttachmentIds = new Set(
+      nextAttachments.flatMap((attachment) => {
+        if (isLocalAttachmentFile(attachment) || !attachment.providerAttachmentId) {
+          return [];
+        }
+
+        return [attachment.providerAttachmentId];
+      }),
+    );
+
+    for (const attachment of existingAttachments) {
+      if (
+        attachment.providerAttachmentId &&
+        !retainedProviderAttachmentIds.has(attachment.providerAttachmentId)
+      ) {
+        await this.deleteDraftAttachment(
+          accountId,
+          draftId,
+          attachment.providerAttachmentId,
+        );
+      }
+    }
+  }
+
+  private async deleteDraftAttachment(
+    accountId: string,
+    draftId: string,
+    attachmentId: string,
+  ) {
+    await this.fetchGraph(
+      accountId,
+      `${graphBaseUrl}/me/messages/${encodeURIComponent(
+        draftId,
+      )}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' },
+    );
   }
 
   private async addSmallAttachmentToDraft(

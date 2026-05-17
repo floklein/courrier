@@ -60,6 +60,7 @@ export function AuthenticatedMailClient({
   const isReadingMessage = Boolean(messageId);
   const {
     deleteMutation,
+    invalidateMailLists,
     isActionPending,
     isSendingMessage,
     markReadMutation,
@@ -317,6 +318,7 @@ export function AuthenticatedMailClient({
             onMoveToWindow={(draft) => {
               void handleMoveComposeToWindow(draft);
             }}
+            onProviderDraftSent={invalidateMailLists}
             onSend={handleSendMessage}
           />
         )}
