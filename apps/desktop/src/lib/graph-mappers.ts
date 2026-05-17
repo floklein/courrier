@@ -36,7 +36,6 @@ export interface GraphMessage {
   flag?: {
     flagStatus?: string | null;
   } | null;
-  parentFolderId?: string | null;
   from?: GraphEmailAddress | null;
   toRecipients?: GraphEmailAddress[] | null;
   ccRecipients?: GraphEmailAddress[] | null;
