@@ -14,6 +14,7 @@ describe('GmailClient', () => {
         labels: [
           { id: 'Label_1', name: 'Projects' },
           { id: 'INBOX', name: 'Inbox' },
+          { id: 'IMPORTANT', name: 'Important' },
           { id: 'UNREAD', name: 'Unread' },
         ],
       }),
@@ -29,6 +30,12 @@ describe('GmailClient', () => {
         messagesTotal: 10,
         messagesUnread: 2,
       }),
+      jsonResponse({
+        id: 'IMPORTANT',
+        name: 'Important',
+        messagesTotal: 4,
+        messagesUnread: 0,
+      }),
     );
     const client = createGmailClient();
 
@@ -39,6 +46,12 @@ describe('GmailClient', () => {
         icon: 'inbox',
         wellKnownName: 'inbox',
         unreadCount: 2,
+      },
+      {
+        id: 'IMPORTANT',
+        label: 'Important',
+        icon: 'important',
+        unreadCount: 0,
       },
       {
         id: 'Label_1',

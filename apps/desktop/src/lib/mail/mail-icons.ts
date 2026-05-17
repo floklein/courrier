@@ -1,6 +1,6 @@
 import {
   Archive,
-  Clock,
+  BadgeAlert,
   FileText,
   FolderOpen,
   Inbox,
@@ -21,5 +21,5 @@ export const folderIcons: Record<FolderIcon, LucideIcon> = {
   archive: Archive,
   trash: Trash2,
   star: Star,
-  clock: Clock,
+  important: BadgeAlert,
 };

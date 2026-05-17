@@ -7,7 +7,7 @@ export type FolderIcon =
   | 'archive'
   | 'trash'
   | 'star'
-  | 'clock';
+  | 'important';
 
 export interface MailFolder {
   id: string;

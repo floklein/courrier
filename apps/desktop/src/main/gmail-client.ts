@@ -696,7 +696,7 @@ function getGmailFolderIcon(id: string): MailFolder['icon'] {
     TRASH: 'trash',
     SPAM: 'mail-x',
     STARRED: 'star',
-    IMPORTANT: 'clock',
+    IMPORTANT: 'important',
   };
 
   return map[id] ?? 'folder';
