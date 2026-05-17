@@ -1,16 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import {
-  Archive,
   Download,
   ExternalLink,
-  Flag,
   Forward,
   MailOpen,
   MoreHorizontal,
   Paperclip,
   Reply,
-  ReplyAll,
-  Star,
   Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -41,10 +37,7 @@ import { PanelStatus } from '@/ui/app/StatusViews';
 import { MailComposer } from '@/ui/compose/MailComposer';
 import { ToolbarButton } from '@/ui/primitives/ToolbarButton';
 import { HtmlMessageBody } from '@/ui/mail/HtmlMessageBody';
-import {
-  isArchiveFolder,
-  MailActionDropdownContent,
-} from '@/ui/mail/MailActionMenu';
+import { MailActionDropdownContent } from '@/ui/mail/MailActionMenu';
 import { MailAvatar } from '@/ui/mail/MailAvatar';
 
 export function ReadingPane({
@@ -124,9 +117,6 @@ export function ReadingPane({
   ) => void;
   className?: string;
 }) {
-  const canArchive =
-    actionCapabilities.includes('archive') && !isArchiveFolder(folders, folderId);
-
   if (isLoading) {
     return (
       <section
@@ -195,39 +185,9 @@ export function ReadingPane({
             disabled={isActionPending}
             onClick={() => onReplyToMessage(message)}
           />
-          {canArchive && (
-            <ToolbarButton
-              icon={Archive}
-              label="Archive"
-              disabled={isActionPending}
-              onClick={() => onArchiveMessage(message)}
-            />
-          )}
-          {actionCapabilities.includes('star') && (
-            <ToolbarButton
-              icon={Star}
-              label={message.isStarred ? 'Unstar' : 'Star'}
-              disabled={isActionPending}
-              onClick={() => onToggleMessageStar(message, !message.isStarred)}
-            />
-          )}
-          {actionCapabilities.includes('flag') && (
-            <ToolbarButton
-              icon={Flag}
-              label={message.isFlagged ? 'Clear flag' : 'Flag'}
-              disabled={isActionPending}
-              onClick={() => onToggleMessageFlag(message, !message.isFlagged)}
-            />
-          )}
-          <ToolbarButton
-            icon={ReplyAll}
-            label="Reply all"
-            disabled={isActionPending}
-            onClick={() => onReplyAllToMessage(message)}
-          />
           <ToolbarButton
             icon={Forward}
-            label="Forward"
+            label="Transfer"
             disabled={isActionPending}
             onClick={() => onForwardMessage(message)}
           />
