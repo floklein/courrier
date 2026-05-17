@@ -152,6 +152,10 @@ export class GmailClient implements MailProvider {
 
     params.append('labelIds', folderId);
 
+    if (isGmailInboxCategory(folderId)) {
+      params.append('labelIds', 'INBOX');
+    }
+
     if (search) {
       params.set('q', search);
     }
@@ -238,12 +242,16 @@ export class GmailClient implements MailProvider {
     messageId: string,
     sourceFolderId?: string,
   ): Promise<MailMessageDetail> {
-    void sourceFolderId;
+    const removeLabelId = getGmailArchiveSourceLabel(sourceFolderId);
     const message = await this.modifyMessage(accountId, messageId, {
-      removeLabelIds: ['INBOX'],
+      removeLabelIds: [removeLabelId],
     });
 
-    return mapGmailMessageDetail(message.labelIds?.[0] ?? 'INBOX', message);
+    return mapGmailMessageDetail(
+      message.labelIds?.find((labelId) => labelId !== removeLabelId) ??
+        removeLabelId,
+      message,
+    );
   }
 
   async markMessageJunkState(
@@ -696,6 +704,22 @@ function getGmailFolderIcon(id: string): MailFolder['icon'] {
 
 function isHiddenGmailLabel(id: string | undefined) {
   return id === 'CHAT' || id === 'UNREAD';
+}
+
+function isGmailInboxCategory(id: string) {
+  return id.startsWith('CATEGORY_');
+}
+
+function getGmailArchiveSourceLabel(sourceFolderId: string | undefined) {
+  if (
+    !sourceFolderId ||
+    sourceFolderId === 'INBOX' ||
+    isGmailInboxCategory(sourceFolderId)
+  ) {
+    return 'INBOX';
+  }
+
+  return sourceFolderId;
 }
 
 function getHeaderMap(headers: GmailHeader[] | undefined) {

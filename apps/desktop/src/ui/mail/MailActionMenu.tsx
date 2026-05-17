@@ -25,11 +25,14 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
+import { folderIcons } from '@/lib/mail/mail-icons';
 import type {
   MailActionCapability,
   MailFolder,
   MailMessageSummary,
 } from '@/lib/mail-types';
+
+const JunkIcon = folderIcons['mail-x'];
 
 interface MailActionMenuProps {
   currentFolderId: string;
@@ -221,7 +224,7 @@ function TriageDropdownItems(props: MailActionMenuProps) {
           disabled={props.isBusy}
           onClick={() => props.onMarkJunk(props.message, junkState.isJunk)}
         >
-          <BadgeAlert />
+          <JunkIcon />
           {junkState.label}
         </DropdownMenuItem>
       )}
@@ -282,7 +285,7 @@ function TriageContextItems(props: MailActionMenuProps) {
           disabled={props.isBusy}
           onClick={() => props.onMarkJunk(props.message, junkState.isJunk)}
         >
-          <BadgeAlert />
+          <JunkIcon />
           {junkState.label}
         </ContextMenuItem>
       )}

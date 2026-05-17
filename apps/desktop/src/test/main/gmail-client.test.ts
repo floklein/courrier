@@ -89,11 +89,15 @@ describe('GmailClient', () => {
     const fetchMock = mockFetch(
       jsonResponse({ id: 'message-1', labelIds: ['Label_1'] }),
       jsonResponse({ id: 'message-1', labelIds: ['SPAM'] }),
+      jsonResponse({ id: 'message-1', labelIds: [] }),
+      jsonResponse({ id: 'message-1', labelIds: ['CATEGORY_PERSONAL'] }),
     );
     const client = createGmailClient();
 
     await client.archiveMessage(accountId, 'message-1', 'INBOX');
     await client.markMessageJunkState(accountId, 'message-1', true);
+    await client.archiveMessage(accountId, 'message-1', 'SPAM');
+    await client.archiveMessage(accountId, 'message-1', 'CATEGORY_PERSONAL');
 
     expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
       removeLabelIds: ['INBOX'],
@@ -102,6 +106,23 @@ describe('GmailClient', () => {
       addLabelIds: ['SPAM'],
       removeLabelIds: ['INBOX'],
     });
+    expect(JSON.parse(fetchMock.mock.calls[2][1]?.body as string)).toEqual({
+      removeLabelIds: ['SPAM'],
+    });
+    expect(JSON.parse(fetchMock.mock.calls[3][1]?.body as string)).toEqual({
+      removeLabelIds: ['INBOX'],
+    });
+  });
+
+  it('scopes Gmail category folders to inbox messages', async () => {
+    const fetchMock = mockFetch(jsonResponse({ messages: [] }));
+    const client = createGmailClient();
+
+    await client.listMessages(accountId, 'CATEGORY_PERSONAL');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&labelIds=CATEGORY_PERSONAL&labelIds=INBOX',
+    );
   });
 
   it('toggles Gmail star and important labels', async () => {
