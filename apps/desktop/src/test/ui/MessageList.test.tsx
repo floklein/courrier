@@ -137,6 +137,47 @@ function renderControlledMessageList(onSearch = vi.fn()) {
   return { onSearch };
 }
 
+function renderControlledScopeMessageList() {
+  function ControlledMessageList() {
+    const [searchScope, setSearchScope] = useState<MailSearchScope>('all');
+
+    return (
+      <TooltipProvider>
+        <MessageList
+          folderId="inbox"
+          folderLabel="Inbox"
+          folders={[]}
+          actionCapabilities={[]}
+          messages={[]}
+          selectedMessageId={undefined}
+          isLoading={false}
+          error={null}
+          hasNextPage={false}
+          isFetchingNextPage={false}
+          isActionPending={false}
+          onLoadMore={vi.fn()}
+          onArchiveMessage={vi.fn()}
+          onDeleteMessage={vi.fn()}
+          onDragActiveChange={vi.fn()}
+          onMarkMessageJunkState={vi.fn()}
+          onMarkMessageReadState={vi.fn()}
+          onMoveMessage={vi.fn()}
+          onReplyToMessage={vi.fn()}
+          onToggleMessageFlag={vi.fn()}
+          onToggleMessageImportant={vi.fn()}
+          onToggleMessageStar={vi.fn()}
+          onSearch={vi.fn()}
+          onSearchScopeChange={setSearchScope}
+          searchQuery=""
+          searchScope={searchScope}
+        />
+      </TooltipProvider>
+    );
+  }
+
+  render(<ControlledMessageList />);
+}
+
 describe('MessageList', () => {
   it('debounces folder search while typing instead of waiting for submit', () => {
     vi.useFakeTimers();
@@ -201,6 +242,18 @@ describe('MessageList', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'This folder' }));
 
     expect(onSearchScopeChange).toHaveBeenCalledWith('folder');
+  });
+
+  it('keeps search mode open when switching from all mail to this folder', () => {
+    renderControlledScopeMessageList();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search mail' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'This folder' }));
+
+    expect(screen.getByLabelText('Search Inbox')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'This folder' })).toHaveAttribute(
+      'data-active',
+    );
   });
 
   it('uses a global search result folder for move destinations', async () => {

@@ -113,6 +113,7 @@ export function MessageList({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollParentRef = useRef<HTMLDivElement>(null);
   const loadMoreRequestLengthRef = useRef<number | null>(null);
+  const previousFolderIdRef = useRef(folderId);
   const rowVirtualizer = useVirtualizer({
     count: hasNextPage ? messages.length + 1 : messages.length,
     getScrollElement: () => scrollParentRef.current,
@@ -132,6 +133,13 @@ export function MessageList({
   }, [searchQuery]);
 
   useEffect(() => {
+    const didChangeFolder = previousFolderIdRef.current !== folderId;
+    previousFolderIdRef.current = folderId;
+
+    if (!didChangeFolder) {
+      return;
+    }
+
     if (searchScope === 'all') {
       return;
     }
