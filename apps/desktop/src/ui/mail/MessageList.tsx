@@ -284,11 +284,11 @@ export function MessageList({
               }
             >
               <TabsList className="h-7 w-full">
-                <TabsTrigger value="folder" className="h-6 text-xs">
-                  This folder
-                </TabsTrigger>
                 <TabsTrigger value="all" className="h-6 text-xs">
                   All mail
+                </TabsTrigger>
+                <TabsTrigger value="folder" className="h-6 text-xs">
+                  This folder
                 </TabsTrigger>
               </TabsList>
             </Tabs>

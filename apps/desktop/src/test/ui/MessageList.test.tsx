@@ -194,6 +194,10 @@ describe('MessageList', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Search mail' }));
 
     expect(screen.getByLabelText('Search all mail')).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'All mail',
+      'This folder',
+    ]);
     fireEvent.click(screen.getByRole('tab', { name: 'This folder' }));
 
     expect(onSearchScopeChange).toHaveBeenCalledWith('folder');
