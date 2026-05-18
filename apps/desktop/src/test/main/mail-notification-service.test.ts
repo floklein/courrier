@@ -9,14 +9,14 @@ const electronMock = vi.hoisted(() => ({
   isSupported: vi.fn(() => true),
   notifications: [] as Array<{
     options: Record<string, unknown>;
-    handlers: Record<string, () => void>;
+    handlers: Record<string, (...args: unknown[]) => void>;
     show: ReturnType<typeof vi.fn>;
   }>,
 }));
 
 vi.mock('electron', () => {
   class MockNotification {
-    private readonly handlers: Record<string, () => void> = {};
+    private readonly handlers: Record<string, (...args: unknown[]) => void> = {};
     readonly show = vi.fn();
 
     constructor(readonly options: Record<string, unknown>) {
@@ -31,7 +31,7 @@ vi.mock('electron', () => {
       return electronMock.isSupported();
     }
 
-    on(eventName: string, handler: () => void) {
+    on(eventName: string, handler: (...args: unknown[]) => void) {
       this.handlers[eventName] = handler;
       return this;
     }
@@ -153,6 +153,33 @@ describe('MailNotificationService', () => {
         'google:account-2:message-1',
       ],
     });
+  });
+
+  it('logs native notification failures', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const provider = {
+      getNotificationMessages: vi.fn().mockResolvedValue({
+        messages: [createMessage()],
+      }),
+    };
+    const service = new MailNotificationService({
+      mailService: {
+        getProvider: vi.fn(() => provider),
+      } as never,
+      onNotificationClick: vi.fn(),
+      settingsPath,
+    });
+
+    await service.handleRemoteChange(createEvent());
+    electronMock.notifications[0]?.handlers.failed?.(
+      {},
+      'Windows rejected the notification',
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'Native mail notification failed.',
+      'Windows rejected the notification',
+    );
   });
 
   it('updates the synchronous tray decision when settings change', async () => {

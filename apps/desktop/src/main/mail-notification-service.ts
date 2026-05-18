@@ -160,6 +160,9 @@ export class MailNotificationService {
     notification.on('click', () => {
       this.options.onNotificationClick(accountId, message);
     });
+    notification.on('failed', (_event, error) => {
+      console.warn('Native mail notification failed.', error);
+    });
 
     try {
       notification.show();

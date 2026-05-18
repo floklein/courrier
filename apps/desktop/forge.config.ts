@@ -20,6 +20,7 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
+      name: 'Courrier',
       setupIcon: appWindowsIconPath,
     }),
     new MakerZIP({}, ['darwin']),

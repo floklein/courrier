@@ -34,11 +34,14 @@ import {
   type AppUrlTrustPolicy,
   registerWindowNavigationGuards,
 } from '@/main/security';
+import { configureWindowsNotificationIdentity } from '@/main/windows-notifications';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
+
+configureWindowsNotificationIdentity();
 
 const composeDraftsByWebContentsId = new Map<number, ComposeWindowDraft>();
 let mainWindow: BrowserWindow | undefined;
