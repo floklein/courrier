@@ -24,6 +24,7 @@ const externalNativeDependencies = [
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    extraResource: [appPngIconPath],
     icon: appIconBasePath,
   },
   hooks: {

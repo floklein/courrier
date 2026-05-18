@@ -50,6 +50,10 @@ let isExplicitQuit = false;
 let isKeepingMainWindowInTray = false;
 
 export function getWindowIconPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'icon.png');
+  }
+
   return path.join(app.getAppPath(), 'src/assets/icon.png');
 }
 
