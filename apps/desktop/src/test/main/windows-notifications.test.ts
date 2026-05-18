@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  configureWindowsNotificationIdentity,
-  squirrelAppUserModelId,
-} from '@/main/windows-notifications';
+import { configureWindowsNotificationIdentity } from '@/main/windows-notifications';
 
 describe('configureWindowsNotificationIdentity', () => {
   it('sets the AppUserModelID to the Electron executable in Windows development', () => {
@@ -22,7 +19,7 @@ describe('configureWindowsNotificationIdentity', () => {
     );
   });
 
-  it('sets the Squirrel AppUserModelID in packaged Windows builds', () => {
+  it('leaves packaged Windows Squirrel identity to Electron', () => {
     const electronApp = {
       isPackaged: true,
       setAppUserModelId: vi.fn(),
@@ -34,9 +31,7 @@ describe('configureWindowsNotificationIdentity', () => {
       platform: 'win32',
     });
 
-    expect(electronApp.setAppUserModelId).toHaveBeenCalledWith(
-      squirrelAppUserModelId,
-    );
+    expect(electronApp.setAppUserModelId).not.toHaveBeenCalled();
   });
 
   it('leaves non-Windows notification identity to the runtime', () => {

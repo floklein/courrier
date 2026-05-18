@@ -6,18 +6,14 @@ interface WindowsNotificationIdentityOptions {
   platform?: NodeJS.Platform;
 }
 
-export const squirrelAppUserModelId = 'com.squirrel.Courrier.Courrier';
-
 export function configureWindowsNotificationIdentity({
   electronApp = app,
   execPath = process.execPath,
   platform = process.platform,
 }: WindowsNotificationIdentityOptions = {}) {
-  if (platform !== 'win32') {
+  if (platform !== 'win32' || electronApp.isPackaged) {
     return;
   }
 
-  electronApp.setAppUserModelId(
-    electronApp.isPackaged ? squirrelAppUserModelId : execPath,
-  );
+  electronApp.setAppUserModelId(execPath);
 }
