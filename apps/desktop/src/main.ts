@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import {
   app,
   BrowserWindow,
@@ -10,6 +9,7 @@ import {
   shell,
   Tray,
 } from 'electron';
+import { config as loadDotenvFile } from 'dotenv';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -164,6 +164,10 @@ nativeTheme.on('updated', () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
+  if (!app.isPackaged) {
+    loadDotenvFile({ path: path.join(app.getAppPath(), '.env') });
+  }
+
   const trustPolicy = createAppUrlTrustPolicy({
     appFilePath: getRendererIndexPath(),
     devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
