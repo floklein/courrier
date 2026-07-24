@@ -526,6 +526,166 @@ describe('GraphClient write requests', () => {
     });
     expect(isGraphItemNotFoundError(error)).toBe(true);
   });
+
+  it('resolves unread inbox creations for native notifications', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/me/messages/message-1?')) {
+        return jsonResponse({
+          id: 'message-1',
+          parentFolderId: 'inbox-folder',
+          subject: 'Hello',
+          bodyPreview: 'Preview',
+          receivedDateTime: '2026-05-16T10:00:00.000Z',
+          isRead: false,
+          hasAttachments: false,
+          importance: 'normal',
+          from: {
+            emailAddress: {
+              name: 'Ada Lovelace',
+              address: 'ada@example.com',
+            },
+          },
+          toRecipients: [],
+        });
+      }
+
+      if (url.includes('/me/mailFolders?$top=100')) {
+        return jsonResponse({
+          value: [
+            {
+              id: 'inbox-folder',
+              displayName: 'Inbox',
+              unreadItemCount: 1,
+              totalItemCount: 1,
+            },
+          ],
+        });
+      }
+
+      if (url.includes('/me/mailFolders/inbox?')) {
+        return jsonResponse({
+          id: 'inbox-folder',
+          displayName: 'Inbox',
+          wellKnownName: 'inbox',
+        });
+      }
+
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createGraphClient();
+
+    const resolution = await client.getNotificationMessages(account.id, {
+      id: 'event-1',
+      clientId: 'client-1',
+      accountId: account.id,
+      providerId: 'microsoft',
+      subscriptionId: 'subscription-1',
+      kind: 'message-change',
+      changeType: 'created',
+      messageId: 'message-1',
+      receivedAt: '2026-05-16T10:00:00.000Z',
+    });
+
+    expect(resolution.messages).toMatchObject([
+      {
+        id: 'message-1',
+        folderId: 'inbox-folder',
+        sender: { name: 'Ada Lovelace', email: 'ada@example.com' },
+        subject: 'Hello',
+        isRead: false,
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        url.includes('/me/mailFolders?$top=100'),
+      ),
+    ).toBe(false);
+  });
+
+  it('does not notify for Graph changes outside inbox or already read messages', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/me/messages/message-1?')) {
+        return jsonResponse({
+          id: 'message-1',
+          parentFolderId: 'archive-folder',
+          subject: 'Hello',
+          isRead: false,
+        });
+      }
+
+      if (url.includes('/me/mailFolders?$top=100')) {
+        return jsonResponse({
+          value: [
+            { id: 'archive-folder', displayName: 'Archive' },
+            { id: 'inbox-folder', displayName: 'Inbox' },
+          ],
+        });
+      }
+
+      if (url.includes('/me/mailFolders/inbox?')) {
+        return jsonResponse({
+          id: 'inbox-folder',
+          displayName: 'Inbox',
+          wellKnownName: 'inbox',
+        });
+      }
+
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createGraphClient();
+
+    await expect(
+      client.getNotificationMessages(account.id, {
+        id: 'event-1',
+        clientId: 'client-1',
+        accountId: account.id,
+        providerId: 'microsoft',
+        subscriptionId: 'subscription-1',
+        kind: 'message-change',
+        changeType: 'created',
+        messageId: 'message-1',
+        receivedAt: '2026-05-16T10:00:00.000Z',
+      }),
+    ).resolves.toEqual({ messages: [] });
+  });
+
+  it('does not notify for a read message in the Graph inbox', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/me/messages/message-1?')) {
+        return jsonResponse({
+          id: 'message-1',
+          parentFolderId: 'inbox-folder',
+          subject: 'Already read',
+          isRead: true,
+        });
+      }
+
+      if (url.includes('/me/mailFolders/inbox?')) {
+        return jsonResponse({ id: 'inbox-folder' });
+      }
+
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createGraphClient();
+
+    await expect(
+      client.getNotificationMessages(account.id, {
+        id: 'event-2',
+        clientId: 'client-1',
+        accountId: account.id,
+        providerId: 'microsoft',
+        subscriptionId: 'subscription-1',
+        kind: 'message-change',
+        changeType: 'created',
+        messageId: 'message-1',
+        receivedAt: '2026-05-16T10:01:00.000Z',
+      }),
+    ).resolves.toEqual({ messages: [] });
+  });
 });
 
 function createGraphClient() {

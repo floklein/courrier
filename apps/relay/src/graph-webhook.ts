@@ -158,6 +158,7 @@ export function registerGraphWebhookRoutes({
         result.data.message.messageId ??
         result.data.message.message_id ??
         notificationData.historyId,
+      historyId: notificationData.historyId,
       kind: 'message-change',
       changeType: 'updated',
       resource: notificationData.emailAddress,

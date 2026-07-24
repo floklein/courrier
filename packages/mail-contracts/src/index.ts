@@ -101,6 +101,7 @@ export const mailRemoteMessageChangeEventSchema =
     kind: z.literal('message-change'),
     changeType: graphChangeTypeSchema,
     messageId: z.string().min(1).optional(),
+    historyId: z.string().min(1).optional(),
   });
 
 export const mailRemoteLifecycleEventSchema =

@@ -26,6 +26,7 @@ export interface GraphMailFolder {
 
 export interface GraphMessage {
   id?: string | null;
+  parentFolderId?: string | null;
   subject?: string | null;
   bodyPreview?: string | null;
   receivedDateTime?: string | null;
@@ -35,7 +36,6 @@ export interface GraphMessage {
   flag?: {
     flagStatus?: string | null;
   } | null;
-  parentFolderId?: string | null;
   from?: GraphEmailAddress | null;
   toRecipients?: GraphEmailAddress[] | null;
   ccRecipients?: GraphEmailAddress[] | null;
