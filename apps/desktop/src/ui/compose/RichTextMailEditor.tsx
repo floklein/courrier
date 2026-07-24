@@ -14,16 +14,20 @@ export type RichTextMailEditorValue = ComposeEditorValue;
 export function RichTextMailEditor({
   className,
   disabled,
+  fill = false,
   id,
   initialValue,
+  value,
   placeholder = 'Write a message',
   onPickAttachments,
   onChange,
 }: {
   className?: string;
   disabled?: boolean;
+  fill?: boolean;
   id?: string;
   initialValue?: RichTextMailEditorValue;
+  value?: RichTextMailEditorValue;
   placeholder?: string;
   onPickAttachments?: () => void;
   onChange: (value: RichTextMailEditorValue) => void;
@@ -53,7 +57,7 @@ export function RichTextMailEditor({
         placeholder,
       }),
     ],
-    content: initialValue?.html ?? '',
+    content: value?.html ?? initialValue?.html ?? '',
     editorProps: getEditorProps(placeholder),
     onCreate: ({ editor }) => {
       onChange(getEditorValue(editor));
@@ -69,6 +73,14 @@ export function RichTextMailEditor({
   useEffect(() => {
     editor?.setEditable(!disabled);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor || !value || editor.getHTML() === value.html) {
+      return;
+    }
+
+    editor.commands.setContent(value.html, { emitUpdate: false });
+  }, [editor, value]);
 
   useEffect(() => {
     if (!editor) {
@@ -99,7 +111,7 @@ export function RichTextMailEditor({
   return (
     <div
       className={cn(
-        'border-input focus-within:border-ring focus-within:ring-ring/50 relative flex min-h-36 w-full flex-col rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] md:text-sm dark:bg-input/30',
+        'border-input focus-within:border-ring focus-within:ring-ring/50 relative flex min-h-36 w-full flex-col overflow-hidden rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] md:text-sm dark:bg-input/30',
         disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
@@ -125,8 +137,12 @@ export function RichTextMailEditor({
       <EditorContent
         editor={editor}
         className={cn(
-          'flex min-h-0 flex-1 flex-col px-3 py-2',
-          '[&>.ProseMirror]:flex-1 [&>.ProseMirror]:overflow-y-auto [&>.ProseMirror]:outline-none',
+          'min-h-0',
+          fill && 'flex min-h-0 flex-1 flex-col',
+          fill
+            ? '[&>.ProseMirror]:min-h-0 [&>.ProseMirror]:flex-1'
+            : '[&>.ProseMirror]:h-32',
+          '[&>.ProseMirror]:box-border [&>.ProseMirror]:overflow-y-auto [&>.ProseMirror]:px-3 [&>.ProseMirror]:py-2 [&>.ProseMirror]:outline-none',
           'prose-mail-editor',
         )}
       />

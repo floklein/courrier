@@ -6,14 +6,17 @@ import { assertTrustedSender, type AppUrlTrustPolicy } from '@/main/security';
 import type {
   ReplyToMessageInput,
   SendMailInput,
+  MailDraftSaveInput,
 } from '@/lib/mail-types';
 import {
   ipcIdSchema,
   mailPageTokenSchema,
   mailPeopleQuerySchema,
   mailSearchQuerySchema,
+  mailDraftSaveInputSchema,
   providerIdSchema,
   replyToMessageInputSchema,
+  searchMessagesInputSchema,
   sendMailInputSchema,
 } from '@/lib/mail-schemas';
 
@@ -73,6 +76,10 @@ export function registerIpcHandlers(
     assertSender(event);
     return mailService.listFolders(parseIpcPayload(ipcIdSchema, accountId));
   });
+  ipcMain.handle('mail:get-capabilities', (event, accountId: string) => {
+    assertSender(event);
+    return mailService.getCapabilities(parseIpcPayload(ipcIdSchema, accountId));
+  });
   ipcMain.handle(
     'mail:list-messages',
     (
@@ -97,6 +104,13 @@ export function registerIpcHandlers(
       parseIpcPayload(ipcIdSchema, accountId),
       parseIpcPayload(ipcIdSchema, folderId),
       parseIpcPayload(ipcIdSchema, messageId),
+    );
+  });
+  ipcMain.handle('mail:search-messages', (event, accountId: string, input: unknown) => {
+    assertSender(event);
+    return mailService.searchMessages(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(searchMessagesInputSchema, input),
     );
   });
   ipcMain.handle(
@@ -134,11 +148,98 @@ export function registerIpcHandlers(
       parseIpcPayload(ipcIdSchema, messageId),
     );
   });
+  ipcMain.handle(
+    'mail:archive-message',
+    (event, accountId: string, messageId: string, sourceFolderId: string) => {
+      assertSender(event);
+      return mailService.archiveMessage(
+        parseIpcPayload(ipcIdSchema, accountId),
+        parseIpcPayload(ipcIdSchema, messageId),
+        parseIpcPayload(ipcIdSchema, sourceFolderId),
+      );
+    },
+  );
+  ipcMain.handle(
+    'mail:mark-message-junk-state',
+    (event, accountId: string, messageId: string, isJunk: boolean) => {
+      assertSender(event);
+      return mailService.markMessageJunkState(
+        parseIpcPayload(ipcIdSchema, accountId),
+        parseIpcPayload(ipcIdSchema, messageId),
+        parseIpcPayload(booleanSchema, isJunk),
+      );
+    },
+  );
+  ipcMain.handle(
+    'mail:set-message-star-state',
+    (event, accountId: string, messageId: string, isStarred: boolean) => {
+      assertSender(event);
+      return mailService.setMessageStarState(
+        parseIpcPayload(ipcIdSchema, accountId),
+        parseIpcPayload(ipcIdSchema, messageId),
+        parseIpcPayload(booleanSchema, isStarred),
+      );
+    },
+  );
+  ipcMain.handle(
+    'mail:set-message-flag-state',
+    (event, accountId: string, messageId: string, isFlagged: boolean) => {
+      assertSender(event);
+      return mailService.setMessageFlagState(
+        parseIpcPayload(ipcIdSchema, accountId),
+        parseIpcPayload(ipcIdSchema, messageId),
+        parseIpcPayload(booleanSchema, isFlagged),
+      );
+    },
+  );
+  ipcMain.handle(
+    'mail:set-message-important-state',
+    (event, accountId: string, messageId: string, isImportant: boolean) => {
+      assertSender(event);
+      return mailService.setMessageImportantState(
+        parseIpcPayload(ipcIdSchema, accountId),
+        parseIpcPayload(ipcIdSchema, messageId),
+        parseIpcPayload(booleanSchema, isImportant),
+      );
+    },
+  );
   ipcMain.handle('mail:list-people', (event, accountId: string, query?: string) => {
     assertSender(event);
     return mailService.listPeople(
       parseIpcPayload(ipcIdSchema, accountId),
       parseIpcPayload(mailPeopleQuerySchema, query),
+    );
+  });
+  ipcMain.handle('draft:list', (event, accountId: string) => {
+    assertSender(event);
+    return mailService.listDrafts(parseIpcPayload(ipcIdSchema, accountId));
+  });
+  ipcMain.handle('draft:get', (event, accountId: string, providerDraftId: string) => {
+    assertSender(event);
+    return mailService.getDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(ipcIdSchema, providerDraftId),
+    );
+  });
+  ipcMain.handle('draft:save', (event, accountId: string, input: MailDraftSaveInput) => {
+    assertSender(event);
+    return mailService.saveDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(mailDraftSaveInputSchema, input),
+    );
+  });
+  ipcMain.handle('draft:delete', (event, accountId: string, providerDraftId: string) => {
+    assertSender(event);
+    return mailService.deleteDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(ipcIdSchema, providerDraftId),
+    );
+  });
+  ipcMain.handle('draft:send', (event, accountId: string, providerDraftId: string) => {
+    assertSender(event);
+    return mailService.sendDraft(
+      parseIpcPayload(ipcIdSchema, accountId),
+      parseIpcPayload(ipcIdSchema, providerDraftId),
     );
   });
   ipcMain.handle('mail:send-message', (event, accountId: string, input: SendMailInput) => {

@@ -19,16 +19,35 @@ function installCourrierApi() {
     signOut: vi.fn(),
   };
   const mail = {
+    getCapabilities: vi.fn().mockResolvedValue([]),
     listFolders: vi.fn().mockResolvedValue([]),
     listMessages: vi.fn().mockResolvedValue({ messages: [] }),
+    searchMessages: vi.fn().mockResolvedValue({ messages: [] }),
     getMessage: vi.fn().mockResolvedValue({ id: 'message-1' }),
     markMessageReadState: vi.fn(),
     moveMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    archiveMessage: vi.fn(),
+    markMessageJunkState: vi.fn(),
+    setMessageStarState: vi.fn(),
+    setMessageFlagState: vi.fn(),
+    setMessageImportantState: vi.fn(),
     listPeople: vi.fn().mockResolvedValue([]),
     sendMessage: vi.fn(),
     replyToMessage: vi.fn(),
     onRemoteChange: vi.fn(),
+    onOpenMessage: vi.fn(),
+  };
+  const notifications = {
+    getSettings: vi.fn(),
+    updateSettings: vi.fn(),
+  };
+  const drafts = {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
+    save: vi.fn(),
+    delete: vi.fn(),
+    send: vi.fn(),
   };
   const windowApi = {
     closeCurrent: vi.fn(),
@@ -38,10 +57,17 @@ function installCourrierApi() {
 
   Object.defineProperty(window, 'courrier', {
     configurable: true,
-    value: { attachments, auth, mail, window: windowApi },
+    value: {
+      attachments,
+      auth,
+      drafts,
+      mail,
+      notifications,
+      window: windowApi,
+    },
   });
 
-  return { auth, mail };
+  return { auth, drafts, mail };
 }
 
 describe('mail query options', () => {
@@ -110,6 +136,7 @@ describe('mail query options', () => {
       'account-1',
       'messages',
       'inbox',
+      'folder',
       '',
     ]);
     expect(options.initialPageParam).toBeUndefined();
@@ -118,7 +145,6 @@ describe('mail query options', () => {
       'account-1',
       'inbox',
       'page-2',
-      undefined,
     );
     expect(
       options.getNextPageParam?.(
@@ -144,18 +170,51 @@ describe('mail query options', () => {
       'account-1',
       'messages',
       'inbox',
+      'folder',
       'urgent',
     ]);
     expect(people.queryKey).toEqual(['mail', 'account-1', 'people', 'Ada']);
     await runQueryFn(messages, { pageParam: undefined });
     await runQueryFn(people);
-    expect(bridge.mail.listMessages).toHaveBeenCalledWith(
+    expect(bridge.mail.searchMessages).toHaveBeenCalledWith('account-1', {
+      query: 'urgent',
+      scope: 'folder',
+      folderId: 'inbox',
+      includeSpamTrash: undefined,
+      nextPageToken: undefined,
+    });
+    expect(bridge.mail.listPeople).toHaveBeenCalledWith('account-1', 'Ada');
+  });
+
+  it('builds global message search queries', async () => {
+    const bridge = installCourrierApi();
+    const { mailMessagesQueryOptions } = await import(
+      '@/lib/mail/mail-query-options'
+    );
+
+    const messages = mailMessagesQueryOptions(
       'account-1',
       'inbox',
-      undefined,
-      'urgent',
+      ' urgent ',
+      'all',
     );
-    expect(bridge.mail.listPeople).toHaveBeenCalledWith('account-1', 'Ada');
+
+    expect(messages.queryKey).toEqual([
+      'mail',
+      'account-1',
+      'messages',
+      'inbox',
+      'all',
+      'urgent',
+    ]);
+    await runQueryFn(messages, { pageParam: 'next-page' });
+    expect(bridge.mail.searchMessages).toHaveBeenCalledWith('account-1', {
+      query: 'urgent',
+      scope: 'all',
+      folderId: 'inbox',
+      includeSpamTrash: true,
+      nextPageToken: 'next-page',
+    });
   });
 
   it('passes undefined for empty people queries', async () => {
@@ -169,5 +228,43 @@ describe('mail query options', () => {
     expect(options.queryKey).toEqual(['mail', 'account-1', 'people', '']);
     await runQueryFn(options);
     expect(bridge.mail.listPeople).toHaveBeenCalledWith('account-1', undefined);
+  });
+
+  it('builds list and detail draft queries scoped to the account', async () => {
+    const bridge = installCourrierApi();
+    const {
+      mailDraftQueryOptions,
+      mailDraftsQueryOptions,
+      mailPreloadStaleTimeMs,
+    } = await import('@/lib/mail/mail-query-options');
+
+    const listOptions = mailDraftsQueryOptions('google:account-1');
+    const detailOptions = mailDraftQueryOptions(
+      'google:account-1',
+      'draft-1',
+    );
+
+    expect(listOptions.queryKey).toEqual([
+      'mail',
+      'google:account-1',
+      'drafts',
+    ]);
+    expect(detailOptions.queryKey).toEqual([
+      'mail',
+      'google:account-1',
+      'draft',
+      'draft-1',
+    ]);
+    expect(listOptions.staleTime).toBe(mailPreloadStaleTimeMs);
+    expect(detailOptions.staleTime).toBe(mailPreloadStaleTimeMs);
+
+    await runQueryFn(listOptions);
+    await runQueryFn(detailOptions);
+
+    expect(bridge.drafts.list).toHaveBeenCalledWith('google:account-1');
+    expect(bridge.drafts.get).toHaveBeenCalledWith(
+      'google:account-1',
+      'draft-1',
+    );
   });
 });

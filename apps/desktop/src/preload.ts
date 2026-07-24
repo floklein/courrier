@@ -2,9 +2,14 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   AuthSession,
   LocalMailAttachment,
+  MailActionCapability,
   MailFolder,
+  MailDraftDetail,
+  MailDraftSaveInput,
+  MailDraftSummary,
   MailMessageDetail,
   MailPersonSuggestion,
+  SearchMessagesInput,
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
@@ -15,6 +20,53 @@ import {
   mailRemoteChangeEventSchema,
   type MailRemoteChangeEvent,
 } from '@courrier/mail-contracts';
+
+interface OpenMailMessagePayload {
+  accountId: string;
+  folderId: string;
+  messageId: string;
+}
+
+const maxPendingOpenMessages = 20;
+const openMessageListeners = new Set<
+  (payload: OpenMailMessagePayload) => void
+>();
+const pendingOpenMessages: OpenMailMessagePayload[] = [];
+
+ipcRenderer.on('mail:open-message', (_event, payload: unknown) => {
+  const parsedPayload = parseOpenMailMessagePayload(payload);
+
+  if (!parsedPayload) {
+    return;
+  }
+
+  if (openMessageListeners.size === 0) {
+    pendingOpenMessages.push(parsedPayload);
+    pendingOpenMessages.splice(
+      0,
+      Math.max(0, pendingOpenMessages.length - maxPendingOpenMessages),
+    );
+    return;
+  }
+
+  for (const listener of openMessageListeners) {
+    listener(parsedPayload);
+  }
+});
+
+const composeCloseRequestListeners = new Set<() => void>();
+let hasPendingComposeCloseRequest = false;
+
+ipcRenderer.on('window:close-requested', () => {
+  if (composeCloseRequestListeners.size === 0) {
+    hasPendingComposeCloseRequest = true;
+    return;
+  }
+
+  for (const listener of composeCloseRequestListeners) {
+    listener();
+  }
+});
 
 const courrier = {
   platform: process.platform,
@@ -58,6 +110,11 @@ const courrier = {
       ) as Promise<boolean>,
   },
   mail: {
+    getCapabilities: (accountId: string) =>
+      ipcRenderer.invoke(
+        'mail:get-capabilities',
+        accountId,
+      ) as Promise<MailActionCapability[]>,
     listFolders: (accountId: string) =>
       ipcRenderer.invoke('mail:list-folders', accountId) as Promise<MailFolder[]>,
     listMessages: (
@@ -80,6 +137,12 @@ const courrier = {
         folderId,
         messageId,
       ) as Promise<MailMessageDetail | undefined>,
+    searchMessages: (accountId: string, input: SearchMessagesInput) =>
+      ipcRenderer.invoke(
+        'mail:search-messages',
+        accountId,
+        input,
+      ) as Promise<PagedMessages>,
     markMessageReadState: (
       accountId: string,
       messageId: string,
@@ -110,6 +173,61 @@ const courrier = {
         accountId,
         messageId,
       ) as Promise<MailMessageDetail>,
+    archiveMessage: (
+      accountId: string,
+      messageId: string,
+      sourceFolderId: string,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:archive-message',
+        accountId,
+        messageId,
+        sourceFolderId,
+      ) as Promise<MailMessageDetail | undefined>,
+    markMessageJunkState: (
+      accountId: string,
+      messageId: string,
+      isJunk: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:mark-message-junk-state',
+        accountId,
+        messageId,
+        isJunk,
+      ) as Promise<MailMessageDetail | undefined>,
+    setMessageStarState: (
+      accountId: string,
+      messageId: string,
+      isStarred: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:set-message-star-state',
+        accountId,
+        messageId,
+        isStarred,
+      ) as Promise<void>,
+    setMessageFlagState: (
+      accountId: string,
+      messageId: string,
+      isFlagged: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:set-message-flag-state',
+        accountId,
+        messageId,
+        isFlagged,
+      ) as Promise<void>,
+    setMessageImportantState: (
+      accountId: string,
+      messageId: string,
+      isImportant: boolean,
+    ) =>
+      ipcRenderer.invoke(
+        'mail:set-message-important-state',
+        accountId,
+        messageId,
+        isImportant,
+      ) as Promise<void>,
     listPeople: (accountId: string, query?: string) =>
       ipcRenderer.invoke(
         'mail:list-people',
@@ -134,9 +252,69 @@ const courrier = {
         ipcRenderer.removeListener('mail:remote-change', handler);
       };
     },
+    onOpenMessage: (listener: (payload: OpenMailMessagePayload) => void) => {
+      openMessageListeners.add(listener);
+      const pendingMessages = pendingOpenMessages.splice(0);
+
+      for (const pendingMessage of pendingMessages) {
+        listener(pendingMessage);
+      }
+
+      return () => {
+        openMessageListeners.delete(listener);
+      };
+    },
+  },
+  notifications: {
+    getSettings: () =>
+      ipcRenderer.invoke('notifications:get-settings') as Promise<{
+        supported: boolean;
+        enabled: boolean;
+        includePreview: boolean;
+        silent: boolean;
+      }>,
+    updateSettings: (settings: {
+      enabled?: boolean;
+      includePreview?: boolean;
+      silent?: boolean;
+    }) =>
+      ipcRenderer.invoke('notifications:update-settings', settings) as Promise<{
+        supported: boolean;
+        enabled: boolean;
+        includePreview: boolean;
+        silent: boolean;
+      }>,
+  },
+  drafts: {
+    list: (accountId: string) =>
+      ipcRenderer.invoke('draft:list', accountId) as Promise<MailDraftSummary[]>,
+    get: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke(
+        'draft:get',
+        accountId,
+        providerDraftId,
+      ) as Promise<MailDraftDetail>,
+    save: (accountId: string, input: MailDraftSaveInput) =>
+      ipcRenderer.invoke('draft:save', accountId, input) as Promise<MailDraftDetail>,
+    delete: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke('draft:delete', accountId, providerDraftId) as Promise<void>,
+    send: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke('draft:send', accountId, providerDraftId) as Promise<void>,
   },
   window: {
     closeCurrent: () => ipcRenderer.invoke('window:close-current') as Promise<void>,
+    onCloseRequested: (listener: () => void) => {
+      composeCloseRequestListeners.add(listener);
+
+      if (hasPendingComposeCloseRequest) {
+        hasPendingComposeCloseRequest = false;
+        listener();
+      }
+
+      return () => {
+        composeCloseRequestListeners.delete(listener);
+      };
+    },
     getComposeDraft: () =>
       ipcRenderer.invoke('window:get-compose-draft') as Promise<
         ComposeWindowDraft | undefined
@@ -149,3 +327,29 @@ const courrier = {
 contextBridge.exposeInMainWorld('courrier', courrier);
 
 export type CourrierApi = typeof courrier;
+
+function parseOpenMailMessagePayload(
+  payload: unknown,
+): OpenMailMessagePayload | undefined {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    typeof (payload as OpenMailMessagePayload).accountId !== 'string' ||
+    typeof (payload as OpenMailMessagePayload).folderId !== 'string' ||
+    typeof (payload as OpenMailMessagePayload).messageId !== 'string'
+  ) {
+    return undefined;
+  }
+
+  const parsedPayload = payload as OpenMailMessagePayload;
+
+  if (
+    !parsedPayload.accountId ||
+    !parsedPayload.folderId ||
+    !parsedPayload.messageId
+  ) {
+    return undefined;
+  }
+
+  return parsedPayload;
+}

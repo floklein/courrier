@@ -15,7 +15,10 @@ import {
 } from '@/components/ui/tooltip';
 import { useActiveMailAccountChange } from '@/hooks/useActiveMailAccountChange';
 import { api } from '@/lib/api-client';
-import { isMailMessageDragData } from '@/lib/mail/mail-drag';
+import {
+  getMovableMailMessages,
+  isMailMessageDragData,
+} from '@/lib/mail/mail-drag';
 import { folderIcons } from '@/lib/mail/mail-icons';
 import { mailMessagesQueryOptions } from '@/lib/mail/mail-query-options';
 import type {
@@ -58,6 +61,7 @@ export function FolderRail({
   onMoveMessage: (
     message: MailMessageSummary,
     destinationFolderId: string,
+    removedMessageIds?: Set<string>,
   ) => void;
   className?: string;
 }) {
@@ -161,6 +165,7 @@ function FolderRailItem({
   onMoveMessage: (
     message: MailMessageSummary,
     destinationFolderId: string,
+    removedMessageIds?: Set<string>,
   ) => void;
   onPrefetchFolder: (folderId: string) => void;
 }) {
@@ -188,7 +193,10 @@ function FolderRailItem({
       getData: () => ({ folderId: folder.id }),
       canDrop: ({ source }) => {
         const data = source.data;
-        return isMailMessageDragData(data) && data.sourceFolderId !== folder.id;
+        return (
+          isMailMessageDragData(data) &&
+          getMovableMailMessages(data, folder.id).length > 0
+        );
       },
       onDragEnter: () => setIsDraggingOver(true),
       onDragLeave: () => setIsDraggingOver(false),
@@ -197,12 +205,15 @@ function FolderRailItem({
 
         const data = source.data;
 
-        if (!isMailMessageDragData(data) || data.sourceFolderId === folder.id) {
+        if (!isMailMessageDragData(data)) {
           return;
         }
 
-        for (const message of data.messages ?? [data.message]) {
-          onMoveMessage(message, folder.id);
+        const messages = getMovableMailMessages(data, folder.id);
+        const removedMessageIds = new Set(messages.map((message) => message.id));
+
+        for (const message of messages) {
+          onMoveMessage(message, folder.id, removedMessageIds);
         }
       },
     });

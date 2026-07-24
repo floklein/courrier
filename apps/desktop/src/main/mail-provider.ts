@@ -1,13 +1,20 @@
 import type {
   MailAccount,
+  MailActionCapability,
   MailFolder,
   MailMessageDetail,
+  MailMessageSummary,
   MailPersonSuggestion,
+  MailDraftDetail,
+  MailDraftSaveInput,
+  MailDraftSummary,
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
+  SearchMessagesInput,
   SendMailInput,
 } from '@/lib/mail-types';
+import type { MailRemoteChangeEvent } from '@courrier/mail-contracts';
 
 export interface MailAuthProvider {
   readonly id: ProviderId;
@@ -41,10 +48,23 @@ export interface ProviderReplyToMessageInput extends Omit<ReplyToMessageInput, '
   attachments?: LocalAttachmentFile[];
 }
 
+export interface ProviderDraftSaveInput extends Omit<MailDraftSaveInput, 'attachments'> {
+  attachments?: Array<LocalAttachmentFile | NonNullable<MailDraftSaveInput['attachments']>[number]>;
+}
+
 export interface DownloadedMailAttachment {
   name: string;
   contentType: string;
   content: Buffer;
+}
+
+export interface MailNotificationState {
+  gmailLastHistoryId?: string;
+}
+
+export interface MailNotificationResolution {
+  messages: MailMessageSummary[];
+  state?: MailNotificationState;
 }
 
 export interface MailSubscriptionProvider {
@@ -71,10 +91,12 @@ export interface MailSubscription {
   id: string;
   expirationDateTime: string;
   resource?: string;
+  notificationState?: MailNotificationState;
 }
 
 export interface MailProvider extends MailSubscriptionProvider {
   readonly id: ProviderId;
+  getCapabilities(accountId: string): Promise<MailActionCapability[]>;
   listFolders(accountId: string): Promise<MailFolder[]>;
   listMessages(
     accountId: string,
@@ -82,11 +104,17 @@ export interface MailProvider extends MailSubscriptionProvider {
     nextPageToken?: string,
     searchQuery?: string,
   ): Promise<PagedMessages>;
+  searchMessages(accountId: string, input: SearchMessagesInput): Promise<PagedMessages>;
   getMessage(
     accountId: string,
     folderId: string,
     messageId: string,
   ): Promise<MailMessageDetail>;
+  getNotificationMessages?(
+    accountId: string,
+    event: MailRemoteChangeEvent,
+    state?: MailNotificationState,
+  ): Promise<MailNotificationResolution>;
   markMessageReadState(
     accountId: string,
     messageId: string,
@@ -97,7 +125,45 @@ export interface MailProvider extends MailSubscriptionProvider {
     accountId: string,
     messageId: string,
   ): Promise<MailMessageDetail | undefined>;
+  archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId: string,
+  ): Promise<MailMessageDetail | undefined>;
+  markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail | undefined>;
+  setMessageStarState(
+    accountId: string,
+    messageId: string,
+    isStarred: boolean,
+  ): Promise<void>;
+  setMessageFlagState(
+    accountId: string,
+    messageId: string,
+    isFlagged: boolean,
+  ): Promise<void>;
+  setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void>;
   listPeople(accountId: string, query?: string): Promise<MailPersonSuggestion[]>;
+  listDrafts(accountId: string): Promise<MailDraftSummary[]>;
+  getDraft(accountId: string, providerDraftId: string): Promise<MailDraftDetail>;
+  createDraft(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail>;
+  updateDraft(
+    accountId: string,
+    providerDraftId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail>;
+  deleteDraft(accountId: string, providerDraftId: string): Promise<void>;
+  sendDraft(accountId: string, providerDraftId: string): Promise<void>;
   sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void>;
   replyToMessage(accountId: string, input: ProviderReplyToMessageInput): Promise<void>;
   downloadAttachment(

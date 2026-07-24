@@ -10,6 +10,8 @@ import {
 import { z } from 'zod';
 import type { MailAccount, ProviderId } from '@/lib/mail-types';
 import type { AuthService } from '@/main/auth-service';
+import type { MailNotificationService } from '@/main/mail-notification-service';
+import type { MailSubscription } from '@/main/mail-provider';
 import type { MailService } from '@/main/mail-service';
 
 const subscriptionStateFileName = 'mail-subscription.json';
@@ -33,6 +35,7 @@ interface MailSubscriptionState {
 interface MailSubscriptionManagerOptions {
   authService: AuthService;
   mailService: MailService;
+  mailNotificationService?: MailNotificationService;
   relayAdminToken?: string;
   relayPublicUrl?: string;
   reconnectDelayMs?: number;
@@ -128,6 +131,7 @@ class MailAccountSubscription {
   private isStopped = true;
   private shouldDeleteRemoteSubscriptionWhileStopping = false;
   private lifecycleGeneration = 0;
+  private hasSeededNotificationProviderState = false;
 
   constructor(
     private readonly accountId: string,
@@ -183,16 +187,28 @@ class MailAccountSubscription {
 
     state.subscriptionId = subscription.id;
     state.expirationDateTime = subscription.expirationDateTime;
+    const shouldSeedNotificationProviderState =
+      !this.hasSeededNotificationProviderState;
+    if (shouldSeedNotificationProviderState) {
+      await this.seedNotificationProviderState(
+        account.id,
+        subscription.notificationState,
+      );
+    }
     await this.saveState(state);
     if (!this.isLifecycleActive(generation)) {
       return;
     }
 
+    if (shouldSeedNotificationProviderState) {
+      this.hasSeededNotificationProviderState = true;
+    }
     await this.registerWithRelay(state);
     if (!this.isLifecycleActive(generation)) {
       return;
     }
 
+    this.setBackgroundNotificationActive(true);
     this.scheduleRenewal(state);
     this.connectWebSocket(state);
   }
@@ -208,6 +224,8 @@ class MailAccountSubscription {
 
     this.lifecycleGeneration += 1;
     this.isStopped = true;
+    this.hasSeededNotificationProviderState = false;
+    this.setBackgroundNotificationActive(false);
     this.startPromise = undefined;
     if (this.renewalTimer) {
       clearTimeout(this.renewalTimer);
@@ -396,6 +414,33 @@ class MailAccountSubscription {
     if (this.webSocket === socket && !this.isStopped) {
       socket.send(JSON.stringify({ type: 'ack', eventId: result.data.event.id }));
     }
+
+    void this.options.mailNotificationService
+      ?.handleRemoteChange(result.data.event)
+      .catch((error: unknown) => {
+        console.warn('Native mail notification handling failed.', error);
+      });
+  }
+
+  private async seedNotificationProviderState(
+    accountId: string,
+    notificationState: MailSubscription['notificationState'],
+  ) {
+    try {
+      await this.options.mailNotificationService?.mergeProviderState?.(
+        accountId,
+        notificationState,
+      );
+    } catch (error) {
+      console.warn('Could not seed native mail notification state.', error);
+    }
+  }
+
+  private setBackgroundNotificationActive(isActive: boolean) {
+    this.options.mailNotificationService?.setAccountSubscriptionActive?.(
+      this.accountId,
+      isActive,
+    );
   }
 
   private async loadState(): Promise<MailSubscriptionState> {

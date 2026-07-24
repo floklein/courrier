@@ -1,10 +1,15 @@
 import type {
   MailFolder,
+  MailActionCapability,
   MailMessageDetail,
   MailPersonSuggestion,
+  MailDraftDetail,
+  MailDraftSaveInput,
+  MailDraftSummary,
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
+  SearchMessagesInput,
   SendMailInput,
 } from '@/lib/mail-types';
 import {
@@ -39,6 +44,10 @@ export class MailService {
     return this.getProvider(accountId).listFolders(accountId);
   }
 
+  getCapabilities(accountId: string): Promise<MailActionCapability[]> {
+    return this.getProvider(accountId).getCapabilities(accountId);
+  }
+
   listMessages(
     accountId: string,
     folderId: string,
@@ -51,6 +60,13 @@ export class MailService {
       nextPageToken,
       searchQuery,
     );
+  }
+
+  searchMessages(
+    accountId: string,
+    input: SearchMessagesInput,
+  ): Promise<PagedMessages> {
+    return this.getProvider(accountId).searchMessages(accountId, input);
   }
 
   getMessage(
@@ -87,11 +103,110 @@ export class MailService {
     return this.getProvider(accountId).deleteMessage(accountId, messageId);
   }
 
+  archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId: string,
+  ): Promise<MailMessageDetail | undefined> {
+    return this.getProvider(accountId).archiveMessage(
+      accountId,
+      messageId,
+      sourceFolderId,
+    );
+  }
+
+  markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail | undefined> {
+    return this.getProvider(accountId).markMessageJunkState(
+      accountId,
+      messageId,
+      isJunk,
+    );
+  }
+
+  setMessageStarState(
+    accountId: string,
+    messageId: string,
+    isStarred: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageStarState(
+      accountId,
+      messageId,
+      isStarred,
+    );
+  }
+
+  setMessageFlagState(
+    accountId: string,
+    messageId: string,
+    isFlagged: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageFlagState(
+      accountId,
+      messageId,
+      isFlagged,
+    );
+  }
+
+  setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageImportantState(
+      accountId,
+      messageId,
+      isImportant,
+    );
+  }
+
   listPeople(
     accountId: string,
     query?: string,
   ): Promise<MailPersonSuggestion[]> {
     return this.getProvider(accountId).listPeople(accountId, query);
+  }
+
+  listDrafts(accountId: string): Promise<MailDraftSummary[]> {
+    return this.getProvider(accountId).listDrafts(accountId);
+  }
+
+  getDraft(
+    accountId: string,
+    providerDraftId: string,
+  ): Promise<MailDraftDetail> {
+    return this.getProvider(accountId).getDraft(accountId, providerDraftId);
+  }
+
+  async saveDraft(
+    accountId: string,
+    input: MailDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    const providerInput = {
+      ...input,
+      attachments: await this.resolveDraftAttachments(input.attachments),
+    };
+
+    if (input.providerDraftId) {
+      return this.getProvider(accountId).updateDraft(
+        accountId,
+        input.providerDraftId,
+        providerInput,
+      );
+    }
+
+    return this.getProvider(accountId).createDraft(accountId, providerInput);
+  }
+
+  deleteDraft(accountId: string, providerDraftId: string): Promise<void> {
+    return this.getProvider(accountId).deleteDraft(accountId, providerDraftId);
+  }
+
+  sendDraft(accountId: string, providerDraftId: string): Promise<void> {
+    return this.getProvider(accountId).sendDraft(accountId, providerDraftId);
   }
 
   async sendMessage(accountId: string, input: SendMailInput): Promise<void> {
@@ -130,5 +245,31 @@ export class MailService {
     }
 
     return this.localAttachmentStore.resolveMany(attachments);
+  }
+
+  private async resolveDraftAttachments(attachments: MailDraftSaveInput['attachments']) {
+    if (!attachments?.length) {
+      return [];
+    }
+
+    const localAttachments = attachments.filter(
+      (attachment) => !attachment.providerAttachmentId,
+    );
+    const providerAttachments = attachments.filter(
+      (attachment) => attachment.providerAttachmentId,
+    );
+
+    if (!localAttachments.length) {
+      return providerAttachments;
+    }
+
+    if (!this.localAttachmentStore) {
+      throw new Error('Local attachment storage is unavailable.');
+    }
+
+    return [
+      ...providerAttachments,
+      ...(await this.localAttachmentStore.resolveMany(localAttachments)),
+    ];
   }
 }

@@ -2,7 +2,6 @@ import { PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useComposeStore } from '@/hooks/compose-store';
 import type { ComposeWindowDraft } from '@/lib/compose-window';
-import type { SendMailInput } from '@/lib/mail-types';
 import { cn } from '@/lib/utils';
 import { MailComposer } from '@/ui/compose/MailComposer';
 
@@ -12,20 +11,21 @@ export function NewMessageComposerOverlay({
   error,
   onClose,
   onMoveToWindow,
-  onSend,
+  onProviderDraftChanged,
 }: {
   accountId: string;
   isSending: boolean;
   error: Error | null;
   onClose: () => void;
-  onMoveToWindow: (draft: ComposeWindowDraft) => void;
-  onSend: (input: SendMailInput) => void;
+  onMoveToWindow: (draft: ComposeWindowDraft) => Promise<void> | void;
+  onProviderDraftChanged?: () => Promise<void> | void;
 }) {
-  const draftSubject = useComposeStore((state) => state.draft.subject);
+  const draft = useComposeStore((state) => state.draft);
   const isMinimized = useComposeStore((state) => state.isMinimized);
   const setDraft = useComposeStore((state) => state.setDraft);
+  const setFlushHandler = useComposeStore((state) => state.setFlushHandler);
   const setMinimized = useComposeStore((state) => state.setMinimized);
-  const minimizedTitle = draftSubject.trim() || 'New message';
+  const minimizedTitle = draft.subject.trim() || 'New message';
 
   return (
     <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex items-end justify-end max-sm:inset-x-2">
@@ -38,18 +38,19 @@ export function NewMessageComposerOverlay({
         )}
       >
         <MailComposer
+          key={draft.providerDraftId ?? `${draft.accountId}:${draft.kind ?? 'new'}`}
           accountId={accountId}
-          mode="new"
-          initialDraft={useComposeStore.getState().draft}
+          mode={draft.kind ?? 'new'}
+          initialDraft={draft}
           isSending={isSending}
           error={error}
           className="h-[min(640px,calc(100vh-6rem))]"
           onClose={onClose}
           onDraftChange={setDraft}
+          onFlushHandlerChange={setFlushHandler}
           onMinimize={() => setMinimized(true)}
           onMoveToWindow={onMoveToWindow}
-          onReply={() => undefined}
-          onSend={onSend}
+          onProviderDraftChanged={onProviderDraftChanged}
         />
       </div>
       {isMinimized && (

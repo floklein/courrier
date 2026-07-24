@@ -7,7 +7,7 @@ export type FolderIcon =
   | 'archive'
   | 'trash'
   | 'star'
-  | 'clock';
+  | 'important';
 
 export interface MailFolder {
   id: string;
@@ -50,32 +50,97 @@ export interface LocalMailAttachment {
   name: string;
   contentType: string;
   size: number;
+  providerAttachmentId?: string;
 }
 
 export interface SendMailInput {
   toRecipients: MailComposeRecipient[];
+  ccRecipients?: MailComposeRecipient[];
+  bccRecipients?: MailComposeRecipient[];
   subject: string;
   bodyHtml: string;
   attachments?: LocalMailAttachment[];
 }
 
+export type MailResponseKind = 'reply' | 'replyAll' | 'forward';
+
 export interface ReplyToMessageInput {
+  kind?: MailResponseKind;
   messageId: string;
   bodyHtml: string;
+  toRecipients?: MailComposeRecipient[];
+  ccRecipients?: MailComposeRecipient[];
+  bccRecipients?: MailComposeRecipient[];
   attachments?: LocalMailAttachment[];
 }
+
+export type MailDraftKind = 'new' | 'reply' | 'replyAll' | 'forward';
+
+export interface MailDraftSaveInput {
+  providerDraftId?: string;
+  providerDraftMessageId?: string;
+  kind: MailDraftKind;
+  relatedMessageId?: string;
+  toRecipients: MailComposeRecipient[];
+  ccRecipients?: MailComposeRecipient[];
+  bccRecipients?: MailComposeRecipient[];
+  toValue: string;
+  ccValue?: string;
+  bccValue?: string;
+  subject: string;
+  bodyHtml: string;
+  editorValue: {
+    html: string;
+    text: string;
+    isEmpty: boolean;
+  };
+  attachments?: LocalMailAttachment[];
+}
+
+export interface MailDraftSummary {
+  providerDraftId: string;
+  providerDraftMessageId?: string;
+  accountId: string;
+  kind: MailDraftKind;
+  relatedMessageId?: string;
+  toValue: string;
+  ccValue?: string;
+  bccValue?: string;
+  subject: string;
+  editorValue: {
+    html: string;
+    text: string;
+    isEmpty: boolean;
+  };
+  attachments: LocalMailAttachment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MailDraftDetail = MailDraftSummary;
 
 export interface MailMessageSummary {
   id: string;
   folderId: string;
+  folderLabel?: string;
+  folderWellKnownName?: string;
+  matchedFolderIds?: string[];
   sender: MailAddress;
   recipients: string[];
+  ccRecipients?: string[];
+  replyTo?: MailAddress[];
   subject: string;
   preview: string;
   receivedDateTime: string;
   isRead: boolean;
   hasAttachments: boolean;
   importance: 'low' | 'normal' | 'high';
+  isStarred?: boolean;
+  isFlagged?: boolean;
+  isImportant?: boolean;
+  internetMessageId?: string;
+  threadId?: string;
+  conversationId?: string;
 }
 
 export interface MailMessageDetail extends MailMessageSummary {
@@ -87,6 +152,23 @@ export interface MailMessageDetail extends MailMessageSummary {
 export interface PagedMessages {
   messages: MailMessageSummary[];
   nextPageToken?: string;
+}
+
+export type MailActionCapability =
+  | 'archive'
+  | 'junk'
+  | 'star'
+  | 'flag'
+  | 'important';
+
+export type MailSearchScope = 'folder' | 'all';
+
+export interface SearchMessagesInput {
+  query: string;
+  scope: MailSearchScope;
+  folderId?: string;
+  nextPageToken?: string;
+  includeSpamTrash?: boolean;
 }
 
 export type ProviderId = 'microsoft' | 'google';

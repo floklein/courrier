@@ -1,6 +1,8 @@
 import {
   Archive,
+  FolderInput,
   Loader2,
+  Mail,
   MailOpen,
   MousePointer2,
   Search,
@@ -23,16 +25,31 @@ import {
 } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import type { MailFolder, MailMessageSummary } from '@/lib/mail-types';
+import type {
+  MailActionCapability,
+  MailFolder,
+  MailMessageSummary,
+  MailSearchScope,
+} from '@/lib/mail-types';
 import { cn } from '@/lib/utils';
 import { PanelStatus } from '@/ui/app/StatusViews';
 import { EmptyFolder } from '@/ui/mail/EmptyFolder';
-import { MailActionContextContent } from '@/ui/mail/MailActionMenu';
+import {
+  isArchiveFolder,
+  MailActionContextContent,
+} from '@/ui/mail/MailActionMenu';
 import { MessageListItem } from '@/ui/mail/MessageListItem';
 
 const messageRowEstimate = 104;
@@ -43,6 +60,7 @@ export function MessageList({
   folderId,
   folderLabel,
   folders,
+  actionCapabilities,
   messages,
   selectedMessageId,
   isLoading,
@@ -52,17 +70,27 @@ export function MessageList({
   isActionPending,
   onLoadMore,
   onDeleteMessage,
+  onArchiveMessage,
   onDragActiveChange,
+  onMarkMessageJunkState,
   onMarkMessageReadState,
   onMoveMessage,
+  onForwardMessage,
   onReplyToMessage,
+  onReplyAllToMessage,
+  onToggleMessageFlag,
+  onToggleMessageImportant,
+  onToggleMessageStar,
   onSearch,
+  onSearchScopeChange,
   searchQuery,
+  searchScope,
   className,
 }: {
   folderId: string;
   folderLabel: string;
   folders: MailFolder[];
+  actionCapabilities: MailActionCapability[];
   messages: MailMessageSummary[];
   selectedMessageId: string | undefined;
   isLoading: boolean;
@@ -75,19 +103,44 @@ export function MessageList({
     message: MailMessageSummary,
     removedMessageIds?: Set<string>,
   ) => void;
+  onArchiveMessage: (
+    message: MailMessageSummary,
+    removedMessageIds?: Set<string>,
+  ) => void;
   onDragActiveChange: (isActive: boolean) => void;
+  onMarkMessageJunkState: (
+    message: MailMessageSummary,
+    isJunk: boolean,
+  ) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
     isRead: boolean,
+    selectedMessageIds?: Set<string>,
   ) => void;
   onMoveMessage: (
     message: MailMessageSummary,
     destinationFolderId: string,
     removedMessageIds?: Set<string>,
   ) => void;
+  onForwardMessage: (message: MailMessageSummary) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onReplyAllToMessage: (message: MailMessageSummary) => void;
+  onToggleMessageFlag: (
+    message: MailMessageSummary,
+    isFlagged: boolean,
+  ) => void;
+  onToggleMessageImportant: (
+    message: MailMessageSummary,
+    isImportant: boolean,
+  ) => void;
+  onToggleMessageStar: (
+    message: MailMessageSummary,
+    isStarred: boolean,
+  ) => void;
   onSearch: (query: string) => void;
+  onSearchScopeChange: (scope: MailSearchScope) => void;
   searchQuery: string;
+  searchScope: MailSearchScope;
   className?: string;
 }) {
   const [isSearching, setIsSearching] = useState(Boolean(searchQuery));
@@ -98,9 +151,13 @@ export function MessageList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string>();
   const [activeId, setActiveId] = useState<string>();
+  const [focusRequestVersion, setFocusRequestVersion] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const scrollParentRef = useRef<HTMLDivElement>(null);
+  const pendingFocusIdRef = useRef<string | undefined>(undefined);
   const loadMoreRequestLengthRef = useRef<number | null>(null);
+  const previousFolderIdRef = useRef(folderId);
   const rowVirtualizer = useVirtualizer({
     count: hasNextPage ? messages.length + 1 : messages.length,
     getScrollElement: () => scrollParentRef.current,
@@ -118,8 +175,19 @@ export function MessageList({
     () => new Set(messages.map((message) => message.id)),
     [messages],
   );
-  const archiveFolder = folders.find((folder) => folder.wellKnownName === 'archive');
+  const archivableSelectedMessages = selectedMessages.filter(
+    (message) => !isArchiveFolder(folders, message.folderId || folderId),
+  );
+  const canArchiveSelection =
+    actionCapabilities.includes('archive') &&
+    archivableSelectedMessages.length > 0;
+  const bulkMoveFolders = folders.filter((folder) =>
+    selectedMessages.some(
+      (message) => (message.folderId || folderId) !== folder.id,
+    ),
+  );
   const hasBulkSelection = selectedMessages.length > 0;
+  const shouldMarkSelectedRead = selectedMessages.some((message) => !message.isRead);
 
   useEffect(() => {
     setDraftSearch(searchQuery);
@@ -130,14 +198,32 @@ export function MessageList({
   }, [searchQuery]);
 
   useEffect(() => {
+    setSelectedIds(new Set());
+    setAnchorId(selectedMessageId);
+    setActiveId(selectedMessageId);
+  }, [selectedMessageId]);
+
+  useEffect(() => {
+    const didChangeFolder = previousFolderIdRef.current !== folderId;
+    previousFolderIdRef.current = folderId;
+
+    if (!didChangeFolder) {
+      return;
+    }
+
+    clearSelection();
+
+    if (searchScope === 'all') {
+      return;
+    }
+
     setDraftSearch('');
     setIsSearching(false);
-    clearSelection();
-  }, [folderId]);
+  }, [folderId, searchScope]);
 
   useEffect(() => {
     clearSelection();
-  }, [searchQuery]);
+  }, [searchQuery, searchScope]);
 
   useEffect(() => {
     if (!isSearching) {
@@ -163,7 +249,7 @@ export function MessageList({
 
   useEffect(() => {
     loadMoreRequestLengthRef.current = null;
-  }, [folderId, messages.length, searchQuery]);
+  }, [folderId, messages.length, searchQuery, searchScope]);
 
   useEffect(() => {
     if (
@@ -198,6 +284,33 @@ export function MessageList({
   }, [messageIds]);
 
   useEffect(() => {
+    const pendingFocusId = pendingFocusIdRef.current;
+
+    if (!pendingFocusId || pendingFocusId !== activeId) {
+      return;
+    }
+
+    const messageElement = [...(
+      scrollParentRef.current?.querySelectorAll<HTMLElement>(
+        '[data-mail-message-id]',
+      ) ?? []
+    )].find((element) => element.dataset.mailMessageId === pendingFocusId);
+    const messageLink =
+      messageElement?.querySelector<HTMLAnchorElement>('[data-message-link]');
+
+    if (messageLink) {
+      messageLink.focus();
+      pendingFocusIdRef.current = undefined;
+      return;
+    }
+
+    if (!messageIds.has(pendingFocusId)) {
+      scrollParentRef.current?.focus();
+      pendingFocusIdRef.current = undefined;
+    }
+  }, [activeId, focusRequestVersion, messageIds, virtualRows]);
+
+  useEffect(() => {
     const lastVirtualRow = virtualRows.at(-1);
 
     if (!lastVirtualRow) {
@@ -225,12 +338,24 @@ export function MessageList({
     setDraftSearch('');
     setIsSearching(false);
     onSearch('');
+    onSearchScopeChange('folder');
   }
 
   function clearSelection(nextActiveId?: string) {
     setSelectedIds(new Set());
     setAnchorId(nextActiveId);
     setActiveId(nextActiveId);
+  }
+
+  function restoreMessageFocus(messageId: string | undefined) {
+    if (!messageId) {
+      sectionRef.current?.focus();
+      return;
+    }
+
+    pendingFocusIdRef.current = messageId;
+    setFocusRequestVersion((current) => current + 1);
+    setActiveId(messageId);
   }
 
   function selectRange(fromId: string, toId: string, mode: 'replace' | 'add') {
@@ -287,35 +412,98 @@ export function MessageList({
     clearSelection(message.id);
   }
 
+  function handleMessageFocus(message: MailMessageSummary) {
+    setActiveId(message.id);
+  }
+
+  function toggleMessageSelection(message: MailMessageSummary) {
+    setActiveId(message.id);
+    setAnchorId(message.id);
+    setSelectedIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(message.id)) {
+        next.delete(message.id);
+      } else {
+        next.add(message.id);
+      }
+
+      return next;
+    });
+  }
+
+  function handleSelectionControlClick(
+    event: MouseEvent<HTMLElement>,
+    message: MailMessageSummary,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveId(message.id);
+
+    if ((event.altKey || event.shiftKey) && anchorId) {
+      selectRange(
+        anchorId,
+        message.id,
+        isPrimaryModifier(event) ? 'add' : 'replace',
+      );
+      return;
+    }
+
+    toggleMessageSelection(message);
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (shouldIgnoreShortcut(event.target)) {
       return;
     }
 
-    const currentIndex = activeId
-      ? messages.findIndex((message) => message.id === activeId)
+    const focusedMessageId =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>('[data-mail-message-id]')?.dataset
+            .mailMessageId
+        : undefined;
+    const currentActiveId = focusedMessageId ?? activeId;
+    const currentIndex = currentActiveId
+      ? messages.findIndex((message) => message.id === currentActiveId)
       : -1;
 
     if (isPrimaryModifier(event) && event.key.toLowerCase() === 'a') {
       event.preventDefault();
+      const nextActiveId = currentActiveId ?? messages[0]?.id;
       setSelectedIds(new Set(messages.map((message) => message.id)));
-      setAnchorId(messages[0]?.id);
-      setActiveId(messages[0]?.id);
+      setAnchorId(nextActiveId);
+      setActiveId(nextActiveId);
       return;
     }
 
     if (event.key === 'Escape') {
-      clearSelection();
+      clearSelection(currentActiveId);
       return;
     }
 
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    const isVerticalNavigation =
+      event.key === 'ArrowDown' || event.key === 'ArrowUp';
+    const isBoundaryNavigation = event.key === 'Home' || event.key === 'End';
+
+    if (
+      (isVerticalNavigation || isBoundaryNavigation) &&
+      !isPrimaryModifier(event) &&
+      !event.altKey
+    ) {
       event.preventDefault();
-      const delta = event.key === 'ArrowDown' ? 1 : -1;
-      const nextIndex = Math.max(
-        0,
-        Math.min(messages.length - 1, currentIndex === -1 ? 0 : currentIndex + delta),
-      );
+      const nextIndex = isBoundaryNavigation
+        ? event.key === 'Home'
+          ? 0
+          : messages.length - 1
+        : Math.max(
+            0,
+            Math.min(
+              messages.length - 1,
+              currentIndex === -1
+                ? 0
+                : currentIndex + (event.key === 'ArrowDown' ? 1 : -1),
+            ),
+          );
       const nextMessage = messages[nextIndex];
 
       if (!nextMessage) {
@@ -323,12 +511,33 @@ export function MessageList({
       }
 
       setActiveId(nextMessage.id);
+      pendingFocusIdRef.current = nextMessage.id;
       rowVirtualizer.scrollToIndex(nextIndex, { align: 'auto' });
 
       if (event.shiftKey) {
-        const nextAnchorId = anchorId ?? activeId ?? nextMessage.id;
+        const nextAnchorId = hasBulkSelection
+          ? anchorId ?? currentActiveId ?? nextMessage.id
+          : currentActiveId ?? nextMessage.id;
         setAnchorId(nextAnchorId);
         selectRange(nextAnchorId, nextMessage.id, 'replace');
+      }
+      return;
+    }
+
+    if (
+      isPrimaryModifier(event) &&
+      event.key === ' ' &&
+      currentActiveId &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+      const activeMessage = messages.find(
+        (message) => message.id === currentActiveId,
+      );
+
+      if (activeMessage) {
+        toggleMessageSelection(activeMessage);
       }
       return;
     }
@@ -337,7 +546,12 @@ export function MessageList({
       return;
     }
 
-    if (event.key === 'Delete' || event.key === 'Backspace') {
+    if (
+      (event.key === 'Delete' || event.key === 'Backspace') &&
+      !isPrimaryModifier(event) &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
       event.preventDefault();
       if (isActionPending) {
         return;
@@ -346,12 +560,18 @@ export function MessageList({
       return;
     }
 
-    if (event.key.toLowerCase() === 'e' && archiveFolder) {
+    if (
+      event.key.toLowerCase() === 'e' &&
+      canArchiveSelection &&
+      !isPrimaryModifier(event) &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
       event.preventDefault();
       if (isActionPending) {
         return;
       }
-      moveSelectedMessages(archiveFolder.id);
+      archiveSelectedMessages();
       return;
     }
   }
@@ -362,12 +582,14 @@ export function MessageList({
     }
 
     const removedMessageIds = new Set(selectedMessages.map((message) => message.id));
+    const nextFocusId = findNextFocusIdAfterRemoval(removedMessageIds);
 
     for (const message of selectedMessages) {
       onDeleteMessage(message, removedMessageIds);
     }
 
-    clearSelection();
+    clearSelection(nextFocusId);
+    restoreMessageFocus(nextFocusId);
   }
 
   function markSelectedMessagesReadState(isRead: boolean) {
@@ -375,11 +597,16 @@ export function MessageList({
       return;
     }
 
+    const selectedMessageIds = new Set(
+      selectedMessages.map((message) => message.id),
+    );
+
     for (const message of selectedMessages) {
-      onMarkMessageReadState(message, isRead);
+      onMarkMessageReadState(message, isRead, selectedMessageIds);
     }
 
-    clearSelection();
+    clearSelection(activeId);
+    restoreMessageFocus(activeId);
   }
 
   function moveSelectedMessages(destinationFolderId: string) {
@@ -387,13 +614,54 @@ export function MessageList({
       return;
     }
 
-    const removedMessageIds = new Set(selectedMessages.map((message) => message.id));
+    const messagesToMove = selectedMessages.filter(
+      (message) => (message.folderId || folderId) !== destinationFolderId,
+    );
+    const removedMessageIds = new Set(messagesToMove.map((message) => message.id));
+    const nextFocusId = findNextFocusIdAfterRemoval(removedMessageIds);
 
-    for (const message of selectedMessages) {
+    for (const message of messagesToMove) {
       onMoveMessage(message, destinationFolderId, removedMessageIds);
     }
 
-    clearSelection();
+    clearSelection(nextFocusId);
+    restoreMessageFocus(nextFocusId);
+  }
+
+  function archiveSelectedMessages() {
+    if (isActionPending || !canArchiveSelection) {
+      return;
+    }
+
+    const removedMessageIds = new Set(
+      archivableSelectedMessages.map((message) => message.id),
+    );
+    const nextFocusId = findNextFocusIdAfterRemoval(removedMessageIds);
+
+    for (const message of archivableSelectedMessages) {
+      onArchiveMessage(message, removedMessageIds);
+    }
+
+    clearSelection(nextFocusId);
+    restoreMessageFocus(nextFocusId);
+  }
+
+  function findNextFocusIdAfterRemoval(removedMessageIds: Set<string>) {
+    if (activeId && !removedMessageIds.has(activeId)) {
+      return activeId;
+    }
+
+    const activeIndex = activeId
+      ? messages.findIndex((message) => message.id === activeId)
+      : -1;
+    const messagesAfterActive =
+      activeIndex >= 0 ? messages.slice(activeIndex + 1) : messages;
+    const messagesBeforeActive =
+      activeIndex > 0 ? messages.slice(0, activeIndex).reverse() : [];
+
+    return [...messagesAfterActive, ...messagesBeforeActive].find(
+      (message) => !removedMessageIds.has(message.id),
+    )?.id;
   }
 
   function handleContextMenu(event: MouseEvent<HTMLDivElement>) {
@@ -415,45 +683,77 @@ export function MessageList({
       return;
     }
 
+    clearSelection(message.id);
     setContextMessage(message);
   }
 
   return (
     <section
+      ref={sectionRef}
+      tabIndex={-1}
+      aria-label={`${folderLabel} message list`}
       className={cn(
         'flex min-h-0 min-w-0 flex-col overflow-hidden border-r bg-card max-md:border-r-0',
         className,
       )}
     >
-      <header className="app-window-header app-window-controls-end-mobile flex h-16 shrink-0 items-center justify-between gap-3 border-b px-5">
+      <header
+        className={cn(
+          'app-window-header app-window-controls-end-mobile flex shrink-0 items-center justify-between gap-3 border-b px-5',
+          isSearching ? 'min-h-24 py-2' : 'h-16',
+        )}
+      >
         {isSearching ? (
-          <div
-            className="flex min-w-0 flex-1 items-center gap-2"
-          >
-            <Input
-              ref={searchInputRef}
-              value={draftSearch}
-              onChange={(event) => setDraftSearch(event.target.value)}
-              placeholder={`Search ${folderLabel}`}
-              aria-label={`Search ${folderLabel}`}
-              className="h-8"
-            />
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Clear search"
-                    onClick={clearSearch}
-                  >
-                    <X data-icon="inline-start" />
-                  </Button>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <Input
+                ref={searchInputRef}
+                value={draftSearch}
+                onChange={(event) => setDraftSearch(event.target.value)}
+                placeholder={
+                  searchScope === 'all'
+                    ? 'Search all mail'
+                    : `Search ${folderLabel}`
                 }
+                aria-label={
+                  searchScope === 'all'
+                    ? 'Search all mail'
+                    : `Search ${folderLabel}`
+                }
+                className="h-8"
               />
-              <TooltipContent>Clear search</TooltipContent>
-            </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Clear search"
+                      onClick={clearSearch}
+                    >
+                      <X data-icon="inline-start" />
+                    </Button>
+                  }
+                />
+                <TooltipContent>Clear search</TooltipContent>
+              </Tooltip>
+            </div>
+            <Tabs
+              value={searchScope}
+              onValueChange={(value) =>
+                onSearchScopeChange(value as MailSearchScope)
+              }
+            >
+              <TabsList className="h-7 w-full">
+                <TabsTrigger value="all" className="h-6 text-xs">
+                  All mail
+                </TabsTrigger>
+                <TabsTrigger value="folder" className="h-6 text-xs">
+                  This folder
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         ) : (
           <>
@@ -489,8 +789,19 @@ export function MessageList({
           </>
         )}
       </header>
+      <span className="sr-only" aria-atomic="true" aria-live="polite">
+        {hasBulkSelection
+          ? `${selectedMessages.length} ${
+              selectedMessages.length === 1 ? 'message' : 'messages'
+            } selected`
+          : 'Selection cleared'}
+      </span>
       {hasBulkSelection && (
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-muted/30 px-3 text-sm">
+        <div
+          role="group"
+          aria-label="Selected message actions"
+          className="flex h-12 shrink-0 items-center gap-2 border-b bg-muted/30 px-3 text-sm"
+        >
           <span className="flex min-w-0 flex-1 items-center gap-2 font-medium">
             <MousePointer2 className="size-4 text-muted-foreground" />
             {selectedMessages.length} selected
@@ -503,16 +814,28 @@ export function MessageList({
                   variant="ghost"
                   size="icon-sm"
                   disabled={isActionPending}
-                  aria-label="Mark selected as read"
-                  onClick={() => markSelectedMessagesReadState(true)}
+                  aria-label={
+                    shouldMarkSelectedRead
+                      ? 'Mark selected as read'
+                      : 'Mark selected as unread'
+                  }
+                  onClick={() =>
+                    markSelectedMessagesReadState(shouldMarkSelectedRead)
+                  }
                 >
-                  <MailOpen data-icon="inline-start" />
+                  {shouldMarkSelectedRead ? (
+                    <MailOpen data-icon="inline-start" />
+                  ) : (
+                    <Mail data-icon="inline-start" />
+                  )}
                 </Button>
               }
             />
-            <TooltipContent>Mark as read</TooltipContent>
+            <TooltipContent>
+              {shouldMarkSelectedRead ? 'Mark as read' : 'Mark as unread'}
+            </TooltipContent>
           </Tooltip>
-          {archiveFolder && (
+          {canArchiveSelection && (
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -522,7 +845,7 @@ export function MessageList({
                     size="icon-sm"
                     disabled={isActionPending}
                     aria-label="Archive selected"
-                    onClick={() => moveSelectedMessages(archiveFolder.id)}
+                    onClick={archiveSelectedMessages}
                   >
                     <Archive data-icon="inline-start" />
                   </Button>
@@ -531,6 +854,57 @@ export function MessageList({
               <TooltipContent>Archive</TooltipContent>
             </Tooltip>
           )}
+          {bulkMoveFolders.length > 0 && (
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={isActionPending}
+                          aria-label="Move selected"
+                        >
+                          <FolderInput data-icon="inline-start" />
+                        </Button>
+                      }
+                    />
+                  }
+                />
+                <TooltipContent>Move selected</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="max-h-72 w-56 overflow-y-auto">
+                {bulkMoveFolders.map((folder) => (
+                  <DropdownMenuItem
+                    key={folder.id}
+                    onClick={() => moveSelectedMessages(folder.id)}
+                  >
+                    <span className="truncate">{folder.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon-sm"
+                    disabled={isActionPending}
+                    aria-label="Move selected to trash"
+                    onClick={deleteSelectedMessages}
+                >
+                  <Trash2 data-icon="inline-start" />
+                </Button>
+              }
+            />
+            <TooltipContent>Move to trash</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger
               render={
@@ -538,24 +912,18 @@ export function MessageList({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  disabled={isActionPending}
-                  aria-label="Delete selected"
-                  onClick={deleteSelectedMessages}
+                  aria-label="Clear selection"
+                  onClick={() => {
+                    clearSelection(activeId);
+                    restoreMessageFocus(activeId);
+                  }}
                 >
-                  <Trash2 data-icon="inline-start" />
+                  <X data-icon="inline-start" />
                 </Button>
               }
             />
-            <TooltipContent>Delete</TooltipContent>
+            <TooltipContent>Clear selection</TooltipContent>
           </Tooltip>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => clearSelection()}
-          >
-            Clear
-          </Button>
         </div>
       )}
       {isLoading && <PanelStatus label="Loading messages..." />}
@@ -567,6 +935,8 @@ export function MessageList({
               <div
                 ref={scrollParentRef}
                 tabIndex={0}
+                role="region"
+                aria-label="Messages"
                 className="min-h-0 min-w-0 flex-1 overflow-auto"
                 onContextMenu={handleContextMenu}
                 onKeyDown={handleKeyDown}
@@ -591,6 +961,7 @@ export function MessageList({
                           <MessageListItem
                             folderId={folderId}
                             isSelected={message.id === selectedMessageId}
+                            isKeyboardActive={message.id === activeId}
                             isBulkSelected={selectedIds.has(message.id)}
                             isActionPending={isActionPending}
                             dragMessages={
@@ -601,6 +972,8 @@ export function MessageList({
                             message={message}
                             onDragActiveChange={onDragActiveChange}
                             onMessageClick={handleMessageClick}
+                            onMessageFocus={handleMessageFocus}
+                            onSelectionToggle={handleSelectionControlClick}
                           />
                         ) : (
                           <div className="flex h-12 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -625,14 +998,22 @@ export function MessageList({
           />
           {contextMessage && (
             <MailActionContextContent
-              currentFolderId={folderId}
+              currentFolderId={contextMessage.folderId || folderId}
+              actionCapabilities={actionCapabilities}
               folders={folders}
               isBusy={isActionPending}
               message={contextMessage}
+              onArchive={onArchiveMessage}
               onDelete={onDeleteMessage}
+              onMarkJunk={onMarkMessageJunkState}
               onMarkReadState={onMarkMessageReadState}
               onMove={onMoveMessage}
+              onForward={onForwardMessage}
               onReply={onReplyToMessage}
+              onReplyAll={onReplyAllToMessage}
+              onToggleFlag={onToggleMessageFlag}
+              onToggleImportant={onToggleMessageImportant}
+              onToggleStar={onToggleMessageStar}
             />
           )}
         </ContextMenu>

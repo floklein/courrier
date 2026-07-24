@@ -30,3 +30,16 @@ export function isMailMessageDragData(
     )
   );
 }
+
+export function getMovableMailMessages(
+  data: Pick<
+    MailMessageDragData,
+    'message' | 'messages' | 'sourceFolderId'
+  >,
+  destinationFolderId: string,
+) {
+  return (data.messages ?? [data.message]).filter(
+    (message) =>
+      (message.folderId || data.sourceFolderId) !== destinationFolderId,
+  );
+}

@@ -1,8 +1,14 @@
 import {
+  Archive,
+  BadgeAlert,
+  Flag,
   FolderInput,
   Mail,
   MailOpen,
+  Forward,
   Reply,
+  ReplyAll,
+  Star,
   Trash2,
 } from 'lucide-react';
 import {
@@ -21,17 +27,32 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { MailFolder, MailMessageSummary } from '@/lib/mail-types';
+import { folderIcons } from '@/lib/mail/mail-icons';
+import type {
+  MailActionCapability,
+  MailFolder,
+  MailMessageSummary,
+} from '@/lib/mail-types';
+
+const JunkIcon = folderIcons['mail-x'];
 
 interface MailActionMenuProps {
   currentFolderId: string;
+  actionCapabilities: MailActionCapability[];
   folders: MailFolder[];
   isBusy?: boolean;
   message: MailMessageSummary;
+  onArchive: (message: MailMessageSummary) => void;
   onDelete: (message: MailMessageSummary) => void;
+  onMarkJunk: (message: MailMessageSummary, isJunk: boolean) => void;
   onMarkReadState: (message: MailMessageSummary, isRead: boolean) => void;
   onMove: (message: MailMessageSummary, destinationFolderId: string) => void;
   onReply: (message: MailMessageSummary) => void;
+  onReplyAll: (message: MailMessageSummary) => void;
+  onForward: (message: MailMessageSummary) => void;
+  onToggleFlag: (message: MailMessageSummary, isFlagged: boolean) => void;
+  onToggleImportant: (message: MailMessageSummary, isImportant: boolean) => void;
+  onToggleStar: (message: MailMessageSummary, isStarred: boolean) => void;
 }
 
 export function MailActionDropdownContent(props: MailActionMenuProps) {
@@ -48,13 +69,39 @@ export function MailActionDropdownContent(props: MailActionMenuProps) {
       </DropdownMenuItem>
       <DropdownMenuItem
         disabled={props.isBusy}
+        onClick={() => props.onReplyAll(props.message)}
+      >
+        <ReplyAll />
+        Reply all
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onForward(props.message)}
+      >
+        <Forward />
+        Forward
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        disabled={props.isBusy}
         onClick={() => props.onMarkReadState(props.message, !props.message.isRead)}
       >
         <MarkIcon />
         {markLabel}
       </DropdownMenuItem>
-      <DropdownMoveSubmenu {...props} />
+      <TriageDropdownItems {...props} />
       <DropdownMenuSeparator />
+      {can(props, 'archive') &&
+        !isArchiveFolder(props.folders, props.currentFolderId) && (
+          <DropdownMenuItem
+            disabled={props.isBusy}
+            onClick={() => props.onArchive(props.message)}
+          >
+            <Archive />
+            Archive
+          </DropdownMenuItem>
+        )}
+      <DropdownMoveSubmenu {...props} />
       <DropdownMenuItem
         disabled={props.isBusy}
         variant="destructive"
@@ -81,13 +128,39 @@ export function MailActionContextContent(props: MailActionMenuProps) {
       </ContextMenuItem>
       <ContextMenuItem
         disabled={props.isBusy}
+        onClick={() => props.onReplyAll(props.message)}
+      >
+        <ReplyAll />
+        Reply all
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={props.isBusy}
+        onClick={() => props.onForward(props.message)}
+      >
+        <Forward />
+        Forward
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem
+        disabled={props.isBusy}
         onClick={() => props.onMarkReadState(props.message, !props.message.isRead)}
       >
         <MarkIcon />
         {markLabel}
       </ContextMenuItem>
-      <ContextMoveSubmenu {...props} />
+      <TriageContextItems {...props} />
       <ContextMenuSeparator />
+      {can(props, 'archive') &&
+        !isArchiveFolder(props.folders, props.currentFolderId) && (
+          <ContextMenuItem
+            disabled={props.isBusy}
+            onClick={() => props.onArchive(props.message)}
+          >
+            <Archive />
+            Archive
+          </ContextMenuItem>
+        )}
+      <ContextMoveSubmenu {...props} />
       <ContextMenuItem
         disabled={props.isBusy}
         variant="destructive"
@@ -152,8 +225,145 @@ function ContextMoveSubmenu(props: MailActionMenuProps) {
   );
 }
 
+function TriageDropdownItems(props: MailActionMenuProps) {
+  const junkState = getJunkActionState(props.folders, props.currentFolderId);
+
+  return (
+    <>
+      {can(props, 'star') && (
+        <DropdownMenuItem
+          disabled={props.isBusy}
+          onClick={() =>
+            props.onToggleStar(props.message, !props.message.isStarred)
+          }
+        >
+          <Star />
+          {props.message.isStarred ? 'Unstar' : 'Star'}
+        </DropdownMenuItem>
+      )}
+      {can(props, 'flag') && (
+        <DropdownMenuItem
+          disabled={props.isBusy}
+          onClick={() =>
+            props.onToggleFlag(props.message, !props.message.isFlagged)
+          }
+        >
+          <Flag />
+          {props.message.isFlagged ? 'Clear flag' : 'Flag'}
+        </DropdownMenuItem>
+      )}
+      {can(props, 'important') && (
+        <DropdownMenuItem
+          disabled={props.isBusy}
+          onClick={() =>
+            props.onToggleImportant(props.message, !props.message.isImportant)
+          }
+        >
+          <BadgeAlert />
+          {props.message.isImportant ? 'Mark normal' : 'Mark important'}
+        </DropdownMenuItem>
+      )}
+      {can(props, 'junk') && (
+        <DropdownMenuItem
+          disabled={props.isBusy}
+          onClick={() => props.onMarkJunk(props.message, junkState.isJunk)}
+        >
+          <JunkIcon />
+          {junkState.label}
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+}
+
+function TriageContextItems(props: MailActionMenuProps) {
+  const junkState = getJunkActionState(props.folders, props.currentFolderId);
+
+  return (
+    <>
+      {can(props, 'star') && (
+        <ContextMenuItem
+          disabled={props.isBusy}
+          onClick={() =>
+            props.onToggleStar(props.message, !props.message.isStarred)
+          }
+        >
+          <Star />
+          {props.message.isStarred ? 'Unstar' : 'Star'}
+        </ContextMenuItem>
+      )}
+      {can(props, 'flag') && (
+        <ContextMenuItem
+          disabled={props.isBusy}
+          onClick={() =>
+            props.onToggleFlag(props.message, !props.message.isFlagged)
+          }
+        >
+          <Flag />
+          {props.message.isFlagged ? 'Clear flag' : 'Flag'}
+        </ContextMenuItem>
+      )}
+      {can(props, 'important') && (
+        <ContextMenuItem
+          disabled={props.isBusy}
+          onClick={() =>
+            props.onToggleImportant(props.message, !props.message.isImportant)
+          }
+        >
+          <BadgeAlert />
+          {props.message.isImportant ? 'Mark normal' : 'Mark important'}
+        </ContextMenuItem>
+      )}
+      {can(props, 'junk') && (
+        <ContextMenuItem
+          disabled={props.isBusy}
+          onClick={() => props.onMarkJunk(props.message, junkState.isJunk)}
+        >
+          <JunkIcon />
+          {junkState.label}
+        </ContextMenuItem>
+      )}
+    </>
+  );
+}
+
 function getDestinationFolders(folders: MailFolder[], currentFolderId: string) {
   return folders.filter((folder) => folder.id !== currentFolderId);
+}
+
+function can(props: MailActionMenuProps, capability: MailActionCapability) {
+  return props.actionCapabilities.includes(capability);
+}
+
+export function getJunkActionState(
+  folders: MailFolder[],
+  currentFolderId: string,
+) {
+  const isJunk = isJunkFolder(folders, currentFolderId);
+
+  return {
+    isJunk: !isJunk,
+    label: isJunk ? 'Not junk' : 'Mark as junk',
+  };
+}
+
+export function isArchiveFolder(
+  folders: MailFolder[],
+  currentFolderId: string,
+) {
+  const folder = folders.find((candidate) => candidate.id === currentFolderId);
+
+  return folder?.wellKnownName === 'archive' || currentFolderId === 'archive';
+}
+
+function isJunkFolder(folders: MailFolder[], currentFolderId: string) {
+  const folder = folders.find((candidate) => candidate.id === currentFolderId);
+
+  return (
+    folder?.wellKnownName === 'junkemail' ||
+    currentFolderId === 'junkemail' ||
+    currentFolderId === 'SPAM'
+  );
 }
 
 function getMailActionState(message: MailMessageSummary) {
