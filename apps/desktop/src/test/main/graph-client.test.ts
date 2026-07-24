@@ -596,6 +596,12 @@ describe('GraphClient write requests', () => {
         isRead: false,
       },
     ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        url.includes('/me/mailFolders?$top=100'),
+      ),
+    ).toBe(false);
   });
 
   it('does not notify for Graph changes outside inbox or already read messages', async () => {
@@ -642,6 +648,41 @@ describe('GraphClient write requests', () => {
         changeType: 'created',
         messageId: 'message-1',
         receivedAt: '2026-05-16T10:00:00.000Z',
+      }),
+    ).resolves.toEqual({ messages: [] });
+  });
+
+  it('does not notify for a read message in the Graph inbox', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/me/messages/message-1?')) {
+        return jsonResponse({
+          id: 'message-1',
+          parentFolderId: 'inbox-folder',
+          subject: 'Already read',
+          isRead: true,
+        });
+      }
+
+      if (url.includes('/me/mailFolders/inbox?')) {
+        return jsonResponse({ id: 'inbox-folder' });
+      }
+
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createGraphClient();
+
+    await expect(
+      client.getNotificationMessages(account.id, {
+        id: 'event-2',
+        clientId: 'client-1',
+        accountId: account.id,
+        providerId: 'microsoft',
+        subscriptionId: 'subscription-1',
+        kind: 'message-change',
+        changeType: 'created',
+        messageId: 'message-1',
+        receivedAt: '2026-05-16T10:01:00.000Z',
       }),
     ).resolves.toEqual({ messages: [] });
   });

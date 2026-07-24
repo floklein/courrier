@@ -117,18 +117,32 @@ export function UserMenu({
     ? signInMutation.variables
     : undefined;
   const notificationSettings = notificationSettingsQuery.data ?? {
+    supported: false,
     enabled: false,
     includePreview: true,
     silent: false,
   };
   const isNotificationSettingsPending =
     notificationSettingsQuery.isLoading || notificationSettingsMutation.isPending;
+  const isNotificationControlDisabled =
+    isNotificationSettingsPending || !notificationSettings.supported;
   const updateNotificationSettings = (
-    settings: Partial<typeof notificationSettings>,
+    settings: Partial<
+      Pick<
+        typeof notificationSettings,
+        'enabled' | 'includePreview' | 'silent'
+      >
+    >,
   ) => {
-    notificationSettingsMutation.mutate({
+    const updatedSettings = {
       ...notificationSettings,
       ...settings,
+    };
+
+    notificationSettingsMutation.mutate({
+      enabled: updatedSettings.enabled,
+      includePreview: updatedSettings.includePreview,
+      silent: updatedSettings.silent,
     });
   };
 
@@ -292,9 +306,15 @@ export function UserMenu({
                 Notifications
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-56 p-1">
+                {!notificationSettings.supported &&
+                  !notificationSettingsQuery.isLoading && (
+                    <DropdownMenuLabel className="px-2 py-2 text-xs font-normal text-muted-foreground">
+                      Native notifications are unavailable on this system.
+                    </DropdownMenuLabel>
+                  )}
                 <DropdownMenuCheckboxItem
                   checked={notificationSettings.enabled}
-                  disabled={isNotificationSettingsPending}
+                  disabled={isNotificationControlDisabled}
                   onCheckedChange={(enabled) =>
                     updateNotificationSettings({ enabled: Boolean(enabled) })
                   }
@@ -304,7 +324,7 @@ export function UserMenu({
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
                   checked={notificationSettings.includePreview}
-                  disabled={isNotificationSettingsPending}
+                  disabled={isNotificationControlDisabled}
                   onCheckedChange={(includePreview) =>
                     updateNotificationSettings({
                       includePreview: Boolean(includePreview),
@@ -316,7 +336,7 @@ export function UserMenu({
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
                   checked={notificationSettings.silent}
-                  disabled={isNotificationSettingsPending}
+                  disabled={isNotificationControlDisabled}
                   onCheckedChange={(silent) =>
                     updateNotificationSettings({ silent: Boolean(silent) })
                   }

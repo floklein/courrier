@@ -131,6 +131,7 @@ class MailAccountSubscription {
   private isStopped = true;
   private shouldDeleteRemoteSubscriptionWhileStopping = false;
   private lifecycleGeneration = 0;
+  private hasSeededNotificationProviderState = false;
 
   constructor(
     private readonly accountId: string,
@@ -186,17 +187,28 @@ class MailAccountSubscription {
 
     state.subscriptionId = subscription.id;
     state.expirationDateTime = subscription.expirationDateTime;
-    await this.seedNotificationProviderState(account.id, subscription.notificationState);
+    const shouldSeedNotificationProviderState =
+      !this.hasSeededNotificationProviderState;
+    if (shouldSeedNotificationProviderState) {
+      await this.seedNotificationProviderState(
+        account.id,
+        subscription.notificationState,
+      );
+    }
     await this.saveState(state);
     if (!this.isLifecycleActive(generation)) {
       return;
     }
 
+    if (shouldSeedNotificationProviderState) {
+      this.hasSeededNotificationProviderState = true;
+    }
     await this.registerWithRelay(state);
     if (!this.isLifecycleActive(generation)) {
       return;
     }
 
+    this.setBackgroundNotificationActive(true);
     this.scheduleRenewal(state);
     this.connectWebSocket(state);
   }
@@ -212,6 +224,8 @@ class MailAccountSubscription {
 
     this.lifecycleGeneration += 1;
     this.isStopped = true;
+    this.hasSeededNotificationProviderState = false;
+    this.setBackgroundNotificationActive(false);
     this.startPromise = undefined;
     if (this.renewalTimer) {
       clearTimeout(this.renewalTimer);
@@ -413,13 +427,20 @@ class MailAccountSubscription {
     notificationState: MailSubscription['notificationState'],
   ) {
     try {
-      await this.options.mailNotificationService?.mergeProviderState(
+      await this.options.mailNotificationService?.mergeProviderState?.(
         accountId,
         notificationState,
       );
     } catch (error) {
       console.warn('Could not seed native mail notification state.', error);
     }
+  }
+
+  private setBackgroundNotificationActive(isActive: boolean) {
+    this.options.mailNotificationService?.setAccountSubscriptionActive?.(
+      this.accountId,
+      isActive,
+    );
   }
 
   private async loadState(): Promise<MailSubscriptionState> {

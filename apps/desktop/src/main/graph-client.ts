@@ -180,16 +180,18 @@ export class GraphClient implements MailProvider {
       return { messages: [] };
     }
 
-    const [message, folders] = await Promise.all([
+    const [message, inboxFolder] = await Promise.all([
       this.fetchGraph<GraphMessageDetail>(
         accountId,
         `${graphBaseUrl}/me/messages/${encodeURIComponent(
           event.messageId,
         )}?$select=id,parentFolderId,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients`,
       ),
-      this.listFolders(accountId),
+      this.fetchGraph<GraphMailFolder>(
+        accountId,
+        `${graphBaseUrl}/me/mailFolders/inbox?$select=id`,
+      ),
     ]);
-    const inboxFolder = folders.find((folder) => folder.wellKnownName === 'inbox');
 
     if (
       !message.id ||

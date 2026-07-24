@@ -429,7 +429,7 @@ describe('GmailClient', () => {
     );
 
     expect(fetchMock.mock.calls[0][0]).toContain(
-      'startHistoryId=123&historyTypes=messageAdded',
+      'startHistoryId=123&historyTypes=messageAdded&historyTypes=labelAdded',
     );
     expect(resolution.state).toEqual({ gmailLastHistoryId: '124' });
     expect(resolution.messages).toMatchObject([
@@ -442,6 +442,157 @@ describe('GmailClient', () => {
         matchedFolderIds: ['INBOX', 'UNREAD'],
       },
     ]);
+  });
+
+  it('reads every Gmail history page before advancing notification state', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        historyId: '130',
+        nextPageToken: 'page-2',
+        history: [
+          {
+            messagesAdded: [{ message: { id: 'message-1' } }],
+          },
+        ],
+      }),
+      jsonResponse({
+        historyId: '130',
+        history: [
+          {
+            labelsAdded: [
+              { message: { id: 'message-2' }, labelIds: ['INBOX'] },
+            ],
+          },
+        ],
+      }),
+      jsonResponse({
+        id: 'message-1',
+        labelIds: ['INBOX', 'UNREAD'],
+        payload: { headers: [] },
+      }),
+      jsonResponse({
+        id: 'message-2',
+        labelIds: ['INBOX', 'UNREAD'],
+        payload: { headers: [] },
+      }),
+    );
+    const client = createGmailClient();
+
+    const resolution = await client.getNotificationMessages(
+      accountId,
+      {
+        id: 'event-3',
+        clientId: 'client-1',
+        accountId,
+        providerId: 'google',
+        subscriptionId: 'pubsub-message-3',
+        historyId: '130',
+        kind: 'message-change',
+        changeType: 'updated',
+        receivedAt: '2026-05-16T10:02:00.000Z',
+      },
+      { gmailLastHistoryId: '123' },
+    );
+
+    expect(fetchMock.mock.calls[1][0]).toContain('pageToken=page-2');
+    expect(resolution.state).toEqual({ gmailLastHistoryId: '130' });
+    expect(resolution.messages.map((message) => message.id)).toEqual([
+      'message-1',
+      'message-2',
+    ]);
+  });
+
+  it('rebases Gmail notification state when history has expired', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ error: { message: 'HistoryId too old' } }, 404),
+      jsonResponse({ historyId: 'history-500' }),
+    );
+    const client = createGmailClient();
+
+    await expect(
+      client.getNotificationMessages(
+        accountId,
+        {
+          id: 'event-4',
+          clientId: 'client-1',
+          accountId,
+          providerId: 'google',
+          subscriptionId: 'pubsub-message-4',
+          historyId: 'history-499',
+          kind: 'message-change',
+          changeType: 'updated',
+          receivedAt: '2026-05-16T10:03:00.000Z',
+        },
+        { gmailLastHistoryId: 'expired-history' },
+      ),
+    ).resolves.toEqual({
+      messages: [],
+      state: { gmailLastHistoryId: 'history-500' },
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+    );
+  });
+
+  it('skips notification candidates deleted before hydration', async () => {
+    mockFetch(
+      jsonResponse({
+        historyId: '126',
+        history: [
+          {
+            messagesAdded: [
+              { message: { id: 'missing-message' } },
+              { message: { id: 'message-2' } },
+            ],
+          },
+        ],
+      }),
+      jsonResponse({ error: { message: 'Not found' } }, 404),
+      jsonResponse({
+        id: 'message-2',
+        labelIds: ['INBOX', 'UNREAD'],
+        payload: { headers: [] },
+      }),
+    );
+    const client = createGmailClient();
+
+    const resolution = await client.getNotificationMessages(
+      accountId,
+      {
+        id: 'event-5',
+        clientId: 'client-1',
+        accountId,
+        providerId: 'google',
+        subscriptionId: 'pubsub-message-5',
+        historyId: '126',
+        kind: 'message-change',
+        changeType: 'updated',
+        receivedAt: '2026-05-16T10:04:00.000Z',
+      },
+      { gmailLastHistoryId: '125' },
+    );
+
+    expect(resolution.messages.map((message) => message.id)).toEqual([
+      'message-2',
+    ]);
+    expect(resolution.state).toEqual({ gmailLastHistoryId: '126' });
+  });
+
+  it('does not treat a PubSub message id as Gmail history state', async () => {
+    const client = createGmailClient();
+
+    await expect(
+      client.getNotificationMessages(accountId, {
+        id: 'legacy-event',
+        clientId: 'client-1',
+        accountId,
+        providerId: 'google',
+        subscriptionId: 'pubsub-delivery-id',
+        kind: 'message-change',
+        changeType: 'updated',
+        receivedAt: '2026-05-16T10:05:00.000Z',
+      }),
+    ).resolves.toEqual({ messages: [], state: {} });
   });
 
   it('returns the Gmail watch history id as notification baseline state', async () => {

@@ -25,8 +25,17 @@ import { GoogleAuthProvider } from '@/main/google-auth-provider';
 import { registerIpcHandlers } from '@/main/ipc';
 import { LocalAttachmentStore } from '@/main/local-attachment-store';
 import { MailSubscriptionManager } from '@/main/mail-subscription-manager';
-import { MailNotificationService } from '@/main/mail-notification-service';
+import {
+  MailNotificationService,
+  mailNotificationSettingsPatchSchema,
+} from '@/main/mail-notification-service';
 import { MailService } from '@/main/mail-service';
+import {
+  createTrayMenuTemplate,
+  focusMainWindow,
+  openMessageWhenWindowReady,
+  registerMainWindowCloseBehavior,
+} from '@/main/main-window-lifecycle';
 import { MicrosoftAuthProvider } from '@/main/microsoft-auth-provider';
 import {
   assertTrustedSender,
@@ -36,15 +45,18 @@ import {
 } from '@/main/security';
 import { configureWindowsNotificationIdentity } from '@/main/windows-notifications';
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (started) {
-  app.quit();
-}
+const isPrimaryInstance = !started && app.requestSingleInstanceLock();
 
-configureWindowsNotificationIdentity();
+if (!isPrimaryInstance) {
+  app.quit();
+} else {
+  configureWindowsNotificationIdentity();
+}
 
 const composeDraftsByWebContentsId = new Map<number, ComposeWindowDraft>();
 let mainWindow: BrowserWindow | undefined;
+let mainWindowTrustPolicy: AppUrlTrustPolicy | undefined;
+let mailNotificationService: MailNotificationService | undefined;
 let tray: Tray | undefined;
 let isExplicitQuit = false;
 let isKeepingMainWindowInTray = false;
@@ -60,8 +72,7 @@ export function getWindowIconPath() {
 const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     isKeepingMainWindowInTray = false;
-    mainWindow.show();
-    mainWindow.focus();
+    focusMainWindow(mainWindow);
     return mainWindow;
   }
 
@@ -85,6 +96,19 @@ const createWindow = (trustPolicy: AppUrlTrustPolicy) => {
     },
   });
   registerWindowNavigationGuards(mainWindow, shell.openExternal, trustPolicy);
+  if (mailNotificationService) {
+    registerMainWindowCloseBehavior(mainWindow, {
+      isExplicitQuit: () => isExplicitQuit,
+      onClose: () => {
+        isKeepingMainWindowInTray = false;
+      },
+      onHide: () => {
+        isKeepingMainWindowInTray = true;
+      },
+      shouldKeepInTray: () =>
+        mailNotificationService?.shouldKeepMainWindowInTray() ?? false,
+    });
+  }
   mainWindow.on('closed', () => {
     mainWindow = undefined;
   });
@@ -154,128 +178,92 @@ function getTitleBarOverlayOptions() {
   };
 }
 
-nativeTheme.on('updated', () => {
-  BrowserWindow.getAllWindows().forEach((window) => {
-    window.setTitleBarOverlay(getTitleBarOverlayOptions());
-  });
-});
-
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.on('ready', () => {
-  if (!app.isPackaged) {
-    loadDotenvFile({ path: path.join(app.getAppPath(), '.env') });
-  }
-
-  const trustPolicy = createAppUrlTrustPolicy({
-    appFilePath: getRendererIndexPath(),
-    devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
-  });
-  const microsoftAuthProvider = new MicrosoftAuthProvider();
-  const googleAuthProvider = new GoogleAuthProvider();
-  const graphClient = new GraphClient(microsoftAuthProvider);
-  const gmailClient = new GmailClient(googleAuthProvider);
-  const providers = [
-    { auth: microsoftAuthProvider, mail: graphClient },
-    { auth: googleAuthProvider, mail: gmailClient },
-  ];
-  const authService = new AuthService(providers);
-  const localAttachmentStore = new LocalAttachmentStore();
-  const mailService = new MailService([graphClient, gmailClient], localAttachmentStore);
-  const mailNotificationService = new MailNotificationService({
-    icon: getWindowIconPath(),
-    mailService,
-    onNotificationClick: (accountId, message) => {
-      const window = createWindow(trustPolicy);
-      openMessageWhenWindowReady(window, accountId, message.folderId, message.id);
-    },
-  });
-  void mailNotificationService.getSettings();
-  const subscriptionManager = new MailSubscriptionManager({
-    authService,
-    mailNotificationService,
-    mailService,
-    relayAdminToken: process.env.RELAY_ADMIN_TOKEN,
-    relayPublicUrl: process.env.RELAY_PUBLIC_URL,
+if (isPrimaryInstance) {
+  nativeTheme.on('updated', () => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      window.setTitleBarOverlay(getTitleBarOverlayOptions());
+    });
   });
 
-  Menu.setApplicationMenu(null);
-  registerSessionPermissionGuards();
-  registerIpcHandlers(authService, mailService, {
-    trustPolicy,
-    startMailSubscriptions: () => subscriptionManager.start(),
-    stopMailSubscriptions: (accountId) =>
-      subscriptionManager.stopAccount(accountId, {
-        deleteRemoteSubscription: true,
-      }),
+  app.on('second-instance', () => {
+    if (mainWindowTrustPolicy && mailNotificationService) {
+      createWindow(mainWindowTrustPolicy);
+    }
   });
-  registerWindowIpcHandlers(trustPolicy);
-  registerNotificationIpcHandlers(trustPolicy, mailNotificationService);
-  registerAttachmentIpcHandlers(trustPolicy, localAttachmentStore, mailService);
-  const window = createWindow(trustPolicy);
-  registerMainWindowCloseBehavior(window, mailNotificationService);
-  configureTray(trustPolicy);
-  void startMailSubscriptions(subscriptionManager);
-  app.on('before-quit', () => {
-    isExplicitQuit = true;
-    void subscriptionManager.stop();
-  });
-});
 
-function sendOpenMessageToWindow(
-  window: BrowserWindow,
-  accountId: string,
-  folderId: string,
-  messageId: string,
-) {
-  window.show();
-  window.focus();
-  window.webContents.send('mail:open-message', { accountId, folderId, messageId });
-}
-
-function openMessageWhenWindowReady(
-  window: BrowserWindow,
-  accountId: string,
-  folderId: string,
-  messageId: string,
-) {
-  let didOpen = false;
-  const openMessage = () => {
-    if (didOpen) {
-      return;
+  // This method will be called when Electron has finished initialization.
+  app.on('ready', () => {
+    if (!app.isPackaged) {
+      loadDotenvFile({ path: path.join(app.getAppPath(), '.env') });
     }
 
-    didOpen = true;
-    sendOpenMessageToWindow(window, accountId, folderId, messageId);
-  };
+    const trustPolicy = createAppUrlTrustPolicy({
+      appFilePath: getRendererIndexPath(),
+      devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+    });
+    const microsoftAuthProvider = new MicrosoftAuthProvider();
+    const googleAuthProvider = new GoogleAuthProvider();
+    const graphClient = new GraphClient(microsoftAuthProvider);
+    const gmailClient = new GmailClient(googleAuthProvider);
+    const providers = [
+      { auth: microsoftAuthProvider, mail: graphClient },
+      { auth: googleAuthProvider, mail: gmailClient },
+    ];
+    const authService = new AuthService(providers);
+    const localAttachmentStore = new LocalAttachmentStore();
+    const mailService = new MailService(
+      [graphClient, gmailClient],
+      localAttachmentStore,
+    );
+    mailNotificationService = new MailNotificationService({
+      getAccountLabel: async (accountId) => {
+        const account = (await authService.getAccounts()).find(
+          (candidate) => candidate.id === accountId,
+        );
 
-  window.once('ready-to-show', openMessage);
-  if (window.webContents.isLoading()) {
-    window.webContents.once('did-finish-load', openMessage);
-    return;
-  }
+        return account?.label || account?.email;
+      },
+      icon: getWindowIconPath(),
+      mailService,
+      onNotificationClick: (accountId, message) => {
+        const window = createWindow(trustPolicy);
+        openMessageWhenWindowReady(window, {
+          accountId,
+          folderId: message.folderId,
+          messageId: message.id,
+        });
+      },
+    });
+    mainWindowTrustPolicy = trustPolicy;
+    void mailNotificationService.getSettings();
+    const subscriptionManager = new MailSubscriptionManager({
+      authService,
+      mailNotificationService,
+      mailService,
+      relayAdminToken: process.env.RELAY_ADMIN_TOKEN,
+      relayPublicUrl: process.env.RELAY_PUBLIC_URL,
+    });
 
-  openMessage();
-}
-
-function registerMainWindowCloseBehavior(
-  window: BrowserWindow,
-  mailNotificationService: MailNotificationService,
-) {
-  window.on('close', (event) => {
-    if (isExplicitQuit) {
-      return;
-    }
-
-    if (!mailNotificationService.shouldKeepMainWindowInTray()) {
-      isKeepingMainWindowInTray = false;
-      return;
-    }
-
-    event.preventDefault();
-    isKeepingMainWindowInTray = true;
-    window.hide();
+    Menu.setApplicationMenu(null);
+    registerSessionPermissionGuards();
+    registerIpcHandlers(authService, mailService, {
+      trustPolicy,
+      startMailSubscriptions: () => subscriptionManager.start(),
+      stopMailSubscriptions: (accountId) =>
+        subscriptionManager.stopAccount(accountId, {
+          deleteRemoteSubscription: true,
+        }),
+    });
+    registerWindowIpcHandlers(trustPolicy);
+    registerNotificationIpcHandlers(trustPolicy, mailNotificationService);
+    registerAttachmentIpcHandlers(trustPolicy, localAttachmentStore, mailService);
+    createWindow(trustPolicy);
+    configureTray(trustPolicy);
+    void startMailSubscriptions(subscriptionManager);
+    app.on('before-quit', () => {
+      isExplicitQuit = true;
+      void subscriptionManager.stop();
+    });
   });
 }
 
@@ -290,21 +278,17 @@ function configureTray(trustPolicy: AppUrlTrustPolicy) {
     createWindow(trustPolicy);
   });
   tray.setContextMenu(
-    Menu.buildFromTemplate([
-      {
-        label: 'Open',
-        click: () => {
+    Menu.buildFromTemplate(
+      createTrayMenuTemplate({
+        onOpen: () => {
           createWindow(trustPolicy);
         },
-      },
-      {
-        label: 'Close',
-        click: () => {
+        onQuit: () => {
           isExplicitQuit = true;
           app.quit();
         },
-      },
-    ]),
+      }),
+    ),
   );
 }
 
@@ -333,23 +317,9 @@ function registerNotificationIpcHandlers(
   });
   ipcMain.handle('notifications:update-settings', (event, settings: unknown) => {
     assertTrustedSender(event, trustPolicy);
-
-    if (typeof settings !== 'object' || settings === null) {
-      throw new Error('Invalid IPC payload');
-    }
-
-    const candidate = settings as Record<string, unknown>;
-    return mailNotificationService.updateSettings({
-      ...(typeof candidate.enabled === 'boolean'
-        ? { enabled: candidate.enabled }
-        : {}),
-      ...(typeof candidate.includePreview === 'boolean'
-        ? { includePreview: candidate.includePreview }
-        : {}),
-      ...(typeof candidate.silent === 'boolean'
-        ? { silent: candidate.silent }
-        : {}),
-    });
+    return mailNotificationService.updateSettings(
+      parseIpcPayload(mailNotificationSettingsPatchSchema, settings),
+    );
   });
 }
 
@@ -533,26 +503,25 @@ async function startMailSubscriptions(subscriptionManager: MailSubscriptionManag
   }
 }
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' && !isKeepingMainWindowInTray) {
-    app.quit();
-  }
-});
+if (isPrimaryInstance) {
+  // Quit when all windows are closed, except on macOS. There, it's common
+  // for applications and their menu bar to stay active until the user quits.
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin' && !isKeepingMainWindowInTray) {
+      app.quit();
+    }
+  });
 
-app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
-    const trustPolicy = createAppUrlTrustPolicy({
-      appFilePath: getRendererIndexPath(),
-      devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
-    });
-    createWindow(trustPolicy);
-  }
-});
+  app.on('activate', () => {
+    // On macOS, recreate the main window when the dock icon is clicked.
+    if (
+      BrowserWindow.getAllWindows().length === 0 &&
+      mainWindowTrustPolicy
+    ) {
+      createWindow(mainWindowTrustPolicy);
+    }
+  });
+}
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.

@@ -24,6 +24,33 @@ interface OpenMailMessagePayload {
   messageId: string;
 }
 
+const maxPendingOpenMessages = 20;
+const openMessageListeners = new Set<
+  (payload: OpenMailMessagePayload) => void
+>();
+const pendingOpenMessages: OpenMailMessagePayload[] = [];
+
+ipcRenderer.on('mail:open-message', (_event, payload: unknown) => {
+  const parsedPayload = parseOpenMailMessagePayload(payload);
+
+  if (!parsedPayload) {
+    return;
+  }
+
+  if (openMessageListeners.size === 0) {
+    pendingOpenMessages.push(parsedPayload);
+    pendingOpenMessages.splice(
+      0,
+      Math.max(0, pendingOpenMessages.length - maxPendingOpenMessages),
+    );
+    return;
+  }
+
+  for (const listener of openMessageListeners) {
+    listener(parsedPayload);
+  }
+});
+
 const courrier = {
   platform: process.platform,
   auth: {
@@ -209,27 +236,22 @@ const courrier = {
       };
     },
     onOpenMessage: (listener: (payload: OpenMailMessagePayload) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
-        if (
-          typeof payload === 'object' &&
-          payload !== null &&
-          typeof (payload as OpenMailMessagePayload).accountId === 'string' &&
-          typeof (payload as OpenMailMessagePayload).folderId === 'string' &&
-          typeof (payload as OpenMailMessagePayload).messageId === 'string'
-        ) {
-          listener(payload as OpenMailMessagePayload);
-        }
-      };
+      openMessageListeners.add(listener);
+      const pendingMessages = pendingOpenMessages.splice(0);
 
-      ipcRenderer.on('mail:open-message', handler);
+      for (const pendingMessage of pendingMessages) {
+        listener(pendingMessage);
+      }
+
       return () => {
-        ipcRenderer.removeListener('mail:open-message', handler);
+        openMessageListeners.delete(listener);
       };
     },
   },
   notifications: {
     getSettings: () =>
       ipcRenderer.invoke('notifications:get-settings') as Promise<{
+        supported: boolean;
         enabled: boolean;
         includePreview: boolean;
         silent: boolean;
@@ -240,6 +262,7 @@ const courrier = {
       silent?: boolean;
     }) =>
       ipcRenderer.invoke('notifications:update-settings', settings) as Promise<{
+        supported: boolean;
         enabled: boolean;
         includePreview: boolean;
         silent: boolean;
@@ -259,3 +282,29 @@ const courrier = {
 contextBridge.exposeInMainWorld('courrier', courrier);
 
 export type CourrierApi = typeof courrier;
+
+function parseOpenMailMessagePayload(
+  payload: unknown,
+): OpenMailMessagePayload | undefined {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    typeof (payload as OpenMailMessagePayload).accountId !== 'string' ||
+    typeof (payload as OpenMailMessagePayload).folderId !== 'string' ||
+    typeof (payload as OpenMailMessagePayload).messageId !== 'string'
+  ) {
+    return undefined;
+  }
+
+  const parsedPayload = payload as OpenMailMessagePayload;
+
+  if (
+    !parsedPayload.accountId ||
+    !parsedPayload.folderId ||
+    !parsedPayload.messageId
+  ) {
+    return undefined;
+  }
+
+  return parsedPayload;
+}

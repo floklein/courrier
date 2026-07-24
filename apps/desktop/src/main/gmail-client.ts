@@ -89,6 +89,7 @@ interface GmailMessagePart {
 interface GmailMessage extends GmailMessagePart {
   id?: string;
   threadId?: string;
+  historyId?: string;
   labelIds?: string[];
   snippet?: string;
   internalDate?: string;
@@ -107,6 +108,7 @@ interface GmailAttachmentResponse {
 
 interface GmailHistoryResponse {
   historyId?: string;
+  nextPageToken?: string;
   history?: Array<{
     messagesAdded?: Array<{ message?: GmailMessageListItem }>;
     labelsAdded?: Array<{
@@ -114,6 +116,10 @@ interface GmailHistoryResponse {
       labelIds?: string[];
     }>;
   }>;
+}
+
+interface GmailProfileResponse {
+  historyId?: string;
 }
 
 interface PeopleSearchResponse {
@@ -287,11 +293,15 @@ export class GmailClient implements MailProvider {
     event: MailRemoteChangeEvent,
     state: MailNotificationState = {},
   ): Promise<MailNotificationResolution> {
-    if (event.kind !== 'message-change' || event.providerId !== 'google') {
+    if (
+      event.kind !== 'message-change' ||
+      event.providerId !== 'google' ||
+      !event.historyId
+    ) {
       return { messages: [], state };
     }
 
-    const historyId = event.historyId ?? event.subscriptionId;
+    const historyId = event.historyId;
 
     if (!state.gmailLastHistoryId) {
       return {
@@ -300,45 +310,91 @@ export class GmailClient implements MailProvider {
       };
     }
 
-    const params = new URLSearchParams({
-      startHistoryId: state.gmailLastHistoryId,
-      historyTypes: 'messageAdded',
-    });
-    const data = await this.fetchGmail<GmailHistoryResponse>(
-      accountId,
-      `${gmailBaseUrl}/users/me/history?${params.toString()}`,
-    );
     const candidateIds = new Set<string>();
+    let nextPageToken: string | undefined;
+    let latestHistoryId = historyId;
 
-    for (const item of data.history ?? []) {
-      for (const added of item.messagesAdded ?? []) {
-        if (added.message?.id) {
-          candidateIds.add(added.message.id);
+    try {
+      do {
+        const params = new URLSearchParams({
+          startHistoryId: state.gmailLastHistoryId,
+        });
+        params.append('historyTypes', 'messageAdded');
+        params.append('historyTypes', 'labelAdded');
+        if (nextPageToken) {
+          params.set('pageToken', nextPageToken);
         }
+
+        const data = await this.fetchGmail<GmailHistoryResponse>(
+          accountId,
+          `${gmailBaseUrl}/users/me/history?${params.toString()}`,
+        );
+
+        latestHistoryId = data.historyId ?? latestHistoryId;
+        nextPageToken = data.nextPageToken;
+
+        for (const item of data.history ?? []) {
+          for (const added of item.messagesAdded ?? []) {
+            if (added.message?.id) {
+              candidateIds.add(added.message.id);
+            }
+          }
+
+          for (const labels of item.labelsAdded ?? []) {
+            if (labels.message?.id && labels.labelIds?.includes('INBOX')) {
+              candidateIds.add(labels.message.id);
+            }
+          }
+        }
+      } while (nextPageToken);
+    } catch (error) {
+      if (!isGoogleApiRequestError(error, 404)) {
+        throw error;
       }
 
-      for (const labels of item.labelsAdded ?? []) {
-        if (labels.message?.id && labels.labelIds?.includes('INBOX')) {
-          candidateIds.add(labels.message.id);
-        }
-      }
+      const profile = await this.fetchGmail<GmailProfileResponse>(
+        accountId,
+        `${gmailBaseUrl}/users/me/profile`,
+      );
+
+      return {
+        messages: [],
+        state: {
+          ...state,
+          gmailLastHistoryId: profile.historyId ?? historyId,
+        },
+      };
     }
 
-    const messages = (
-      await Promise.all(
-        [...candidateIds].map((messageId) =>
-          this.getMessageSummary(accountId, 'INBOX', messageId),
-        ),
-      )
-    ).filter((message) =>
-      !message.isRead && message.matchedFolderIds?.includes('INBOX'),
+    const messageResults = await Promise.allSettled(
+      [...candidateIds].map((messageId) =>
+        this.getMessageSummary(accountId, 'INBOX', messageId),
+      ),
     );
+    const messages: MailMessageSummary[] = [];
+
+    for (const result of messageResults) {
+      if (result.status === 'rejected') {
+        if (isGoogleApiRequestError(result.reason, 404)) {
+          continue;
+        }
+
+        throw result.reason;
+      }
+
+      if (
+        !result.value.isRead &&
+        result.value.matchedFolderIds?.includes('INBOX')
+      ) {
+        messages.push(result.value);
+      }
+    }
 
     return {
       messages,
       state: {
         ...state,
-        gmailLastHistoryId: data.historyId ?? historyId,
+        gmailLastHistoryId: latestHistoryId,
       },
     };
   }
@@ -741,12 +797,26 @@ export class GmailClient implements MailProvider {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Google API request failed: ${response.status} ${body}`);
+      throw new GoogleApiRequestError(response.status, body);
     }
 
     const body = await response.text();
     return body ? (JSON.parse(body) as T) : (undefined as T);
   }
+}
+
+class GoogleApiRequestError extends Error {
+  constructor(
+    readonly status: number,
+    body: string,
+  ) {
+    super(`Google API request failed: ${status} ${body}`);
+    this.name = 'GoogleApiRequestError';
+  }
+}
+
+function isGoogleApiRequestError(error: unknown, status: number) {
+  return error instanceof GoogleApiRequestError && error.status === status;
 }
 
 function mapGmailLabel(label: GmailLabel): MailFolder {

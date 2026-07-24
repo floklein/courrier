@@ -86,10 +86,14 @@ describe('MailSubscriptionManager', () => {
     const graphClient = createGraphClient();
     const mailNotificationService = {
       handleRemoteChange: vi.fn().mockResolvedValue(undefined),
+      setAccountSubscriptionActive: vi.fn(),
     };
     const manager = createManager(graphClient, mailNotificationService);
 
     await manager.start();
+    expect(
+      mailNotificationService.setAccountSubscriptionActive,
+    ).toHaveBeenCalledWith('microsoft:account-1', true);
     MockWebSocket.instances[0].open();
     MockWebSocket.instances[0].receive({
       type: 'mail-change',
@@ -120,6 +124,9 @@ describe('MailSubscriptionManager', () => {
       'mail:remote-change',
       expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
     );
+    await waitFor(
+      () => mailNotificationService.handleRemoteChange.mock.calls.length === 1,
+    );
     expect(mailNotificationService.handleRemoteChange).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
     );
@@ -135,6 +142,11 @@ describe('MailSubscriptionManager', () => {
       type: 'ack',
       eventId: 'event-1',
     });
+
+    await manager.stop();
+    expect(
+      mailNotificationService.setAccountSubscriptionActive,
+    ).toHaveBeenLastCalledWith('microsoft:account-1', false);
   });
 
   it('still delivers and acknowledges mail changes when native notification handling fails', async () => {
@@ -201,6 +213,45 @@ describe('MailSubscriptionManager', () => {
 
     await manager.start();
 
+    expect(mailNotificationService.mergeProviderState).toHaveBeenCalledWith(
+      'google:account-1',
+      { gmailLastHistoryId: 'history-100' },
+    );
+  });
+
+  it('preserves the live Gmail history cursor during in-process renewal', async () => {
+    const googleAccount = {
+      ...account,
+      id: 'google:account-1',
+      providerId: 'google' as const,
+      providerAccountId: 'account-1',
+      email: 'ada@example.com',
+    };
+    const googleClient = createGraphClient();
+    googleClient.createMailSubscription.mockResolvedValue({
+      id: 'history-100',
+      expirationDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      notificationState: { gmailLastHistoryId: 'history-100' },
+    });
+    googleClient.renewSubscription.mockResolvedValue({
+      id: 'history-200',
+      expirationDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      notificationState: { gmailLastHistoryId: 'history-200' },
+    });
+    const mailNotificationService = {
+      handleRemoteChange: vi.fn().mockResolvedValue(undefined),
+      mergeProviderState: vi.fn().mockResolvedValue(undefined),
+    };
+    const manager = createManager(
+      googleClient,
+      mailNotificationService,
+      googleAccount,
+    );
+
+    await manager.start();
+    await manager.start();
+
+    expect(mailNotificationService.mergeProviderState).toHaveBeenCalledTimes(1);
     expect(mailNotificationService.mergeProviderState).toHaveBeenCalledWith(
       'google:account-1',
       { gmailLastHistoryId: 'history-100' },
@@ -319,6 +370,7 @@ function createManager(
   mailNotificationService?: {
     handleRemoteChange: ReturnType<typeof vi.fn>;
     mergeProviderState?: ReturnType<typeof vi.fn>;
+    setAccountSubscriptionActive?: ReturnType<typeof vi.fn>;
   },
   currentAccount = account,
 ) {
