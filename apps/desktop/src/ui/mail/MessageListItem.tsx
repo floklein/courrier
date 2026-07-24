@@ -1,8 +1,15 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { disableNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/disable-native-drag-preview';
 import { Link } from '@tanstack/react-router';
-import { BadgeAlert, Flag, Paperclip, Star } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { BadgeAlert, Check, Flag, Paperclip, Star } from 'lucide-react';
+import {
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { mailMessageDragType } from '@/lib/mail/mail-drag';
 import { formatMailDate } from '@/lib/mail/mail-utils';
@@ -20,20 +27,40 @@ import { MailAvatar } from '@/ui/mail/MailAvatar';
 export function MessageListItem({
   folderId,
   isSelected,
+  isKeyboardActive,
   isActionPending,
+  isBulkSelected,
+  dragMessages,
   message,
   onDragActiveChange,
+  onMessageClick,
+  onMessageFocus,
+  onSelectionToggle,
 }: {
   folderId: string;
   isSelected: boolean;
+  isKeyboardActive: boolean;
   isActionPending: boolean;
+  isBulkSelected: boolean;
+  dragMessages: MailMessageSummary[];
   message: MailMessageSummary;
   onDragActiveChange: (isActive: boolean) => void;
+  onMessageClick: (
+    event: MouseEvent<HTMLAnchorElement>,
+    message: MailMessageSummary,
+  ) => void;
+  onMessageFocus: (message: MailMessageSummary) => void;
+  onSelectionToggle: (
+    event: MouseEvent<HTMLButtonElement>,
+    message: MailMessageSummary,
+  ) => void;
 }) {
   const dragRef = useRef<HTMLDivElement>(null);
+  const dragHandleRef = useRef<HTMLAnchorElement>(null);
   const isActionPendingRef = useRef(isActionPending);
   const folderIdRef = useRef(folderId);
   const messageRef = useRef(message);
+  const dragMessagesRef = useRef(dragMessages);
   const effectiveFolderId = message.folderId || folderId;
   const [isDragging, setIsDragging] = useState(false);
   const [dragPreview, setDragPreview] = useState<DragPreviewState>();
@@ -51,7 +78,8 @@ export function MessageListItem({
   useEffect(() => {
     folderIdRef.current = effectiveFolderId;
     messageRef.current = message;
-  }, [effectiveFolderId, message]);
+    dragMessagesRef.current = dragMessages;
+  }, [dragMessages, effectiveFolderId, message]);
 
   useEffect(() => {
     return clearDragState;
@@ -59,18 +87,22 @@ export function MessageListItem({
 
   useEffect(() => {
     const element = dragRef.current;
+    const dragHandle = dragHandleRef.current;
 
-    if (!element) {
+    if (!element || !dragHandle) {
       return;
     }
 
     const cleanup = draggable({
       element,
+      dragHandle,
       canDrag: () => !isActionPendingRef.current,
       getInitialData: () => ({
         type: mailMessageDragType,
         message: messageRef.current,
+        messages: dragMessagesRef.current,
         sourceFolderId: folderIdRef.current,
+        primaryMessageId: messageRef.current.id,
       }),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         disableNativeDragPreview({ nativeSetDragImage });
@@ -112,12 +144,27 @@ export function MessageListItem({
       ref={dragRef}
       data-mail-message-id={message.id}
       className={cn(
-        'group min-w-0 overflow-hidden border-b transition-opacity',
+        'group relative min-w-0 overflow-hidden border-b transition-opacity',
         !isActionPending && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-50',
       )}
     >
+      <button
+        type="button"
+        aria-label={`${isBulkSelected ? 'Deselect' : 'Select'} ${message.subject}`}
+        aria-pressed={isBulkSelected}
+        className={cn(
+          'absolute top-4 left-3 z-10 flex size-4 items-center justify-center rounded border bg-card text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
+          isBulkSelected && 'bg-primary text-primary-foreground opacity-100',
+        )}
+        onClick={(event) => onSelectionToggle(event, message)}
+        onFocus={() => onMessageFocus(message)}
+      >
+        {isBulkSelected && <Check className="size-3" aria-hidden="true" />}
+      </button>
       <Link
+        ref={dragHandleRef}
+        data-message-link
         draggable={false}
         to="/mail/$folderId/$messageId"
         params={{
@@ -127,9 +174,15 @@ export function MessageListItem({
         className={cn(
           'block min-w-0 overflow-hidden px-3 py-3 transition-colors hover:bg-accent/70',
           isSelected && 'bg-accent',
+          isBulkSelected && !isSelected && 'bg-primary/10',
+          isKeyboardActive &&
+            'ring-2 ring-inset ring-ring/70 focus-visible:ring-ring',
         )}
+        onClick={(event) => onMessageClick(event, message)}
+        onFocus={() => onMessageFocus(message)}
       >
         <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-1 size-4 shrink-0" aria-hidden="true" />
           <MailAvatar
             name={message.sender.name}
             email={message.sender.email}
@@ -198,7 +251,7 @@ export function MessageListItem({
               top: dragPreview.pointerY + 12,
             }}
           >
-            <MailDragPreview message={message} />
+            <MailDragPreview message={message} count={dragMessages.length} />
           </div>,
           document.body,
         )}

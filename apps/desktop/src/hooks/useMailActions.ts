@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { announce } from '@atlaskit/pragmatic-drag-and-drop-live-region';
 import { api } from '@/lib/api-client';
@@ -46,17 +51,24 @@ export function useMailActions({
     staleTime: Infinity,
   });
 
-  function handleMessageRemoved(message: MailMessageSummary) {
+  function handleMessageRemoved(
+    message: MailMessageSummary,
+    removedMessageIds = new Set([message.id]),
+  ) {
     removeCachedMessage(queryClient, accountId, message.id);
     onReplyMessageIdChange((current) =>
-      current === message.id ? undefined : current,
+      current && removedMessageIds.has(current) ? undefined : current,
     );
 
     if (message.id !== messageId) {
       return;
     }
 
-    const nextMessage = messages.find((item) => item.id !== message.id);
+    const nextMessage = findNextVisibleMessageAfterRemoval(
+      messages,
+      message.id,
+      removedMessageIds,
+    );
 
     if (nextMessage) {
       void navigate({
@@ -85,7 +97,17 @@ export function useMailActions({
     ]);
   }
 
+  async function invalidateBulkMailState() {
+    await Promise.all([
+      invalidateMailLists(),
+      queryClient.invalidateQueries({
+        queryKey: ['mail', accountId, 'message'],
+      }),
+    ]);
+  }
+
   const markReadMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'mark-read'],
     mutationFn: ({
       message,
       isRead,
@@ -130,13 +152,48 @@ export function useMailActions({
       ]);
     },
   });
+  const bulkMarkReadMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'bulk-mark-read'],
+    mutationFn: ({
+      messages: selectedMessages,
+      isRead,
+    }: {
+      messages: MailMessageSummary[];
+      isRead: boolean;
+    }) =>
+      runMailActionsWithConcurrency(selectedMessages, (message) =>
+        api.mail.markMessageReadState(accountId, message.id, isRead),
+      ),
+    onMutate: async ({ messages: selectedMessages, isRead }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail', accountId] });
+      const snapshot = createMailCacheSnapshot(queryClient);
+
+      for (const message of selectedMessages) {
+        updateCachedMessageReadState(queryClient, accountId, message.id, isRead);
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: message.folderId,
+          unreadDelta: getReadStateUnreadDelta(message.isRead, isRead),
+        });
+      }
+
+      return { snapshot };
+    },
+    onError: (_error, _variables, context) => {
+      restoreMailCacheSnapshot(queryClient, context?.snapshot);
+    },
+    onSettled: async () => {
+      await invalidateBulkMailState();
+    },
+  });
   const moveMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'move'],
     mutationFn: ({
       message,
       destinationFolderId,
     }: {
       message: MailMessageSummary;
       destinationFolderId: string;
+      removedMessageIds?: Set<string>;
     }) =>
       api.mail.moveMessage(
         accountId,
@@ -144,11 +201,11 @@ export function useMailActions({
         message.folderId,
         destinationFolderId,
       ),
-    onMutate: async ({ message, destinationFolderId }) => {
+    onMutate: async ({ message, destinationFolderId, removedMessageIds }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
 
-      handleMessageRemoved(message);
+      handleMessageRemoved(message, removedMessageIds);
       updateCachedFolderCounts(queryClient, accountId, {
         folderId: message.folderId,
         totalDelta: -1,
@@ -177,17 +234,78 @@ export function useMailActions({
       await invalidateMailLists();
     },
   });
+  const bulkMoveMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'bulk-move'],
+    mutationFn: ({
+      messages: selectedMessages,
+      destinationFolderId,
+    }: {
+      messages: MailMessageSummary[];
+      destinationFolderId: string;
+    }) =>
+      runMailActionsWithConcurrency(selectedMessages, (message) =>
+        api.mail.moveMessage(
+          accountId,
+          message.id,
+          message.folderId,
+          destinationFolderId,
+        ),
+      ),
+    onMutate: async ({ messages: selectedMessages, destinationFolderId }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail', accountId] });
+      const snapshot = createMailCacheSnapshot(queryClient);
+      const removedMessageIds = new Set(
+        selectedMessages.map((message) => message.id),
+      );
+
+      for (const message of selectedMessages) {
+        handleMessageRemoved(message, removedMessageIds);
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: message.folderId,
+          totalDelta: -1,
+          unreadDelta: message.isRead ? 0 : -1,
+        });
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: destinationFolderId,
+          totalDelta: 1,
+          unreadDelta: message.isRead ? 0 : 1,
+        });
+      }
+
+      const destinationFolder = folders.find(
+        (folder) => folder.id === destinationFolderId,
+      );
+
+      if (destinationFolder) {
+        announce(
+          `Moved ${formatMessageCount(selectedMessages.length)} to ${destinationFolder.label}.`,
+        );
+      }
+
+      return { snapshot };
+    },
+    onError: (_error, _variables, context) => {
+      restoreMailCacheSnapshot(queryClient, context?.snapshot);
+    },
+    onSettled: async () => {
+      await invalidateBulkMailState();
+    },
+  });
   const deleteMutation = useMutation({
-    mutationFn: ({ message }: { message: MailMessageSummary }) =>
+    mutationKey: ['mail', accountId, 'action', 'delete'],
+    mutationFn: ({ message }: {
+      message: MailMessageSummary;
+      removedMessageIds?: Set<string>;
+    }) =>
       api.mail.deleteMessage(accountId, message.id),
-    onMutate: async ({ message }) => {
+    onMutate: async ({ message, removedMessageIds }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
       const trashFolder = folders.find(
         (folder) => folder.wellKnownName === 'deleteditems',
       );
 
-      handleMessageRemoved(message);
+      handleMessageRemoved(message, removedMessageIds);
       updateCachedFolderCounts(queryClient, accountId, {
         folderId: message.folderId,
         totalDelta: -1,
@@ -211,10 +329,62 @@ export function useMailActions({
       await invalidateMailLists();
     },
   });
+  const bulkDeleteMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'bulk-delete'],
+    mutationFn: ({
+      messages: selectedMessages,
+    }: {
+      messages: MailMessageSummary[];
+    }) =>
+      runMailActionsWithConcurrency(selectedMessages, (message) =>
+        api.mail.deleteMessage(accountId, message.id),
+      ),
+    onMutate: async ({ messages: selectedMessages }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail', accountId] });
+      const snapshot = createMailCacheSnapshot(queryClient);
+      const removedMessageIds = new Set(
+        selectedMessages.map((message) => message.id),
+      );
+      const trashFolder = folders.find(
+        (folder) => folder.wellKnownName === 'deleteditems',
+      );
+
+      for (const message of selectedMessages) {
+        handleMessageRemoved(message, removedMessageIds);
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: message.folderId,
+          totalDelta: -1,
+          unreadDelta: message.isRead ? 0 : -1,
+        });
+
+        if (trashFolder && trashFolder.id !== message.folderId) {
+          updateCachedFolderCounts(queryClient, accountId, {
+            folderId: trashFolder.id,
+            totalDelta: 1,
+            unreadDelta: message.isRead ? 0 : 1,
+          });
+        }
+      }
+
+      return { snapshot };
+    },
+    onError: (_error, _variables, context) => {
+      restoreMailCacheSnapshot(queryClient, context?.snapshot);
+    },
+    onSettled: async () => {
+      await invalidateBulkMailState();
+    },
+  });
   const archiveMutation = useMutation({
-    mutationFn: ({ message }: { message: MailMessageSummary }) =>
+    mutationKey: ['mail', accountId, 'action', 'archive'],
+    mutationFn: ({
+      message,
+    }: {
+      message: MailMessageSummary;
+      removedMessageIds?: Set<string>;
+    }) =>
       api.mail.archiveMessage(accountId, message.id, message.folderId),
-    onMutate: async ({ message }) => {
+    onMutate: async ({ message, removedMessageIds }) => {
       await queryClient.cancelQueries({ queryKey: ['mail'] });
       const snapshot = createMailCacheSnapshot(queryClient);
       const archiveFolder = folders.find(
@@ -227,7 +397,7 @@ export function useMailActions({
       });
 
       if (removesCurrentMessage) {
-        handleMessageRemoved(message);
+        handleMessageRemoved(message, removedMessageIds);
         updateCachedFolderCounts(queryClient, accountId, {
           folderId: message.folderId,
           totalDelta: -1,
@@ -258,7 +428,74 @@ export function useMailActions({
       await invalidateMailLists();
     },
   });
+  const bulkArchiveMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'bulk-archive'],
+    mutationFn: ({
+      messages: selectedMessages,
+    }: {
+      messages: MailMessageSummary[];
+    }) =>
+      runMailActionsWithConcurrency(selectedMessages, (message) =>
+        api.mail.archiveMessage(accountId, message.id, message.folderId),
+      ),
+    onMutate: async ({ messages: selectedMessages }) => {
+      await queryClient.cancelQueries({ queryKey: ['mail', accountId] });
+      const snapshot = createMailCacheSnapshot(queryClient);
+      const removedMessageIds = new Set(
+        selectedMessages
+          .filter((message) =>
+            doesArchiveRemoveFromCurrentFolder({
+              accountId,
+              folders,
+              folderId: message.folderId,
+            }),
+          )
+          .map((message) => message.id),
+      );
+      const archiveFolder = folders.find(
+        (folder) => folder.wellKnownName === 'archive',
+      );
+
+      for (const message of selectedMessages) {
+        const removesCurrentMessage = doesArchiveRemoveFromCurrentFolder({
+          accountId,
+          folders,
+          folderId: message.folderId,
+        });
+
+        if (!removesCurrentMessage) {
+          continue;
+        }
+
+        handleMessageRemoved(message, removedMessageIds);
+        updateCachedFolderCounts(queryClient, accountId, {
+          folderId: message.folderId,
+          totalDelta: -1,
+          unreadDelta: message.isRead ? 0 : -1,
+        });
+
+        if (archiveFolder && archiveFolder.id !== message.folderId) {
+          updateCachedFolderCounts(queryClient, accountId, {
+            folderId: archiveFolder.id,
+            totalDelta: 1,
+            unreadDelta: message.isRead ? 0 : 1,
+          });
+        }
+      }
+
+      announce(`Archived ${formatMessageCount(selectedMessages.length)}.`);
+
+      return { snapshot };
+    },
+    onError: (_error, _variables, context) => {
+      restoreMailCacheSnapshot(queryClient, context?.snapshot);
+    },
+    onSettled: async () => {
+      await invalidateBulkMailState();
+    },
+  });
   const junkMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'junk'],
     mutationFn: ({
       message,
       isJunk,
@@ -304,6 +541,7 @@ export function useMailActions({
     },
   });
   const starMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'star'],
     mutationFn: ({
       message,
       isStarred,
@@ -361,6 +599,7 @@ export function useMailActions({
     },
   });
   const flagMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'flag'],
     mutationFn: ({
       message,
       isFlagged,
@@ -388,6 +627,7 @@ export function useMailActions({
     },
   });
   const importantMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'important'],
     mutationFn: ({
       message,
       isImportant,
@@ -449,6 +689,7 @@ export function useMailActions({
     },
   });
   const sendMessageMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'send'],
     mutationFn: (input: SendMailInput) => api.mail.sendMessage(accountId, input),
     onSuccess: async () => {
       closeCompose();
@@ -456,6 +697,7 @@ export function useMailActions({
     },
   });
   const replyToMessageMutation = useMutation({
+    mutationKey: ['mail', accountId, 'action', 'reply'],
     mutationFn: (input: ReplyToMessageInput) =>
       api.mail.replyToMessage(accountId, input),
     onSuccess: async () => {
@@ -463,23 +705,20 @@ export function useMailActions({
       await invalidateMailLists();
     },
   });
-  const isActionPending =
-    markReadMutation.isPending ||
-    moveMutation.isPending ||
-    deleteMutation.isPending ||
-    archiveMutation.isPending ||
-    junkMutation.isPending ||
-    starMutation.isPending ||
-    flagMutation.isPending ||
-    importantMutation.isPending ||
-    sendMessageMutation.isPending ||
-    replyToMessageMutation.isPending;
+  const activeMailActionCount = useIsMutating({
+    mutationKey: ['mail', accountId, 'action'],
+  });
+  const isActionPending = activeMailActionCount > 0;
   const isSendingMessage =
     sendMessageMutation.isPending || replyToMessageMutation.isPending;
 
   return {
     actionCapabilities: actionCapabilitiesQuery.data ?? [],
     archiveMutation,
+    bulkArchiveMutation,
+    bulkDeleteMutation,
+    bulkMarkReadMutation,
+    bulkMoveMutation,
     deleteMutation,
     invalidateMailLists,
     flagMutation,
@@ -494,6 +733,30 @@ export function useMailActions({
     sendMessageMutation,
     starMutation,
   };
+}
+
+function findNextVisibleMessageAfterRemoval(
+  messages: MailMessageSummary[],
+  removedMessageId: string,
+  removedMessageIds: Set<string>,
+) {
+  const removedIndex = messages.findIndex(
+    (message) => message.id === removedMessageId,
+  );
+
+  if (removedIndex === -1) {
+    return messages.find((message) => !removedMessageIds.has(message.id));
+  }
+
+  return (
+    messages
+      .slice(removedIndex + 1)
+      .find((message) => !removedMessageIds.has(message.id)) ??
+    messages
+      .slice(0, removedIndex)
+      .reverse()
+      .find((message) => !removedMessageIds.has(message.id))
+  );
 }
 
 export function getLabelFolderStateUpdate({
@@ -536,4 +799,37 @@ export function doesArchiveRemoveFromCurrentFolder({
   const folder = folders.find((candidate) => candidate.id === folderId);
 
   return folder?.wellKnownName === 'inbox' || folderId === 'INBOX';
+}
+
+async function runMailActionsWithConcurrency<T>(
+  items: T[],
+  action: (item: T) => Promise<unknown>,
+  concurrency = 4,
+) {
+  const errors: unknown[] = [];
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const item = items[nextIndex];
+        nextIndex += 1;
+
+        try {
+          await action(item);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+    }),
+  );
+
+  if (errors.length > 0) {
+    throw errors[0];
+  }
+}
+
+function formatMessageCount(count: number) {
+  return `${count} ${count === 1 ? 'message' : 'messages'}`;
 }

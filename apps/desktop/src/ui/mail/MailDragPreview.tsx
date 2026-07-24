@@ -4,9 +4,11 @@ import { cn } from '@/lib/utils';
 export function MailDragPreview({
   className,
   message,
+  count = 1,
 }: {
   className?: string;
   message: MailMessageSummary;
+  count?: number;
 }) {
   return (
     <div
@@ -15,7 +17,9 @@ export function MailDragPreview({
         className,
       )}
     >
-      <p className="truncate text-xs font-medium">{message.sender.name}</p>
+      <p className="truncate text-xs font-medium">
+        {count > 1 ? `${count} messages` : message.sender.name}
+      </p>
       <p className="mt-0.5 truncate text-xs text-muted-foreground">
         {message.subject}
       </p>

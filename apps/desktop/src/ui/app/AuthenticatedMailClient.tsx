@@ -78,6 +78,10 @@ export function AuthenticatedMailClient({
   const {
     actionCapabilities,
     archiveMutation,
+    bulkArchiveMutation,
+    bulkDeleteMutation,
+    bulkMarkReadMutation,
+    bulkMoveMutation,
     deleteMutation,
     invalidateMailLists,
     flagMutation,
@@ -307,24 +311,96 @@ export function AuthenticatedMailClient({
   function handleMarkMessageReadState(
     message: MailMessageSummary,
     isRead: boolean,
+    selectedMessageIds?: Set<string>,
   ) {
-    manuallyMarkedUnreadMessageId.current = isRead ? undefined : message.id;
+    if (selectedMessageIds) {
+      const selectedMessages = resolveBulkMessages(
+        message,
+        selectedMessageIds,
+        messages,
+      );
+
+      if (selectedMessages.length > 0) {
+        manuallyMarkedUnreadMessageId.current =
+          getManualUnreadGuardAfterAction({
+            currentGuardId: manuallyMarkedUnreadMessageId.current,
+            isRead,
+            openMessageId: selectedMessage?.id,
+            targetMessageIds: selectedMessageIds,
+          });
+        bulkMarkReadMutation.mutate({ messages: selectedMessages, isRead });
+      }
+      return;
+    }
+
+    if (selectedMessage?.id === message.id) {
+      manuallyMarkedUnreadMessageId.current = isRead ? undefined : message.id;
+    }
     markReadMutation.mutate({ message, isRead });
   }
 
   function handleMoveMessage(
     message: MailMessageSummary,
     destinationFolderId: string,
+    removedMessageIds?: Set<string>,
   ) {
-    moveMutation.mutate({ message, destinationFolderId });
+    if (removedMessageIds) {
+      const selectedMessages = resolveBulkMessages(
+        message,
+        removedMessageIds,
+        messages,
+      );
+
+      if (selectedMessages.length > 0) {
+        bulkMoveMutation.mutate({
+          messages: selectedMessages,
+          destinationFolderId,
+        });
+      }
+      return;
+    }
+
+    moveMutation.mutate({ message, destinationFolderId, removedMessageIds });
   }
 
-  function handleDeleteMessage(message: MailMessageSummary) {
-    deleteMutation.mutate({ message });
+  function handleDeleteMessage(
+    message: MailMessageSummary,
+    removedMessageIds?: Set<string>,
+  ) {
+    if (removedMessageIds) {
+      const selectedMessages = resolveBulkMessages(
+        message,
+        removedMessageIds,
+        messages,
+      );
+
+      if (selectedMessages.length > 0) {
+        bulkDeleteMutation.mutate({ messages: selectedMessages });
+      }
+      return;
+    }
+
+    deleteMutation.mutate({ message, removedMessageIds });
   }
 
-  function handleArchiveMessage(message: MailMessageSummary) {
-    archiveMutation.mutate({ message });
+  function handleArchiveMessage(
+    message: MailMessageSummary,
+    removedMessageIds?: Set<string>,
+  ) {
+    if (removedMessageIds) {
+      const selectedMessages = resolveBulkMessages(
+        message,
+        removedMessageIds,
+        messages,
+      );
+
+      if (selectedMessages.length > 0) {
+        bulkArchiveMutation.mutate({ messages: selectedMessages });
+      }
+      return;
+    }
+
+    archiveMutation.mutate({ message, removedMessageIds });
   }
 
   function handleMarkMessageJunkState(
@@ -454,6 +530,7 @@ export function AuthenticatedMailClient({
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
         <MessageList
+          key={activeAccount.id}
           folderId={resolvedFolderId}
           folderLabel={currentFolder?.label ?? 'Inbox'}
           folders={folders}
@@ -542,4 +619,44 @@ function getInboxFolder(folders: MailFolder[] | undefined) {
     folders.find((folder) => folder.id.toLowerCase() === 'inbox') ??
     folders[0]
   );
+}
+
+function resolveBulkMessages(
+  message: MailMessageSummary,
+  messageIds: Set<string>,
+  messages: MailMessageSummary[],
+) {
+  if (message.id !== messageIds.values().next().value) {
+    return [];
+  }
+
+  const messagesById = new Map(
+    messages.map((candidate) => [candidate.id, candidate]),
+  );
+
+  return [...messageIds].flatMap((messageId) => {
+    const selectedMessage =
+      messagesById.get(messageId) ??
+      (message.id === messageId ? message : undefined);
+
+    return selectedMessage ? [selectedMessage] : [];
+  });
+}
+
+export function getManualUnreadGuardAfterAction({
+  currentGuardId,
+  isRead,
+  openMessageId,
+  targetMessageIds,
+}: {
+  currentGuardId: string | undefined;
+  isRead: boolean;
+  openMessageId: string | undefined;
+  targetMessageIds: Set<string>;
+}) {
+  if (!openMessageId || !targetMessageIds.has(openMessageId)) {
+    return currentGuardId;
+  }
+
+  return isRead ? undefined : openMessageId;
 }
