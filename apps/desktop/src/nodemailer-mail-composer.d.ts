@@ -1,5 +1,8 @@
 declare module 'nodemailer/lib/mail-composer' {
   interface MailComposerAttachment {
+    cid?: string;
+    content?: Buffer;
+    contentDisposition?: 'inline' | 'attachment';
     contentType?: string;
     filename?: string;
     path?: string;

@@ -4,6 +4,9 @@ import type {
   LocalMailAttachment,
   MailActionCapability,
   MailFolder,
+  MailDraftDetail,
+  MailDraftSaveInput,
+  MailDraftSummary,
   MailMessageDetail,
   MailPersonSuggestion,
   SearchMessagesInput,
@@ -48,6 +51,20 @@ ipcRenderer.on('mail:open-message', (_event, payload: unknown) => {
 
   for (const listener of openMessageListeners) {
     listener(parsedPayload);
+  }
+});
+
+const composeCloseRequestListeners = new Set<() => void>();
+let hasPendingComposeCloseRequest = false;
+
+ipcRenderer.on('window:close-requested', () => {
+  if (composeCloseRequestListeners.size === 0) {
+    hasPendingComposeCloseRequest = true;
+    return;
+  }
+
+  for (const listener of composeCloseRequestListeners) {
+    listener();
   }
 });
 
@@ -268,8 +285,36 @@ const courrier = {
         silent: boolean;
       }>,
   },
+  drafts: {
+    list: (accountId: string) =>
+      ipcRenderer.invoke('draft:list', accountId) as Promise<MailDraftSummary[]>,
+    get: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke(
+        'draft:get',
+        accountId,
+        providerDraftId,
+      ) as Promise<MailDraftDetail>,
+    save: (accountId: string, input: MailDraftSaveInput) =>
+      ipcRenderer.invoke('draft:save', accountId, input) as Promise<MailDraftDetail>,
+    delete: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke('draft:delete', accountId, providerDraftId) as Promise<void>,
+    send: (accountId: string, providerDraftId: string) =>
+      ipcRenderer.invoke('draft:send', accountId, providerDraftId) as Promise<void>,
+  },
   window: {
     closeCurrent: () => ipcRenderer.invoke('window:close-current') as Promise<void>,
+    onCloseRequested: (listener: () => void) => {
+      composeCloseRequestListeners.add(listener);
+
+      if (hasPendingComposeCloseRequest) {
+        hasPendingComposeCloseRequest = false;
+        listener();
+      }
+
+      return () => {
+        composeCloseRequestListeners.delete(listener);
+      };
+    },
     getComposeDraft: () =>
       ipcRenderer.invoke('window:get-compose-draft') as Promise<
         ComposeWindowDraft | undefined

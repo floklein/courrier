@@ -1,4 +1,5 @@
 import { cleanup as cleanupLiveRegion } from '@atlaskit/pragmatic-drag-and-drop-live-region';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -18,10 +19,10 @@ import type {
   MailFolder,
   MailMessageSummary,
   MailResponseKind,
-  ReplyToMessageInput,
-  SendMailInput,
 } from '@/lib/mail-types';
 import {
+  mailDraftQueryOptions,
+  mailDraftsQueryOptions,
   mailFoldersQueryOptions,
   mailMessagesQueryOptions,
 } from '@/lib/mail/mail-query-options';
@@ -41,12 +42,18 @@ export function AuthenticatedMailClient({
   const navigate = useNavigate();
   const [replyMessageId, setReplyMessageId] = useState<string>();
   const [responseKind, setResponseKind] = useState<MailResponseKind>('reply');
+  const [draftOpenError, setDraftOpenError] = useState<Error | null>(null);
   const [isOpeningComposeWindow, setIsOpeningComposeWindow] = useState(false);
   const [isMailDragActive, setIsMailDragActive] = useState(false);
   const isComposingNew = useComposeStore((state) => state.isOpen);
   const closeCompose = useComposeStore((state) => state.close);
+  const flushAndCloseCompose = useComposeStore((state) => state.flushAndClose);
   const openCompose = useComposeStore((state) => state.open);
+  const setComposeFlushHandler = useComposeStore(
+    (state) => state.setFlushHandler,
+  );
   const manuallyMarkedUnreadMessageId = useRef<string | undefined>(undefined);
+  const openingProviderDraftId = useRef<string | undefined>(undefined);
   const previousFolderId = useRef<string | undefined>(undefined);
   const {
     applyActiveMailAccountSession,
@@ -72,16 +79,14 @@ export function AuthenticatedMailClient({
     actionCapabilities,
     archiveMutation,
     deleteMutation,
+    invalidateMailLists,
     flagMutation,
     importantMutation,
     isActionPending,
-    isSendingMessage,
     junkMutation,
     markReadMutation,
     moveMutation,
     queryClient,
-    replyToMessageMutation,
-    sendMessageMutation,
     starMutation,
   } = useMailActions({
     accountId: activeAccount.id,
@@ -92,6 +97,7 @@ export function AuthenticatedMailClient({
     closeCompose,
     onReplyMessageIdChange: setReplyMessageId,
   });
+  const draftsQuery = useQuery(mailDraftsQueryOptions(activeAccount.id));
 
   useEffect(() => cleanupLiveRegion, []);
 
@@ -175,9 +181,82 @@ export function AuthenticatedMailClient({
     }
 
     setReplyMessageId(undefined);
-    closeCompose();
+    setDraftOpenError(null);
     manuallyMarkedUnreadMessageId.current = undefined;
-  }, [closeCompose, resolvedFolderId, searchScope, setSearchQuery]);
+  }, [resolvedFolderId, searchScope, setSearchQuery]);
+
+  useEffect(() => {
+    if (
+      currentFolder?.wellKnownName !== 'drafts' ||
+      !messageId ||
+      !draftsQuery.data
+    ) {
+      return;
+    }
+
+    const providerDraft = draftsQuery.data.find(
+      (draft) =>
+        draft.providerDraftId === messageId ||
+        draft.providerDraftMessageId === messageId,
+    );
+
+    if (!providerDraft) {
+      return;
+    }
+
+    if (openingProviderDraftId.current === providerDraft.providerDraftId) {
+      return;
+    }
+
+    openingProviderDraftId.current = providerDraft.providerDraftId;
+
+    const openProviderDraft = async () => {
+      try {
+        setDraftOpenError(null);
+        const didClose = await flushAndCloseCompose();
+
+        if (!didClose) {
+          return;
+        }
+
+        const draft = await queryClient.ensureQueryData(
+          mailDraftQueryOptions(activeAccount.id, providerDraft.providerDraftId),
+        );
+
+        setReplyMessageId(undefined);
+        openCompose(draft);
+        await navigate({
+          to: '/mail/$folderId',
+          params: { folderId: encodeRouteId(resolvedFolderId) },
+          replace: true,
+        });
+      } catch (error) {
+        setDraftOpenError(
+          error instanceof Error
+            ? error
+            : new Error('Could not open the provider draft.'),
+        );
+      } finally {
+        if (
+          openingProviderDraftId.current === providerDraft.providerDraftId
+        ) {
+          openingProviderDraftId.current = undefined;
+        }
+      }
+    };
+
+    void openProviderDraft();
+  }, [
+    activeAccount.id,
+    currentFolder?.wellKnownName,
+    draftsQuery.data,
+    flushAndCloseCompose,
+    messageId,
+    navigate,
+    openCompose,
+    queryClient,
+    resolvedFolderId,
+  ]);
 
   useEffect(() => {
     if (!messageId || !messageQuery.error) {
@@ -276,12 +355,16 @@ export function AuthenticatedMailClient({
     importantMutation.mutate({ message, isImportant });
   }
 
-  function handleRespondToMessage(
+  async function handleRespondToMessage(
     message: MailMessageSummary,
     kind: MailResponseKind,
   ) {
-    closeCompose();
-    replyToMessageMutation.reset();
+    const didClose = await flushAndCloseCompose();
+
+    if (!didClose) {
+      return;
+    }
+
     setResponseKind(kind);
     setReplyMessageId(message.id);
 
@@ -300,35 +383,34 @@ export function AuthenticatedMailClient({
   }
 
   function handleReplyToMessage(message: MailMessageSummary) {
-    handleRespondToMessage(message, 'reply');
+    void handleRespondToMessage(message, 'reply');
   }
 
   function handleReplyAllToMessage(message: MailMessageSummary) {
-    handleRespondToMessage(message, 'replyAll');
+    void handleRespondToMessage(message, 'replyAll');
   }
 
   function handleForwardMessage(message: MailMessageSummary) {
-    handleRespondToMessage(message, 'forward');
+    void handleRespondToMessage(message, 'forward');
   }
 
   function handleCloseReply() {
-    replyToMessageMutation.reset();
     setReplyMessageId(undefined);
   }
 
-  function handleComposeMessage() {
-    sendMessageMutation.reset();
+  async function handleComposeMessage() {
+    const didClose = await flushAndCloseCompose();
+
+    if (!didClose) {
+      return;
+    }
+
     setReplyMessageId(undefined);
     openCompose();
   }
 
   function handleCloseCompose() {
-    sendMessageMutation.reset();
     closeCompose();
-  }
-
-  function handleSendMessage(input: SendMailInput) {
-    sendMessageMutation.mutate(input);
   }
 
   async function handleMoveComposeToWindow(draft: ComposeWindowDraft) {
@@ -342,9 +424,6 @@ export function AuthenticatedMailClient({
     }
   }
 
-  function handleReplyToMessageBody(input: ReplyToMessageInput) {
-    replyToMessageMutation.mutate(input);
-  }
 
   function handleSearch(query: string) {
     setSearchQuery(query);
@@ -368,7 +447,9 @@ export function AuthenticatedMailClient({
           isLoading={foldersQuery.isPending}
           error={foldersQuery.error as Error | null}
           isActionPending={isActionPending}
-          onComposeMessage={handleComposeMessage}
+          onComposeMessage={() => {
+            void handleComposeMessage();
+          }}
           onMoveMessage={handleMoveMessage}
           className={cn(isReadingMessage && 'max-md:hidden')}
         />
@@ -380,7 +461,7 @@ export function AuthenticatedMailClient({
           messages={messages}
           selectedMessageId={messageId}
           isLoading={messagesQuery.isPending || foldersQuery.isPending}
-          error={messagesQuery.error as Error | null}
+          error={draftOpenError ?? (messagesQuery.error as Error | null)}
           hasNextPage={Boolean(messagesQuery.hasNextPage)}
           isFetchingNextPage={messagesQuery.isFetchingNextPage}
           isActionPending={isActionPending}
@@ -415,8 +496,8 @@ export function AuthenticatedMailClient({
           message={selectedMessage}
           replyMessageId={replyMessageId}
           responseKind={responseKind}
-          isSendingMessage={isSendingMessage}
-          replyError={replyToMessageMutation.error as Error | null}
+          isSendingMessage={false}
+          replyError={null}
           isLoading={messageQuery.isPending && Boolean(messageId)}
           error={messageQuery.error as Error | null}
           isMailDragActive={isMailDragActive}
@@ -429,7 +510,8 @@ export function AuthenticatedMailClient({
           onForwardMessage={handleForwardMessage}
           onReplyToMessage={handleReplyToMessage}
           onReplyAllToMessage={handleReplyAllToMessage}
-          onReplyToMessageBody={handleReplyToMessageBody}
+          onFlushHandlerChange={setComposeFlushHandler}
+          onProviderDraftChanged={invalidateMailLists}
           onToggleMessageFlag={handleToggleMessageFlag}
           onToggleMessageImportant={handleToggleMessageImportant}
           onToggleMessageStar={handleToggleMessageStar}
@@ -438,13 +520,11 @@ export function AuthenticatedMailClient({
         {isComposingNew && (
           <NewMessageComposerOverlay
             accountId={activeAccount.id}
-            isSending={isSendingMessage || isOpeningComposeWindow}
-            error={sendMessageMutation.error as Error | null}
+            isSending={isOpeningComposeWindow}
+            error={null}
             onClose={handleCloseCompose}
-            onMoveToWindow={(draft) => {
-              void handleMoveComposeToWindow(draft);
-            }}
-            onSend={handleSendMessage}
+            onMoveToWindow={handleMoveComposeToWindow}
+            onProviderDraftChanged={invalidateMailLists}
           />
         )}
       </main>

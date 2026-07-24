@@ -10,6 +10,8 @@ export interface ComposeEditorValue {
 
 export interface ComposeWindowDraft {
   accountId: string;
+  providerDraftId?: string;
+  providerDraftMessageId?: string;
   kind?: 'new' | 'reply' | 'replyAll' | 'forward';
   relatedMessageId?: string;
   toValue: string;
@@ -43,6 +45,8 @@ export const composeEditorValueSchema = z.object({
 
 export const composeWindowDraftSchema = z.object({
   accountId: z.string().min(1).max(2048),
+  providerDraftId: z.string().min(1).max(2048).optional(),
+  providerDraftMessageId: z.string().min(1).max(2048).optional(),
   kind: z.enum(['new', 'reply', 'replyAll', 'forward']).optional(),
   relatedMessageId: z.string().min(1).max(2048).optional(),
   toValue: z.string().max(10_000),

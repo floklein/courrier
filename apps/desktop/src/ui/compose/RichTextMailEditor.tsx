@@ -17,6 +17,7 @@ export function RichTextMailEditor({
   fill = false,
   id,
   initialValue,
+  value,
   placeholder = 'Write a message',
   onPickAttachments,
   onChange,
@@ -26,6 +27,7 @@ export function RichTextMailEditor({
   fill?: boolean;
   id?: string;
   initialValue?: RichTextMailEditorValue;
+  value?: RichTextMailEditorValue;
   placeholder?: string;
   onPickAttachments?: () => void;
   onChange: (value: RichTextMailEditorValue) => void;
@@ -55,7 +57,7 @@ export function RichTextMailEditor({
         placeholder,
       }),
     ],
-    content: initialValue?.html ?? '',
+    content: value?.html ?? initialValue?.html ?? '',
     editorProps: getEditorProps(placeholder),
     onCreate: ({ editor }) => {
       onChange(getEditorValue(editor));
@@ -71,6 +73,14 @@ export function RichTextMailEditor({
   useEffect(() => {
     editor?.setEditable(!disabled);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor || !value || editor.getHTML() === value.html) {
+      return;
+    }
+
+    editor.commands.setContent(value.html, { emitUpdate: false });
+  }, [editor, value]);
 
   useEffect(() => {
     if (!editor) {

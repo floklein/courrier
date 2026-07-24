@@ -9,10 +9,13 @@ import type { ComposeWindowDraft } from '@/lib/compose-window';
 import type { MailMessageDetail } from '@/lib/mail-types';
 import { cn } from '@/lib/utils';
 
+type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
+
 export function MailComposerHeader({
   currentDraft,
   isReply,
   isSending,
+  autosaveStatus,
   replyMessage,
   useWindowHeader,
   onClose,
@@ -22,11 +25,12 @@ export function MailComposerHeader({
   currentDraft: ComposeWindowDraft;
   isReply: boolean;
   isSending: boolean;
+  autosaveStatus?: AutosaveStatus;
   replyMessage?: MailMessageDetail;
   useWindowHeader?: boolean;
   onClose: () => void;
   onMinimize?: () => void;
-  onMoveToWindow?: (draft: ComposeWindowDraft) => void;
+  onMoveToWindow?: () => void;
 }) {
   return (
     <div
@@ -43,6 +47,11 @@ export function MailComposerHeader({
         {isReply && replyMessage && (
           <p className="truncate text-xs text-muted-foreground">
             {replyMessage.subject}
+          </p>
+        )}
+        {autosaveStatus && autosaveStatus !== 'idle' && (
+          <p className="truncate text-xs text-muted-foreground">
+            {getAutosaveLabel(autosaveStatus)}
           </p>
         )}
       </div>
@@ -76,7 +85,7 @@ export function MailComposerHeader({
                   size="icon-sm"
                   aria-label="Move composer to window"
                   disabled={isSending}
-                  onClick={() => onMoveToWindow(currentDraft)}
+                  onClick={onMoveToWindow}
                 >
                   <ExternalLink data-icon="inline-start" />
                 </Button>
@@ -107,6 +116,18 @@ export function MailComposerHeader({
       </div>
     </div>
   );
+}
+
+function getAutosaveLabel(status: AutosaveStatus) {
+  if (status === 'saving') {
+    return 'Saving...';
+  }
+
+  if (status === 'failed') {
+    return 'Autosave failed';
+  }
+
+  return 'Saved';
 }
 
 function getComposerTitle(

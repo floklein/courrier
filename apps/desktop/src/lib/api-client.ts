@@ -35,8 +35,16 @@ export const api = {
     getSettings: window.courrier.notifications.getSettings,
     updateSettings: window.courrier.notifications.updateSettings,
   },
+  drafts: {
+    list: window.courrier.drafts.list,
+    get: window.courrier.drafts.get,
+    save: window.courrier.drafts.save,
+    delete: window.courrier.drafts.delete,
+    send: window.courrier.drafts.send,
+  },
   window: {
     closeCurrent: () => window.courrier.window.closeCurrent(),
+    onCloseRequested: window.courrier.window.onCloseRequested,
     getComposeDraft: () => window.courrier.window.getComposeDraft(),
     openComposeWindow: window.courrier.window.openComposeWindow,
   },

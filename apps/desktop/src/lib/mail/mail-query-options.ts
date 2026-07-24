@@ -65,6 +65,25 @@ export function mailMessageQueryOptions(
   });
 }
 
+export function mailDraftsQueryOptions(accountId: string) {
+  return queryOptions({
+    queryKey: ['mail', accountId, 'drafts'] as const,
+    queryFn: () => api.drafts.list(accountId),
+    staleTime: mailPreloadStaleTimeMs,
+  });
+}
+
+export function mailDraftQueryOptions(
+  accountId: string,
+  providerDraftId: string,
+) {
+  return queryOptions({
+    queryKey: ['mail', accountId, 'draft', providerDraftId] as const,
+    queryFn: () => api.drafts.get(accountId, providerDraftId),
+    staleTime: mailPreloadStaleTimeMs,
+  });
+}
+
 export function mailPeopleQueryOptions(accountId: string, query: string) {
   const normalizedQuery = query.trim();
 

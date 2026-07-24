@@ -50,6 +50,7 @@ export interface LocalMailAttachment {
   name: string;
   contentType: string;
   size: number;
+  providerAttachmentId?: string;
 }
 
 export interface SendMailInput {
@@ -72,6 +73,51 @@ export interface ReplyToMessageInput {
   bccRecipients?: MailComposeRecipient[];
   attachments?: LocalMailAttachment[];
 }
+
+export type MailDraftKind = 'new' | 'reply' | 'replyAll' | 'forward';
+
+export interface MailDraftSaveInput {
+  providerDraftId?: string;
+  providerDraftMessageId?: string;
+  kind: MailDraftKind;
+  relatedMessageId?: string;
+  toRecipients: MailComposeRecipient[];
+  ccRecipients?: MailComposeRecipient[];
+  bccRecipients?: MailComposeRecipient[];
+  toValue: string;
+  ccValue?: string;
+  bccValue?: string;
+  subject: string;
+  bodyHtml: string;
+  editorValue: {
+    html: string;
+    text: string;
+    isEmpty: boolean;
+  };
+  attachments?: LocalMailAttachment[];
+}
+
+export interface MailDraftSummary {
+  providerDraftId: string;
+  providerDraftMessageId?: string;
+  accountId: string;
+  kind: MailDraftKind;
+  relatedMessageId?: string;
+  toValue: string;
+  ccValue?: string;
+  bccValue?: string;
+  subject: string;
+  editorValue: {
+    html: string;
+    text: string;
+    isEmpty: boolean;
+  };
+  attachments: LocalMailAttachment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MailDraftDetail = MailDraftSummary;
 
 export interface MailMessageSummary {
   id: string;

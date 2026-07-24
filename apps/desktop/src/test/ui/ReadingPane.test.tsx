@@ -100,7 +100,6 @@ function createReadingPane(responseKind: MailResponseKind) {
         onForwardMessage={vi.fn()}
         onReplyToMessage={vi.fn()}
         onReplyAllToMessage={vi.fn()}
-        onReplyToMessageBody={vi.fn()}
         onToggleMessageFlag={vi.fn()}
         onToggleMessageImportant={vi.fn()}
         onToggleMessageStar={vi.fn()}

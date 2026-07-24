@@ -10,7 +10,12 @@ export function useActiveMailAccountChange() {
   const queryClient = useQueryClient();
 
   const resetActiveMailView = useCallback(async () => {
-    useComposeStore.getState().close();
+    const didClose = await useComposeStore.getState().flushAndClose();
+
+    if (!didClose) {
+      throw new Error('Could not save the open draft before changing accounts.');
+    }
+
     await resetMailRouteAfterActiveAccountChanged(navigate);
   }, [navigate]);
 

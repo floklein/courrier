@@ -1,44 +1,69 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import { api } from '@/lib/api-client';
 import { emptyComposeWindowDraft } from '@/lib/compose-window';
-import type { SendMailInput } from '@/lib/mail-types';
+import { requestComposeWindowClose } from '@/ui/app/compose-window-close';
 import { MailComposer } from '@/ui/compose/MailComposer';
 import { FullScreenStatus } from '@/ui/app/StatusViews';
 
 export function ComposeWindow() {
+  const queryClient = useQueryClient();
+  const composerRootRef = useRef<HTMLElement>(null);
   const draftQuery = useQuery({
     queryKey: ['window', 'compose-draft'],
     queryFn: api.window.getComposeDraft,
   });
-  const sendMessageMutation = useMutation({
-    mutationFn: (input: SendMailInput) =>
-      api.mail.sendMessage(
-        draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId,
-        input,
-      ),
-    onSuccess: async () => {
-      await api.window.closeCurrent();
-    },
-  });
+  useEffect(() => {
+    if (draftQuery.isPending) {
+      return undefined;
+    }
+
+    return api.window.onCloseRequested(() => {
+      requestComposeWindowClose(composerRootRef.current);
+    });
+  }, [draftQuery.isPending]);
 
   if (draftQuery.isPending) {
     return <FullScreenStatus label="Opening composer..." />;
   }
 
   return (
-    <main className="h-full bg-background">
+    <main ref={composerRootRef} className="h-full bg-background">
       <MailComposer
         accountId={draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId}
-        mode="new"
+        mode={draftQuery.data?.kind ?? 'new'}
         initialDraft={draftQuery.data ?? emptyComposeWindowDraft}
-        isSending={sendMessageMutation.isPending}
-        error={sendMessageMutation.error as Error | null}
+        isSending={false}
+        error={null}
         className="h-full"
         onClose={() => {
           void api.window.closeCurrent();
         }}
-        onReply={() => undefined}
-        onSend={(input) => sendMessageMutation.mutate(input)}
+        onProviderDraftChanged={() =>
+          Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: [
+                'mail',
+                draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId,
+                'folders',
+              ],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: [
+                'mail',
+                draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId,
+                'messages',
+              ],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: [
+                'mail',
+                draftQuery.data?.accountId ?? emptyComposeWindowDraft.accountId,
+                'drafts',
+              ],
+            }),
+          ]).then(() => undefined)
+        }
         useWindowHeader
       />
     </main>

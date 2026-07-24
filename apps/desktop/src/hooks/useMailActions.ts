@@ -81,6 +81,7 @@ export function useMailActions({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'folders'] }),
       queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'messages'] }),
+      queryClient.invalidateQueries({ queryKey: ['mail', accountId, 'drafts'] }),
     ]);
   }
 
@@ -480,6 +481,7 @@ export function useMailActions({
     actionCapabilities: actionCapabilitiesQuery.data ?? [],
     archiveMutation,
     deleteMutation,
+    invalidateMailLists,
     flagMutation,
     importantMutation,
     isActionPending,

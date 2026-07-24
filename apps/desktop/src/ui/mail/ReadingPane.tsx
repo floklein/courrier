@@ -28,7 +28,6 @@ import type {
   MailMessageDetail,
   MailMessageSummary,
   MailResponseKind,
-  ReplyToMessageInput,
 } from '@/lib/mail-types';
 import { api } from '@/lib/api-client';
 import { formatMailDate } from '@/lib/mail/mail-utils';
@@ -64,7 +63,8 @@ export function ReadingPane({
   onForwardMessage,
   onReplyToMessage,
   onReplyAllToMessage,
-  onReplyToMessageBody,
+  onFlushHandlerChange,
+  onProviderDraftChanged,
   onToggleMessageFlag,
   onToggleMessageImportant,
   onToggleMessageStar,
@@ -102,7 +102,10 @@ export function ReadingPane({
   onForwardMessage: (message: MailMessageSummary) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
   onReplyAllToMessage: (message: MailMessageSummary) => void;
-  onReplyToMessageBody: (input: ReplyToMessageInput) => void;
+  onFlushHandlerChange?: (
+    handler: (() => Promise<boolean>) | undefined,
+  ) => void;
+  onProviderDraftChanged?: () => Promise<void> | void;
   onToggleMessageFlag: (
     message: MailMessageSummary,
     isFlagged: boolean,
@@ -298,8 +301,8 @@ export function ReadingPane({
           error={replyError}
           className="max-h-[46vh] shrink-0 border-t"
           onClose={onCloseReply}
-          onReply={onReplyToMessageBody}
-          onSend={() => undefined}
+          onFlushHandlerChange={onFlushHandlerChange}
+          onProviderDraftChanged={onProviderDraftChanged}
         />
       )}
     </article>
