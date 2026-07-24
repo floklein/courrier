@@ -14,6 +14,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
+const graphDraftStatePropertyId =
+  'String {5f640a5e-821a-4d62-9a14-a242f04c62d2} Name CourrierDraftState';
 const account: MailAccount = {
   id: 'microsoft:account-1',
   providerId: 'microsoft',
@@ -686,6 +688,211 @@ describe('GraphClient write requests', () => {
       }),
     ).resolves.toEqual({ messages: [] });
   });
+
+  it('creates a forward draft with recipients and patches only Courrier metadata', async () => {
+    const draftState = {
+      kind: 'forward' as const,
+      relatedMessageId: 'message-1',
+      toValue: 'Ada <ada@example.com>',
+      ccValue: 'Grace <grace@example.com>',
+      bccValue: 'Hidden <hidden@example.com>',
+    };
+    const encodedDraftState = encodeProviderDraftState(draftState);
+    const fetchMock = mockFetch(
+      jsonResponse({
+        id: 'draft-1',
+        body: {
+          contentType: 'html',
+          content: '<p>Note</p><hr><p>Original message</p>',
+        },
+      }, 201),
+      new Response(null, { status: 204 }),
+      jsonResponse({
+        id: 'draft-1',
+        subject: 'Fwd: Project',
+        bodyPreview: 'Note Original message',
+        body: {
+          contentType: 'html',
+          content: '<p>Note</p><hr><p>Original message</p>',
+        },
+        toRecipients: [
+          { emailAddress: { name: 'Ada', address: 'ada@example.com' } },
+        ],
+        ccRecipients: [
+          { emailAddress: { name: 'Grace', address: 'grace@example.com' } },
+        ],
+        bccRecipients: [
+          { emailAddress: { name: 'Hidden', address: 'hidden@example.com' } },
+        ],
+        singleValueExtendedProperties: [
+          {
+            id: graphDraftStatePropertyId,
+            value: encodedDraftState,
+          },
+        ],
+      }),
+    );
+    const client = createGraphClient();
+
+    const draft = await client.createDraft(account.id, {
+      ...draftState,
+      toRecipients: [{ name: 'Ada', email: 'ada@example.com' }],
+      ccRecipients: [{ name: 'Grace', email: 'grace@example.com' }],
+      bccRecipients: [{ name: 'Hidden', email: 'hidden@example.com' }],
+      subject: 'Fwd: Project',
+      bodyHtml: '<p>Note</p>',
+      editorValue: {
+        html: '<p>Note</p>',
+        text: 'Note',
+        isEmpty: false,
+      },
+      attachments: [],
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/createForward`,
+    );
+    const createBody = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
+    expect(createBody.message).toEqual({
+      subject: 'Fwd: Project',
+      body: {
+        contentType: 'HTML',
+        content: '<p>Note</p>',
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            name: 'Ada',
+            address: 'ada@example.com',
+          },
+        },
+      ],
+      ccRecipients: [
+        {
+          emailAddress: {
+            name: 'Grace',
+            address: 'grace@example.com',
+          },
+        },
+      ],
+      bccRecipients: [
+        {
+          emailAddress: {
+            name: 'Hidden',
+            address: 'hidden@example.com',
+          },
+        },
+      ],
+    });
+    const metadataPatch = JSON.parse(
+      fetchMock.mock.calls[1][1]?.body as string,
+    );
+    expect(metadataPatch).toEqual({
+      singleValueExtendedProperties: [
+        {
+          id: graphDraftStatePropertyId,
+          value: encodedDraftState,
+        },
+      ],
+    });
+    expect(metadataPatch).not.toHaveProperty('body');
+    expect(draft).toMatchObject({
+      providerDraftId: 'draft-1',
+      kind: 'forward',
+      relatedMessageId: 'message-1',
+      toValue: draftState.toValue,
+      ccValue: draftState.ccValue,
+      bccValue: draftState.bccValue,
+      editorValue: {
+        html: '<p>Note</p><hr><p>Original message</p>',
+      },
+    });
+  });
+
+  it('restores plaintext Graph drafts as escaped editor HTML', async () => {
+    mockFetch(
+      jsonResponse({
+        id: 'draft-text',
+        subject: 'Plain notes',
+        body: {
+          contentType: 'text',
+          content: 'Hello <Ada>\nSecond line',
+        },
+        toRecipients: [
+          {
+            emailAddress: {
+              name: 'Ada Lovelace',
+              address: 'ada@example.com',
+            },
+          },
+        ],
+        ccRecipients: [
+          {
+            emailAddress: {
+              address: 'grace@example.com',
+            },
+          },
+        ],
+        bccRecipients: [],
+      }),
+    );
+    const client = createGraphClient();
+
+    const draft = await client.getDraft(account.id, 'draft-text');
+
+    expect(draft).toMatchObject({
+      providerDraftId: 'draft-text',
+      kind: 'new',
+      toValue: 'Ada Lovelace <ada@example.com>',
+      ccValue: 'grace@example.com',
+      bccValue: '',
+      editorValue: {
+        html: 'Hello &lt;Ada&gt;<br>Second line',
+        text: 'Hello <Ada>\nSecond line',
+        isEmpty: false,
+      },
+    });
+  });
+
+  it('loads every Microsoft Graph draft page', async () => {
+    const nextPageUrl =
+      `${graphBaseUrl}/me/mailFolders/drafts/messages?` +
+      '$top=100&$skiptoken=page-2';
+    const fetchMock = mockFetch(
+      jsonResponse({
+        value: [
+          {
+            id: 'draft-1',
+            subject: 'First',
+            body: { contentType: 'html', content: '<p>First</p>' },
+          },
+        ],
+        '@odata.nextLink': nextPageUrl,
+      }),
+      jsonResponse({
+        value: [
+          {
+            id: 'draft-2',
+            subject: 'Second',
+            body: { contentType: 'html', content: '<p>Second</p>' },
+          },
+        ],
+      }),
+    );
+    const client = createGraphClient();
+
+    const drafts = await client.listDrafts(account.id);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      new URL(String(fetchMock.mock.calls[0][0])).searchParams.get('$expand'),
+    ).not.toContain('@odata.type');
+    expect(fetchMock.mock.calls[1][0]).toBe(nextPageUrl);
+    expect(drafts.map((draft) => draft.providerDraftId)).toEqual([
+      'draft-1',
+      'draft-2',
+    ]);
+  });
 });
 
 function createGraphClient() {
@@ -713,4 +920,8 @@ function mockFetch(...responses: Response[]) {
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status });
+}
+
+function encodeProviderDraftState(state: Record<string, unknown>) {
+  return Buffer.from(JSON.stringify(state), 'utf8').toString('base64url');
 }

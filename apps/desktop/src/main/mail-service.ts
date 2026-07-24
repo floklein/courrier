@@ -3,6 +3,9 @@ import type {
   MailActionCapability,
   MailMessageDetail,
   MailPersonSuggestion,
+  MailDraftDetail,
+  MailDraftSaveInput,
+  MailDraftSummary,
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
@@ -167,6 +170,45 @@ export class MailService {
     return this.getProvider(accountId).listPeople(accountId, query);
   }
 
+  listDrafts(accountId: string): Promise<MailDraftSummary[]> {
+    return this.getProvider(accountId).listDrafts(accountId);
+  }
+
+  getDraft(
+    accountId: string,
+    providerDraftId: string,
+  ): Promise<MailDraftDetail> {
+    return this.getProvider(accountId).getDraft(accountId, providerDraftId);
+  }
+
+  async saveDraft(
+    accountId: string,
+    input: MailDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    const providerInput = {
+      ...input,
+      attachments: await this.resolveDraftAttachments(input.attachments),
+    };
+
+    if (input.providerDraftId) {
+      return this.getProvider(accountId).updateDraft(
+        accountId,
+        input.providerDraftId,
+        providerInput,
+      );
+    }
+
+    return this.getProvider(accountId).createDraft(accountId, providerInput);
+  }
+
+  deleteDraft(accountId: string, providerDraftId: string): Promise<void> {
+    return this.getProvider(accountId).deleteDraft(accountId, providerDraftId);
+  }
+
+  sendDraft(accountId: string, providerDraftId: string): Promise<void> {
+    return this.getProvider(accountId).sendDraft(accountId, providerDraftId);
+  }
+
   async sendMessage(accountId: string, input: SendMailInput): Promise<void> {
     return this.getProvider(accountId).sendMessage(accountId, {
       ...input,
@@ -203,5 +245,31 @@ export class MailService {
     }
 
     return this.localAttachmentStore.resolveMany(attachments);
+  }
+
+  private async resolveDraftAttachments(attachments: MailDraftSaveInput['attachments']) {
+    if (!attachments?.length) {
+      return [];
+    }
+
+    const localAttachments = attachments.filter(
+      (attachment) => !attachment.providerAttachmentId,
+    );
+    const providerAttachments = attachments.filter(
+      (attachment) => attachment.providerAttachmentId,
+    );
+
+    if (!localAttachments.length) {
+      return providerAttachments;
+    }
+
+    if (!this.localAttachmentStore) {
+      throw new Error('Local attachment storage is unavailable.');
+    }
+
+    return [
+      ...providerAttachments,
+      ...(await this.localAttachmentStore.resolveMany(localAttachments)),
+    ];
   }
 }

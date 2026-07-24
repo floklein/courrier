@@ -42,6 +42,13 @@ function installCourrierApi() {
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
   };
+  const drafts = {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
+    save: vi.fn(),
+    delete: vi.fn(),
+    send: vi.fn(),
+  };
   const windowApi = {
     closeCurrent: vi.fn(),
     getComposeDraft: vi.fn(),
@@ -50,10 +57,17 @@ function installCourrierApi() {
 
   Object.defineProperty(window, 'courrier', {
     configurable: true,
-    value: { attachments, auth, mail, notifications, window: windowApi },
+    value: {
+      attachments,
+      auth,
+      drafts,
+      mail,
+      notifications,
+      window: windowApi,
+    },
   });
 
-  return { auth, mail };
+  return { auth, drafts, mail };
 }
 
 describe('mail query options', () => {
@@ -214,5 +228,43 @@ describe('mail query options', () => {
     expect(options.queryKey).toEqual(['mail', 'account-1', 'people', '']);
     await runQueryFn(options);
     expect(bridge.mail.listPeople).toHaveBeenCalledWith('account-1', undefined);
+  });
+
+  it('builds list and detail draft queries scoped to the account', async () => {
+    const bridge = installCourrierApi();
+    const {
+      mailDraftQueryOptions,
+      mailDraftsQueryOptions,
+      mailPreloadStaleTimeMs,
+    } = await import('@/lib/mail/mail-query-options');
+
+    const listOptions = mailDraftsQueryOptions('google:account-1');
+    const detailOptions = mailDraftQueryOptions(
+      'google:account-1',
+      'draft-1',
+    );
+
+    expect(listOptions.queryKey).toEqual([
+      'mail',
+      'google:account-1',
+      'drafts',
+    ]);
+    expect(detailOptions.queryKey).toEqual([
+      'mail',
+      'google:account-1',
+      'draft',
+      'draft-1',
+    ]);
+    expect(listOptions.staleTime).toBe(mailPreloadStaleTimeMs);
+    expect(detailOptions.staleTime).toBe(mailPreloadStaleTimeMs);
+
+    await runQueryFn(listOptions);
+    await runQueryFn(detailOptions);
+
+    expect(bridge.drafts.list).toHaveBeenCalledWith('google:account-1');
+    expect(bridge.drafts.get).toHaveBeenCalledWith(
+      'google:account-1',
+      'draft-1',
+    );
   });
 });

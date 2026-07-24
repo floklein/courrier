@@ -29,6 +29,8 @@ export interface GraphMessage {
   parentFolderId?: string | null;
   subject?: string | null;
   bodyPreview?: string | null;
+  createdDateTime?: string | null;
+  lastModifiedDateTime?: string | null;
   receivedDateTime?: string | null;
   isRead?: boolean | null;
   hasAttachments?: boolean | null;
@@ -51,6 +53,10 @@ export interface GraphMessageDetail extends GraphMessage {
     content?: string | null;
   } | null;
   attachments?: GraphAttachment[] | null;
+  singleValueExtendedProperties?: Array<{
+    id?: string | null;
+    value?: string | null;
+  }> | null;
 }
 
 export interface GraphAttachment {

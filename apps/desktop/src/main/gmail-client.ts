@@ -6,6 +6,9 @@ import type {
   MailActionCapability,
   MailAddress,
   MailAttachment,
+  MailDraftDetail,
+  MailDraftKind,
+  MailDraftSummary,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
@@ -22,6 +25,7 @@ import type {
   MailNotificationState,
   MailSubscription,
   MoveMessageInput,
+  ProviderDraftSaveInput,
   ProviderReplyToMessageInput,
   ProviderSendMailInput,
   RenewSubscriptionInput,
@@ -31,6 +35,7 @@ import MailComposer from 'nodemailer/lib/mail-composer';
 const gmailBaseUrl = 'https://gmail.googleapis.com/gmail/v1';
 const peopleBaseUrl = 'https://people.googleapis.com/v1';
 const gmailPageSize = '25';
+const courrierDraftStateHeader = 'X-Courrier-Draft-State';
 const messageMetadataHeaders = ['From', 'To', 'Subject', 'Date'];
 const detailHeaders = [
   'From',
@@ -64,6 +69,21 @@ interface GmailMessageListItem {
 interface GmailListMessagesResponse {
   messages?: GmailMessageListItem[];
   nextPageToken?: string;
+}
+
+interface GmailDraftListItem {
+  id?: string;
+  message?: GmailMessageListItem;
+}
+
+interface GmailListDraftsResponse {
+  drafts?: GmailDraftListItem[];
+  nextPageToken?: string;
+}
+
+interface GmailDraft {
+  id?: string;
+  message?: GmailMessage;
 }
 
 interface GmailHeader {
@@ -514,6 +534,281 @@ export class GmailClient implements MailProvider {
     return mapPeopleSuggestions(data);
   }
 
+  async listDrafts(accountId: string): Promise<MailDraftSummary[]> {
+    const drafts: MailDraftSummary[] = [];
+    let nextPageToken: string | undefined;
+
+    do {
+      const params = new URLSearchParams({ maxResults: '100' });
+
+      if (nextPageToken) {
+        params.set('pageToken', nextPageToken);
+      }
+
+      const data = await this.fetchGmail<GmailListDraftsResponse>(
+        accountId,
+        `${gmailBaseUrl}/users/me/drafts?${params.toString()}`,
+      );
+      drafts.push(
+        ...(await Promise.all(
+          (data.drafts ?? [])
+            .filter((draft) => draft.id)
+            .map((draft) => this.getDraft(accountId, draft.id ?? '')),
+        )),
+      );
+      nextPageToken = data.nextPageToken;
+    } while (nextPageToken);
+
+    return drafts;
+  }
+
+  async getDraft(
+    accountId: string,
+    providerDraftId: string,
+  ): Promise<MailDraftDetail> {
+    const draft = await this.fetchGmail<GmailDraft>(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts/${encodeURIComponent(providerDraftId)}?format=full`,
+    );
+
+    return mapGmailDraft(accountId, draft);
+  }
+
+  async createDraft(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    const draft = await this.fetchGmail<GmailDraft>(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: await this.createGmailDraftMessage(accountId, input),
+        }),
+      },
+    );
+
+    if (!draft.id) {
+      throw new Error('Gmail did not return a draft ID.');
+    }
+
+    return this.getDraft(accountId, draft.id);
+  }
+
+  async updateDraft(
+    accountId: string,
+    providerDraftId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<MailDraftDetail> {
+    let normalizedInput = input;
+    const needsProviderMessageId = (input.attachments ?? []).some(
+      (attachment) =>
+        !isLocalAttachmentFile(attachment) &&
+        Boolean(attachment.providerAttachmentId),
+    );
+
+    if (needsProviderMessageId && !input.providerDraftMessageId) {
+      const existingDraft = await this.getDraft(accountId, providerDraftId);
+
+      if (!existingDraft.providerDraftMessageId) {
+        throw new Error('Gmail did not return the draft message ID.');
+      }
+
+      normalizedInput = {
+        ...input,
+        providerDraftMessageId: existingDraft.providerDraftMessageId,
+      };
+    }
+
+    await this.fetchGmail<GmailDraft>(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts/${encodeURIComponent(providerDraftId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: providerDraftId,
+          message: await this.createGmailDraftMessage(accountId, normalizedInput),
+        }),
+      },
+    );
+
+    return this.getDraft(accountId, providerDraftId);
+  }
+
+  async deleteDraft(accountId: string, providerDraftId: string): Promise<void> {
+    await this.fetchGmail(
+      accountId,
+      `${gmailBaseUrl}/users/me/drafts/${encodeURIComponent(providerDraftId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async sendDraft(accountId: string, providerDraftId: string): Promise<void> {
+    await this.fetchGmail(accountId, `${gmailBaseUrl}/users/me/drafts/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: providerDraftId }),
+    });
+  }
+
+  private async createGmailDraftMessage(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ) {
+    const isResponse = input.kind !== 'new';
+
+    if (isResponse && !input.relatedMessageId) {
+      throw new Error('Response drafts require a related message ID.');
+    }
+
+    const relatedMessageId = input.relatedMessageId;
+    const original = isResponse
+      ? input.kind === 'forward'
+        ? await this.getFullMessage(accountId, relatedMessageId as string)
+        : await this.getRawMessage(accountId, relatedMessageId as string)
+      : undefined;
+    const headers = getHeaderMap(original?.payload?.headers);
+    const accountEmail =
+      input.kind === 'replyAll'
+        ? await this.getAccountEmail(accountId)
+        : undefined;
+    const replyAllRecipients =
+      input.kind === 'replyAll' && original
+        ? getGmailReplyAllRecipients(headers, accountEmail)
+        : undefined;
+    const toRecipients =
+      input.toRecipients.length > 0
+        ? input.toRecipients
+        : input.kind === 'replyAll'
+          ? replyAllRecipients?.toRecipients ?? []
+          : input.kind === 'reply'
+            ? getGmailReplyRecipients(headers)
+            : [];
+    const ccRecipients =
+      input.ccRecipients?.length
+        ? input.ccRecipients
+        : input.kind === 'replyAll'
+          ? replyAllRecipients?.ccRecipients ?? []
+          : [];
+    const messageId = headers.get('message-id');
+    const references = [headers.get('references'), messageId]
+      .filter(Boolean)
+      .join(' ');
+
+    if (
+      (input.kind === 'reply' || input.kind === 'replyAll') &&
+      toRecipients.length === 0
+    ) {
+      throw new Error('Gmail reply target is missing a sender address.');
+    }
+
+    return {
+      raw: await createRawMail({
+        attachments: await this.resolveDraftAttachments(accountId, input),
+        bodyHtml:
+          input.kind === 'forward' && original && !input.providerDraftId
+            ? createForwardBodyHtml(input.bodyHtml, original)
+            : input.bodyHtml,
+        bccRecipients: input.bccRecipients ?? [],
+        ccRecipients,
+        extraHeaders: {
+          [courrierDraftStateHeader]: encodeGmailDraftState(input),
+          ...(isResponse && input.kind !== 'forward' && messageId
+            ? { 'In-Reply-To': messageId }
+            : {}),
+          ...(isResponse && input.kind !== 'forward' && references
+            ? { References: references }
+            : {}),
+        },
+        subject: input.subject,
+        toRecipients,
+      }),
+      ...(isResponse && input.kind !== 'forward' && original?.threadId
+        ? { threadId: original.threadId }
+        : {}),
+    };
+  }
+
+  private async resolveDraftAttachments(
+    accountId: string,
+    input: ProviderDraftSaveInput,
+  ): Promise<RawMailAttachment[]> {
+    const attachments: RawMailAttachment[] = [];
+
+    for (const attachment of input.attachments ?? []) {
+      if (isLocalAttachmentFile(attachment)) {
+        attachments.push(attachment);
+        continue;
+      }
+
+      if (attachment.providerAttachmentId && input.providerDraftMessageId) {
+        const downloaded = await this.downloadAttachment(
+          accountId,
+          input.providerDraftMessageId,
+          attachment.providerAttachmentId,
+        );
+        attachments.push({
+          name: downloaded.name,
+          contentType: downloaded.contentType,
+          content: downloaded.content,
+        });
+      }
+    }
+
+    if (input.providerDraftMessageId) {
+      const currentMessage = await this.getFullMessage(
+        accountId,
+        input.providerDraftMessageId,
+      );
+
+      for (const part of collectInlineAttachmentParts(currentMessage.payload)) {
+        attachments.push({
+          name: part.filename || 'inline-attachment',
+          contentType: part.mimeType || 'application/octet-stream',
+          content: await this.readGmailAttachmentPart(
+            accountId,
+            input.providerDraftMessageId,
+            part,
+          ),
+          cid: getPartHeader(part, 'content-id')?.replace(/^<|>$/g, ''),
+          contentDisposition: 'inline',
+        });
+      }
+    }
+
+    return attachments;
+  }
+
+  private async readGmailAttachmentPart(
+    accountId: string,
+    messageId: string,
+    part: GmailMessagePart,
+  ) {
+    if (part.body?.data != null) {
+      return decodeBase64UrlBuffer(part.body.data);
+    }
+
+    if (!part.body?.attachmentId) {
+      throw new Error('Gmail did not return inline attachment content.');
+    }
+
+    const data = await this.fetchGmail<GmailAttachmentResponse>(
+      accountId,
+      `${gmailBaseUrl}/users/me/messages/${encodeURIComponent(
+        messageId,
+      )}/attachments/${encodeURIComponent(part.body.attachmentId)}`,
+    );
+
+    if (data.data == null) {
+      throw new Error('Gmail did not return inline attachment content.');
+    }
+
+    return decodeBase64UrlBuffer(data.data);
+  }
+
   async sendMessage(accountId: string, input: ProviderSendMailInput): Promise<void> {
     await this.fetchGmail(accountId, `${gmailBaseUrl}/users/me/messages/send`, {
       method: 'POST',
@@ -878,6 +1173,104 @@ function mapGmailMessageDetail(
   };
 }
 
+function mapGmailDraft(accountId: string, draft: GmailDraft): MailDraftDetail {
+  const message = draft.message ?? {};
+  const headers = getHeaderMap(message.payload?.headers);
+  const body = extractBody(message.payload);
+  const draftState = decodeGmailDraftState(
+    headers.get(courrierDraftStateHeader.toLowerCase()),
+  );
+  const bodyHtml =
+    body.contentType === 'html' ? body.content : plainTextToHtml(body.content);
+
+  return {
+    providerDraftId: draft.id ?? '',
+    providerDraftMessageId: message.id,
+    accountId,
+    kind: (draftState?.kind ?? 'new') as MailDraftKind,
+    relatedMessageId: draftState?.relatedMessageId,
+    toValue: draftState?.toValue ?? headers.get('to') ?? '',
+    ccValue: draftState?.ccValue ?? headers.get('cc') ?? '',
+    bccValue: draftState?.bccValue ?? headers.get('bcc') ?? '',
+    subject: headers.get('subject') ?? '',
+    editorValue: {
+      html: bodyHtml,
+      text: body.contentType === 'text' ? body.content : message.snippet ?? '',
+      isEmpty: !body.content && !message.snippet,
+    },
+    attachments: collectAttachments(message.payload).map((attachment) => ({
+      id: attachment.id,
+      providerAttachmentId: attachment.id,
+      name: attachment.name,
+      contentType: attachment.contentType,
+      size: attachment.size,
+    })),
+    createdAt: mapGmailDate(message, headers),
+    updatedAt: mapGmailDate(message, headers),
+  };
+}
+
+function encodeGmailDraftState(input: ProviderDraftSaveInput) {
+  return Buffer.from(
+    JSON.stringify({
+      kind: input.kind,
+      relatedMessageId: input.relatedMessageId,
+      toValue: input.toValue,
+      ccValue: input.ccValue,
+      bccValue: input.bccValue,
+    }),
+    'utf8',
+  ).toString('base64url');
+}
+
+function decodeGmailDraftState(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const state = JSON.parse(
+      Buffer.from(value, 'base64url').toString('utf8'),
+    ) as Record<string, unknown>;
+    const kind = state.kind;
+
+    if (
+      kind !== 'new' &&
+      kind !== 'reply' &&
+      kind !== 'replyAll' &&
+      kind !== 'forward'
+    ) {
+      return undefined;
+    }
+
+    return {
+      kind,
+      relatedMessageId:
+        typeof state.relatedMessageId === 'string'
+          ? state.relatedMessageId
+          : undefined,
+      toValue: typeof state.toValue === 'string' ? state.toValue : '',
+      ccValue: typeof state.ccValue === 'string' ? state.ccValue : undefined,
+      bccValue: typeof state.bccValue === 'string' ? state.bccValue : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function plainTextToHtml(value: string) {
+  return escapeHtml(value).replaceAll(/\r?\n/g, '<br>');
+}
+
+function isLocalAttachmentFile(
+  attachment: NonNullable<ProviderDraftSaveInput['attachments']>[number],
+): attachment is Extract<
+  NonNullable<ProviderDraftSaveInput['attachments']>[number],
+  { path: string }
+> {
+  return 'path' in attachment;
+}
+
 function getGmailDisplayName(id: string, name: string | undefined) {
   const map: Record<string, string> = {
     INBOX: 'Inbox',
@@ -1113,6 +1506,31 @@ function isInlinePart(part: GmailMessagePart) {
   return disposition?.split(';', 1)[0].trim() === 'inline';
 }
 
+function collectInlineAttachmentParts(
+  part: GmailMessagePart | undefined,
+): GmailMessagePart[] {
+  if (!part) {
+    return [];
+  }
+
+  const parts =
+    part.filename && isInlinePart(part) && part.body
+      ? [part]
+      : [];
+
+  for (const child of part.parts ?? []) {
+    parts.push(...collectInlineAttachmentParts(child));
+  }
+
+  return parts;
+}
+
+function getPartHeader(part: GmailMessagePart, name: string) {
+  return part.headers?.find(
+    (header) => header.name?.toLowerCase() === name.toLowerCase(),
+  )?.value;
+}
+
 function decodeBase64Url(value: string) {
   return decodeBase64UrlBuffer(value).toString('utf8');
 }
@@ -1133,7 +1551,7 @@ async function createRawMail({
   subject,
   toRecipients,
 }: {
-  attachments: NonNullable<ProviderSendMailInput['attachments']>;
+  attachments: RawMailAttachment[];
   bccRecipients?: ProviderSendMailInput['bccRecipients'];
   bodyHtml: string;
   ccRecipients?: ProviderSendMailInput['ccRecipients'];
@@ -1143,6 +1561,9 @@ async function createRawMail({
 }) {
   const composer = new MailComposer({
     attachments: attachments.map((attachment) => ({
+      cid: attachment.cid,
+      content: attachment.content,
+      contentDisposition: attachment.contentDisposition,
       contentType: attachment.contentType,
       filename: attachment.name,
       path: attachment.path,
@@ -1161,6 +1582,15 @@ async function createRawMail({
   );
 
   return message.toString('base64url');
+}
+
+interface RawMailAttachment {
+  name: string;
+  contentType: string;
+  path?: string;
+  content?: Buffer;
+  cid?: string;
+  contentDisposition?: 'inline' | 'attachment';
 }
 
 function injectBccHeader(

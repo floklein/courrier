@@ -26,6 +26,10 @@ import { registerIpcHandlers } from '@/main/ipc';
 import { LocalAttachmentStore } from '@/main/local-attachment-store';
 import { MailSubscriptionManager } from '@/main/mail-subscription-manager';
 import {
+  registerComposeWindowCloseHandshake,
+  type ComposeWindowCloseHandshake,
+} from '@/main/compose-window-close-lifecycle';
+import {
   MailNotificationService,
   mailNotificationSettingsPatchSchema,
 } from '@/main/mail-notification-service';
@@ -54,6 +58,10 @@ if (!isPrimaryInstance) {
 }
 
 const composeDraftsByWebContentsId = new Map<number, ComposeWindowDraft>();
+const composeCloseHandshakesByWebContentsId = new Map<
+  number,
+  ComposeWindowCloseHandshake
+>();
 let mainWindow: BrowserWindow | undefined;
 let mainWindowTrustPolicy: AppUrlTrustPolicy | undefined;
 let mailNotificationService: MailNotificationService | undefined;
@@ -153,10 +161,16 @@ const createComposeWindow = (
   });
 
   const composeWebContentsId = composeWindow.webContents.id;
+  const closeHandshake = registerComposeWindowCloseHandshake(composeWindow);
 
   composeDraftsByWebContentsId.set(composeWebContentsId, draft);
+  composeCloseHandshakesByWebContentsId.set(
+    composeWebContentsId,
+    closeHandshake,
+  );
   composeWindow.on('closed', () => {
     composeDraftsByWebContentsId.delete(composeWebContentsId);
+    composeCloseHandshakesByWebContentsId.delete(composeWebContentsId);
   });
   registerWindowNavigationGuards(composeWindow, shell.openExternal, trustPolicy);
 
@@ -303,6 +317,15 @@ function registerWindowIpcHandlers(trustPolicy: AppUrlTrustPolicy) {
   });
   ipcMain.handle('window:close-current', (event) => {
     assertTrustedSender(event, trustPolicy);
+    const composeCloseHandshake = composeCloseHandshakesByWebContentsId.get(
+      event.sender.id,
+    );
+
+    if (composeCloseHandshake) {
+      composeCloseHandshake.authorizeAndClose();
+      return;
+    }
+
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
 }

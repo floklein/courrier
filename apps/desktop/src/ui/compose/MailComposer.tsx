@@ -1,7 +1,15 @@
 import { dropTargetForExternal } from '@atlaskit/pragmatic-drag-and-drop/external/adapter';
 import { containsFiles, getFiles } from '@atlaskit/pragmatic-drag-and-drop/external/file';
 import { Paperclip, Send, X } from 'lucide-react';
-import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,9 +26,8 @@ import type {
   MailAddress,
   MailComposeRecipient,
   LocalMailAttachment,
+  MailDraftSaveInput,
   MailMessageDetail,
-  ReplyToMessageInput,
-  SendMailInput,
 } from '@/lib/mail-types';
 import {
   parseRecipients,
@@ -43,10 +50,10 @@ export function MailComposer({
   className,
   onClose,
   onDraftChange,
+  onFlushHandlerChange,
   onMinimize,
   onMoveToWindow,
-  onReply,
-  onSend,
+  onProviderDraftChanged,
   useWindowHeader,
 }: {
   accountId: string;
@@ -59,13 +66,23 @@ export function MailComposer({
   className?: string;
   onClose: () => void;
   onDraftChange?: (draft: ComposeWindowDraft) => void;
+  onFlushHandlerChange?: (
+    handler: (() => Promise<boolean>) | undefined,
+  ) => void;
   onMinimize?: () => void;
-  onMoveToWindow?: (draft: ComposeWindowDraft) => void;
-  onReply: (input: ReplyToMessageInput) => void;
-  onSend: (input: SendMailInput) => void;
+  onMoveToWindow?: (draft: ComposeWindowDraft) => Promise<void> | void;
+  onProviderDraftChanged?: () => Promise<void> | void;
   useWindowHeader?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const lastSavedDraftSignatureRef = useRef(
+    initialDraft?.providerDraftId
+      ? getComposeDraftSignature(initialDraft)
+      : undefined,
+  );
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const isTransitioningRef = useRef(false);
+  const shouldSaveOnUnmountRef = useRef(true);
   const toInputId = useId();
   const ccInputId = useId();
   const bccInputId = useId();
@@ -121,17 +138,43 @@ export function MailComposer({
   const [attachments, setAttachments] = useState<LocalMailAttachment[]>(
     initialDraft?.attachments ?? [],
   );
+  const [providerDraftId, setProviderDraftId] = useState(
+    initialDraft?.providerDraftId,
+  );
+  const [providerDraftMessageId, setProviderDraftMessageId] = useState(
+    initialDraft?.providerDraftMessageId,
+  );
+  const [providerDraftAccountId, setProviderDraftAccountId] = useState(
+    initialDraft?.providerDraftId ? initialDraft.accountId : undefined,
+  );
+  const providerDraftIdRef = useRef(initialDraft?.providerDraftId);
+  const providerDraftMessageIdRef = useRef(initialDraft?.providerDraftMessageId);
+  const providerDraftAccountIdRef = useRef(
+    initialDraft?.providerDraftId ? initialDraft.accountId : undefined,
+  );
   const [editorValue, setEditorValue] = useState<RichTextMailEditorValue>({
     ...(initialDraft?.editorValue ?? emptyComposeWindowDraft.editorValue),
   });
   const [validationMessage, setValidationMessage] = useState('');
+  const [autosaveStatus, setAutosaveStatus] = useState<
+    'idle' | 'saving' | 'saved' | 'failed'
+  >('idle');
+  const [isSendingDraft, setIsSendingDraft] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const isComposerBusy = isSending || isSendingDraft || isTransitioning;
   const isResponse = mode !== 'new';
+  const scopedProviderDraftId =
+    providerDraftAccountId === accountId ? providerDraftId : undefined;
+  const scopedProviderDraftMessageId =
+    providerDraftAccountId === accountId ? providerDraftMessageId : undefined;
   const currentDraft = useMemo<ComposeWindowDraft>(
     () => ({
       accountId,
+      providerDraftId: scopedProviderDraftId,
+      providerDraftMessageId: scopedProviderDraftMessageId,
       kind: mode,
-      relatedMessageId: replyMessage?.id,
+      relatedMessageId: replyMessage?.id ?? initialDraft?.relatedMessageId,
       toValue: serializeRecipients(toRecipients, toInputValue),
       ccValue: serializeRecipients(ccRecipients, ccInputValue),
       bccValue: serializeRecipients(bccRecipients, bccInputValue),
@@ -148,34 +191,201 @@ export function MailComposer({
       ccRecipients,
       editorValue,
       mode,
+      initialDraft?.relatedMessageId,
       replyMessage?.id,
+      scopedProviderDraftId,
+      scopedProviderDraftMessageId,
       subject,
       toInputValue,
       toRecipients,
     ],
   );
   const hasBody = editorValue.text.trim().length > 0 && !editorValue.isEmpty;
-  const initialDraftValueRef = useRef<string | null>(null);
+  const currentDraftRef = useRef(currentDraft);
+  currentDraftRef.current = currentDraft;
+  const initialDraftValueRef = useRef<string | undefined>(undefined);
 
-  if (initialDraftValueRef.current == null) {
-    initialDraftValueRef.current = serializeDraftForDirtyCheck(currentDraft);
+  if (initialDraftValueRef.current === undefined) {
+    initialDraftValueRef.current = getComposeDraftSignature(currentDraft);
   }
 
-  const isDirty =
-    serializeDraftForDirtyCheck(currentDraft) !== initialDraftValueRef.current;
+  const currentDraftSignature = getComposeDraftSignature(currentDraft);
+  const hasLocalChanges =
+    currentDraftSignature !== initialDraftValueRef.current;
+  const hasUnsavedChanges =
+    currentDraftSignature !== lastSavedDraftSignatureRef.current;
+
+  const runSaveDraft = useCallback(async ({ force = false } = {}) => {
+    if (!accountId) {
+      return undefined;
+    }
+
+    const draftSnapshot = currentDraftRef.current;
+    const draftSignature = getComposeDraftSignature(draftSnapshot);
+    const hasProviderDraft =
+      providerDraftAccountIdRef.current === accountId &&
+      Boolean(providerDraftIdRef.current);
+
+    if (
+      draftSignature === lastSavedDraftSignatureRef.current ||
+      (!force &&
+        !hasProviderDraft &&
+        draftSignature === initialDraftValueRef.current)
+    ) {
+      return undefined;
+    }
+
+    const draftInput = getDraftSaveInput(
+      draftSnapshot,
+      hasProviderDraft ? providerDraftIdRef.current : undefined,
+      hasProviderDraft ? providerDraftMessageIdRef.current : undefined,
+    );
+    setAutosaveStatus('saving');
+
+    try {
+      const savedDraft = await api.drafts.save(accountId, draftInput);
+      const acknowledgedEditorValue =
+        draftSnapshot.kind !== 'new'
+          ? mergeSavedResponseEditorValue(
+              savedDraft.editorValue,
+              draftSnapshot.editorValue,
+              currentDraftRef.current.editorValue,
+            )
+          : currentDraftRef.current.editorValue;
+      const acknowledgedAttachments = reconcileSavedAttachments(
+        draftSnapshot.attachments ?? [],
+        savedDraft.attachments,
+        currentDraftRef.current.attachments ?? [],
+      );
+      const acknowledgedDraft: ComposeWindowDraft = {
+        ...draftSnapshot,
+        providerDraftId: savedDraft.providerDraftId,
+        providerDraftMessageId: savedDraft.providerDraftMessageId,
+        editorValue:
+          draftSnapshot.kind !== 'new'
+            ? savedDraft.editorValue
+            : draftSnapshot.editorValue,
+        attachments: savedDraft.attachments,
+      };
+
+      providerDraftIdRef.current = savedDraft.providerDraftId;
+      providerDraftMessageIdRef.current = savedDraft.providerDraftMessageId;
+      providerDraftAccountIdRef.current = accountId;
+      currentDraftRef.current = {
+        ...currentDraftRef.current,
+        providerDraftId: savedDraft.providerDraftId,
+        providerDraftMessageId: savedDraft.providerDraftMessageId,
+        editorValue: acknowledgedEditorValue,
+        attachments: acknowledgedAttachments,
+      };
+      setProviderDraftId(savedDraft.providerDraftId);
+      setProviderDraftMessageId(savedDraft.providerDraftMessageId);
+      setProviderDraftAccountId(accountId);
+      setAttachments(acknowledgedAttachments);
+      if (draftSnapshot.kind !== 'new') {
+        setEditorValue(acknowledgedEditorValue);
+      }
+      lastSavedDraftSignatureRef.current =
+        getComposeDraftSignature(acknowledgedDraft);
+      setAutosaveStatus('saved');
+      void onProviderDraftChanged?.();
+      return savedDraft;
+    } catch {
+      setAutosaveStatus('failed');
+      return undefined;
+    }
+  }, [accountId, onProviderDraftChanged]);
+
+  const saveDraft = useCallback(
+    (options: { force?: boolean } = {}) => {
+      const queuedSave = saveQueueRef.current.then(
+        () => runSaveDraft(options),
+        () => runSaveDraft(options),
+      );
+
+      saveQueueRef.current = queuedSave.catch(() => undefined);
+      return queuedSave;
+    },
+    [runSaveDraft],
+  );
+  const saveDraftRef = useRef(saveDraft);
+  saveDraftRef.current = saveDraft;
+
+  useEffect(
+    () => () => {
+      const draftSignature = getComposeDraftSignature(currentDraftRef.current);
+      const hasProviderDraft =
+        providerDraftAccountIdRef.current === accountId &&
+        Boolean(providerDraftIdRef.current);
+
+      if (
+        shouldSaveOnUnmountRef.current &&
+        draftSignature !== lastSavedDraftSignatureRef.current &&
+        (hasProviderDraft || draftSignature !== initialDraftValueRef.current)
+      ) {
+        void saveDraftRef.current({ force: true });
+      }
+    },
+    [accountId],
+  );
 
   useEffect(() => {
-    if (isResponse) {
+    onDraftChange?.(currentDraft);
+  }, [currentDraft, onDraftChange]);
+
+  useEffect(() => {
+    if (!providerDraftAccountId || providerDraftAccountId === accountId) {
       return;
     }
 
-    onDraftChange?.(currentDraft);
-  }, [currentDraft, isResponse, onDraftChange]);
+    providerDraftIdRef.current = undefined;
+    providerDraftMessageIdRef.current = undefined;
+    providerDraftAccountIdRef.current = undefined;
+    lastSavedDraftSignatureRef.current = undefined;
+    setProviderDraftId(undefined);
+    setProviderDraftMessageId(undefined);
+    setProviderDraftAccountId(undefined);
+    setAutosaveStatus('idle');
+    setAttachments((current) =>
+      current.filter((attachment) => !attachment.providerAttachmentId),
+    );
+  }, [accountId, providerDraftAccountId]);
+
+  useEffect(() => {
+    if (
+      !hasUnsavedChanges ||
+      (!scopedProviderDraftId && !hasLocalChanges) ||
+      !accountId ||
+      isSending ||
+      isSendingDraft ||
+      isTransitioningRef.current
+    ) {
+      return;
+    }
+
+    setAutosaveStatus('saving');
+    const timeout = window.setTimeout(() => {
+      if (!isTransitioningRef.current) {
+        void saveDraft();
+      }
+    }, 750);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    accountId,
+    currentDraft,
+    hasLocalChanges,
+    hasUnsavedChanges,
+    isSending,
+    isSendingDraft,
+    saveDraft,
+    scopedProviderDraftId,
+  ]);
 
   useEffect(() => {
     const element = formRef.current;
 
-    if (!element || isSending) {
+    if (!element || isComposerBusy) {
       return;
     }
 
@@ -189,9 +399,9 @@ export function MailComposer({
         void addDroppedAttachments(getFiles({ source }));
       },
     });
-  }, [isSending]);
+  }, [isComposerBusy]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setValidationMessage('');
 
@@ -199,8 +409,6 @@ export function MailComposer({
       setValidationMessage('Write a message before sending.');
       return;
     }
-
-    const bodyHtml = sanitizeOutgoingMailHtml(editorValue.html);
 
     const toResult = parsePendingRecipients(toRecipients, toInputValue, 'recipient');
     const ccResult = parsePendingRecipients(ccRecipients, ccInputValue, 'Cc recipient');
@@ -225,42 +433,57 @@ export function MailComposer({
       return;
     }
 
-    if (mode !== 'new') {
-      if (!replyMessage) {
-        setValidationMessage('Select a message before responding.');
-        return;
-      }
-
-      if (mode === 'forward' && toResult.recipients.length === 0) {
-        setValidationMessage('Add at least one recipient.');
-        return;
-      }
-
-      onReply({
-        kind: mode,
-        messageId: replyMessage.id,
-        bodyHtml,
-        toRecipients: toResult.recipients,
-        ccRecipients: ccResult.recipients,
-        bccRecipients: bccResult.recipients,
-        attachments,
-      });
+    if (
+      mode !== 'new' &&
+      !currentDraft.relatedMessageId &&
+      !providerDraftIdRef.current
+    ) {
+      setValidationMessage('Select a message before responding.');
       return;
     }
 
-    if (toResult.recipients.length === 0) {
+    if (
+      (mode === 'new' || mode === 'forward') &&
+      toResult.recipients.length === 0
+    ) {
       setValidationMessage('Add at least one recipient.');
       return;
     }
 
-    onSend({
-      toRecipients: toResult.recipients,
-      ccRecipients: ccResult.recipients,
-      bccRecipients: bccResult.recipients,
-      subject: subject.trim(),
-      bodyHtml,
-      attachments,
-    });
+    await sendProviderDraft();
+  }
+
+  async function sendProviderDraft() {
+    if (isSendingDraft) {
+      return;
+    }
+
+    setComposerTransitioning(true);
+    setIsSendingDraft(true);
+
+    try {
+      const didSave = await flushCurrentDraft({ ensureProviderDraft: true });
+      const draftId =
+        providerDraftAccountIdRef.current === accountId
+          ? providerDraftIdRef.current
+          : undefined;
+
+      if (!didSave || !draftId) {
+        setValidationMessage('Autosave failed. Keep the composer open and try again.');
+        setComposerTransitioning(false);
+        return;
+      }
+
+      await api.drafts.send(accountId, draftId);
+      await onProviderDraftChanged?.();
+      shouldSaveOnUnmountRef.current = false;
+      onClose();
+    } catch (error) {
+      setValidationMessage(getErrorMessage(error));
+      setComposerTransitioning(false);
+    } finally {
+      setIsSendingDraft(false);
+    }
   }
 
   async function addPickedAttachments() {
@@ -300,15 +523,171 @@ export function MailComposer({
     );
   }
 
-  function handleClose() {
-    if (
-      isDirty &&
-      !window.confirm('Discard this unsent message?')
-    ) {
+  const flushCurrentDraft = useCallback(async ({
+    ensureProviderDraft = false,
+  }: {
+    ensureProviderDraft?: boolean;
+  } = {}) => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const draftSignature = getComposeDraftSignature(currentDraftRef.current);
+      const hasProviderDraft =
+        providerDraftAccountIdRef.current === accountId &&
+        Boolean(providerDraftIdRef.current);
+      const needsSave =
+        (!hasProviderDraft && ensureProviderDraft) ||
+        (draftSignature !== lastSavedDraftSignatureRef.current &&
+          (hasProviderDraft || draftSignature !== initialDraftValueRef.current));
+
+      if (!needsSave) {
+        return true;
+      }
+
+      const savedDraft = await saveDraft({ force: true });
+
+      if (
+        getComposeDraftSignature(currentDraftRef.current) ===
+        lastSavedDraftSignatureRef.current
+      ) {
+        return true;
+      }
+
+      if (!savedDraft) {
+        return false;
+      }
+    }
+
+    return false;
+  }, [accountId, saveDraft]);
+
+  const flushAndClose = useCallback(async () => {
+    setComposerTransitioning(true);
+    const didSave = await flushCurrentDraft({ ensureProviderDraft: true });
+
+    if (!didSave) {
+      setComposerTransitioning(false);
+      setValidationMessage(
+        'Autosave failed. Keep the composer open and try again.',
+      );
+      return false;
+    }
+
+    shouldSaveOnUnmountRef.current = false;
+    onClose();
+    return true;
+  }, [flushCurrentDraft, onClose]);
+
+  useEffect(() => {
+    onFlushHandlerChange?.(flushAndClose);
+
+    return () => onFlushHandlerChange?.(undefined);
+  }, [flushAndClose, onFlushHandlerChange]);
+
+  async function handleMinimize() {
+    if (!onMinimize) {
       return;
     }
 
-    onClose();
+    setComposerTransitioning(true);
+    const didSave = await flushCurrentDraft({ ensureProviderDraft: true });
+
+    if (!didSave) {
+      setComposerTransitioning(false);
+      setValidationMessage(
+        'Autosave failed. Keep the composer open and try again.',
+      );
+      return;
+    }
+
+    onMinimize();
+    setComposerTransitioning(false);
+  }
+
+  async function handleMoveToWindow() {
+    if (!onMoveToWindow) {
+      return;
+    }
+
+    setComposerTransitioning(true);
+    const didSave = await flushCurrentDraft({ ensureProviderDraft: true });
+
+    if (!didSave) {
+      setComposerTransitioning(false);
+      setValidationMessage(
+        'Autosave failed. Keep the composer open and try again.',
+      );
+      return;
+    }
+
+    try {
+      await onMoveToWindow({
+        ...currentDraftRef.current,
+        providerDraftId:
+          providerDraftAccountIdRef.current === accountId
+            ? providerDraftIdRef.current
+            : undefined,
+        providerDraftMessageId:
+          providerDraftAccountIdRef.current === accountId
+            ? providerDraftMessageIdRef.current
+            : undefined,
+      });
+      shouldSaveOnUnmountRef.current = false;
+    } catch (error) {
+      setComposerTransitioning(false);
+      setValidationMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleClose() {
+    if (isComposerBusy) {
+      return;
+    }
+
+    setComposerTransitioning(true);
+    setValidationMessage('');
+
+    try {
+      await saveQueueRef.current;
+      const existingDraftId =
+        providerDraftAccountIdRef.current === accountId
+          ? providerDraftIdRef.current
+          : undefined;
+
+      if (
+        existingDraftId &&
+        window.confirm('Discard this saved draft?')
+      ) {
+        await api.drafts.delete(accountId, existingDraftId);
+        await onProviderDraftChanged?.();
+        shouldSaveOnUnmountRef.current = false;
+        onClose();
+        return;
+      }
+
+      const didSave = await flushCurrentDraft();
+
+      if (
+        !didSave &&
+        !window.confirm(
+          existingDraftId
+            ? 'Autosave failed. Close without saving your latest changes?'
+            : 'Autosave failed. Discard this unsent message?',
+        )
+      ) {
+        setComposerTransitioning(false);
+        return;
+      }
+
+      shouldSaveOnUnmountRef.current = false;
+      onClose();
+    } catch (error) {
+      setComposerTransitioning(false);
+      setValidationMessage(getErrorMessage(error));
+    }
+  }
+
+  function setComposerTransitioning(isNextTransitioning: boolean) {
+    isTransitioningRef.current = isNextTransitioning;
+    setIsTransitioning(isNextTransitioning);
   }
 
   return (
@@ -322,13 +701,14 @@ export function MailComposer({
     >
       <MailComposerHeader
         currentDraft={currentDraft}
+        autosaveStatus={autosaveStatus}
         isReply={isResponse}
-        isSending={isSending}
+        isSending={isComposerBusy}
         replyMessage={replyMessage}
         useWindowHeader={useWindowHeader}
         onClose={handleClose}
-        onMinimize={onMinimize}
-        onMoveToWindow={onMoveToWindow}
+        onMinimize={onMinimize ? handleMinimize : undefined}
+        onMoveToWindow={onMoveToWindow ? handleMoveToWindow : undefined}
       />
 
       <div
@@ -373,7 +753,7 @@ export function MailComposer({
                 id={toInputId}
                 value={toRecipients}
                 inputValue={toInputValue}
-                disabled={isSending}
+                disabled={isComposerBusy}
                 invalid={validationMessage.startsWith('Check recipient')}
                 onChange={setToRecipients}
                 onInputChange={setToInputValue}
@@ -392,7 +772,7 @@ export function MailComposer({
                   id={ccInputId}
                   value={ccRecipients}
                   inputValue={ccInputValue}
-                  disabled={isSending}
+                  disabled={isComposerBusy}
                   invalid={validationMessage.startsWith('Check Cc recipient')}
                   onChange={setCcRecipients}
                   onInputChange={setCcInputValue}
@@ -412,7 +792,7 @@ export function MailComposer({
                   id={bccInputId}
                   value={bccRecipients}
                   inputValue={bccInputValue}
-                  disabled={isSending}
+                  disabled={isComposerBusy}
                   invalid={validationMessage.startsWith('Check Bcc recipient')}
                   onChange={setBccRecipients}
                   onInputChange={setBccInputValue}
@@ -432,7 +812,7 @@ export function MailComposer({
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
                   placeholder="Subject"
-                  disabled={isSending}
+                  disabled={isComposerBusy}
                 />
               ) : (
                 <p id={subjectInputId} className="truncate text-sm text-foreground">
@@ -453,9 +833,10 @@ export function MailComposer({
           <RichTextMailEditor
             id={bodyInputId}
             className={cn(!isResponse && 'flex-1')}
-            disabled={isSending}
+            disabled={isComposerBusy}
             fill={!isResponse}
             initialValue={initialDraft?.editorValue}
+            value={editorValue}
             onPickAttachments={() => void addPickedAttachments()}
             placeholder={isResponse ? 'Write a response' : 'Write a message'}
             onChange={setEditorValue}
@@ -482,7 +863,7 @@ export function MailComposer({
                         variant="ghost"
                         size="icon-xs"
                         aria-label={`Remove ${attachment.name}`}
-                        disabled={isSending}
+                        disabled={isComposerBusy}
                         onClick={() => removeAttachment(attachment.id)}
                       >
                         <X data-icon="inline-start" />
@@ -507,14 +888,14 @@ export function MailComposer({
         <Button
           type="button"
           variant="ghost"
-          disabled={isSending}
+          disabled={isComposerBusy}
           onClick={handleClose}
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isSending}>
+        <Button type="submit" disabled={isComposerBusy}>
           <Send data-icon="inline-start" />
-          {isSending ? 'Sending...' : 'Send'}
+          {isSending || isSendingDraft ? 'Sending...' : 'Send'}
         </Button>
       </div>
 
@@ -630,22 +1011,6 @@ function isOwnRecipient(
   return recipient.email.toLowerCase() === accountEmail?.toLowerCase();
 }
 
-function serializeDraftForDirtyCheck(draft: ComposeWindowDraft) {
-  return JSON.stringify({
-    toValue: draft.toValue.trim(),
-    ccValue: draft.ccValue?.trim() ?? '',
-    bccValue: draft.bccValue?.trim() ?? '',
-    subject: draft.subject.trim(),
-    editorHtml: draft.editorValue.html,
-    editorText: draft.editorValue.text.trim(),
-    attachments: (draft.attachments ?? []).map((attachment) => ({
-      id: attachment.id,
-      name: attachment.name,
-      size: attachment.size,
-    })),
-  });
-}
-
 function formatFileSize(size: number) {
   if (size < 1024) {
     return `${size} B`;
@@ -658,8 +1023,127 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getComposeDraftSignature(draft: ComposeWindowDraft) {
+  return JSON.stringify({
+    kind: draft.kind ?? 'new',
+    relatedMessageId: draft.relatedMessageId,
+    toValue: getRecipientValueSignature(draft.toValue),
+    ccValue: getRecipientValueSignature(draft.ccValue ?? ''),
+    bccValue: getRecipientValueSignature(draft.bccValue ?? ''),
+    subject: draft.subject.trim(),
+    bodyHtml: sanitizeOutgoingMailHtml(draft.editorValue.html),
+    attachments: getAttachmentSignature(draft.attachments ?? []),
+  });
+}
+
+function getRecipientValueSignature(value: string) {
+  const parsed = parseRecipients(value);
+
+  return {
+    valid: parsed.valid.map((recipient) => ({
+      name: recipient.name?.trim() ?? '',
+      email: recipient.email.toLowerCase(),
+    })),
+    invalid: parsed.invalid.map((recipient) => recipient.trim()),
+  };
+}
+
+function getDraftSaveInput(
+  draft: ComposeWindowDraft,
+  providerDraftId: string | undefined,
+  providerDraftMessageId: string | undefined,
+): MailDraftSaveInput {
+  return {
+    providerDraftId,
+    providerDraftMessageId,
+    kind: draft.kind ?? 'new',
+    relatedMessageId: draft.relatedMessageId,
+    toRecipients: parseRecipients(draft.toValue).valid,
+    ccRecipients: parseRecipients(draft.ccValue ?? '').valid,
+    bccRecipients: parseRecipients(draft.bccValue ?? '').valid,
+    toValue: draft.toValue,
+    ccValue: draft.ccValue,
+    bccValue: draft.bccValue,
+    subject: draft.subject.trim(),
+    bodyHtml: sanitizeOutgoingMailHtml(draft.editorValue.html),
+    editorValue: draft.editorValue,
+    attachments: draft.attachments,
+  };
+}
+
+function reconcileSavedAttachments(
+  submitted: LocalMailAttachment[],
+  saved: LocalMailAttachment[],
+  current: LocalMailAttachment[],
+) {
+  const availableSaved = [...saved];
+  const savedBySubmittedId = new Map<string, LocalMailAttachment>();
+
+  for (const attachment of submitted) {
+    const matchIndex = availableSaved.findIndex(
+      (candidate) =>
+        candidate.providerAttachmentId === attachment.providerAttachmentId ||
+        (candidate.name === attachment.name &&
+          candidate.contentType === attachment.contentType &&
+          candidate.size === attachment.size),
+    );
+
+    if (matchIndex < 0) {
+      continue;
+    }
+
+    savedBySubmittedId.set(
+      attachment.id,
+      availableSaved.splice(matchIndex, 1)[0],
+    );
+  }
+
+  return current.map(
+    (attachment) => savedBySubmittedId.get(attachment.id) ?? attachment,
+  );
+}
+
+function mergeSavedResponseEditorValue(
+  saved: RichTextMailEditorValue,
+  submitted: RichTextMailEditorValue,
+  current: RichTextMailEditorValue,
+): RichTextMailEditorValue {
+  if (current.html === submitted.html) {
+    return saved;
+  }
+
+  const submittedIndex = submitted.html
+    ? saved.html.indexOf(submitted.html)
+    : -1;
+  const html =
+    submittedIndex >= 0
+      ? `${saved.html.slice(0, submittedIndex)}${current.html}${saved.html.slice(
+          submittedIndex + submitted.html.length,
+        )}`
+      : `${current.html}${saved.html}`;
+
+  return {
+    ...current,
+    html,
+  };
+}
+
+function getAttachmentSignature(attachments: LocalMailAttachment[]) {
+  return attachments.map((attachment) => ({
+    id: attachment.id,
+    providerAttachmentId: attachment.providerAttachmentId,
+    name: attachment.name,
+    contentType: attachment.contentType,
+    size: attachment.size,
+  }));
+}
+
 function getAttachmentErrorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
     : 'Could not add attachment.';
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Could not send draft.';
 }
