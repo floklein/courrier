@@ -1,5 +1,6 @@
 import type {
   MailFolder,
+  MailActionCapability,
   MailMessageDetail,
   MailPersonSuggestion,
   MailDraftDetail,
@@ -8,6 +9,7 @@ import type {
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
+  SearchMessagesInput,
   SendMailInput,
 } from '@/lib/mail-types';
 import {
@@ -42,6 +44,10 @@ export class MailService {
     return this.getProvider(accountId).listFolders(accountId);
   }
 
+  getCapabilities(accountId: string): Promise<MailActionCapability[]> {
+    return this.getProvider(accountId).getCapabilities(accountId);
+  }
+
   listMessages(
     accountId: string,
     folderId: string,
@@ -54,6 +60,13 @@ export class MailService {
       nextPageToken,
       searchQuery,
     );
+  }
+
+  searchMessages(
+    accountId: string,
+    input: SearchMessagesInput,
+  ): Promise<PagedMessages> {
+    return this.getProvider(accountId).searchMessages(accountId, input);
   }
 
   getMessage(
@@ -88,6 +101,66 @@ export class MailService {
     messageId: string,
   ): Promise<MailMessageDetail | undefined> {
     return this.getProvider(accountId).deleteMessage(accountId, messageId);
+  }
+
+  archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId: string,
+  ): Promise<MailMessageDetail | undefined> {
+    return this.getProvider(accountId).archiveMessage(
+      accountId,
+      messageId,
+      sourceFolderId,
+    );
+  }
+
+  markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail | undefined> {
+    return this.getProvider(accountId).markMessageJunkState(
+      accountId,
+      messageId,
+      isJunk,
+    );
+  }
+
+  setMessageStarState(
+    accountId: string,
+    messageId: string,
+    isStarred: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageStarState(
+      accountId,
+      messageId,
+      isStarred,
+    );
+  }
+
+  setMessageFlagState(
+    accountId: string,
+    messageId: string,
+    isFlagged: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageFlagState(
+      accountId,
+      messageId,
+      isFlagged,
+    );
+  }
+
+  setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void> {
+    return this.getProvider(accountId).setMessageImportantState(
+      accountId,
+      messageId,
+      isImportant,
+    );
   }
 
   listPeople(

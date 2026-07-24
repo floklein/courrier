@@ -26,6 +26,7 @@ export interface GraphMailFolder {
 
 export interface GraphMessage {
   id?: string | null;
+  parentFolderId?: string | null;
   subject?: string | null;
   bodyPreview?: string | null;
   createdDateTime?: string | null;
@@ -34,8 +35,16 @@ export interface GraphMessage {
   isRead?: boolean | null;
   hasAttachments?: boolean | null;
   importance?: string | null;
+  flag?: {
+    flagStatus?: string | null;
+  } | null;
   from?: GraphEmailAddress | null;
   toRecipients?: GraphEmailAddress[] | null;
+  ccRecipients?: GraphEmailAddress[] | null;
+  bccRecipients?: GraphEmailAddress[] | null;
+  replyTo?: GraphEmailAddress[] | null;
+  internetMessageId?: string | null;
+  conversationId?: string | null;
 }
 
 export interface GraphMessageDetail extends GraphMessage {
@@ -44,6 +53,10 @@ export interface GraphMessageDetail extends GraphMessage {
     content?: string | null;
   } | null;
   attachments?: GraphAttachment[] | null;
+  singleValueExtendedProperties?: Array<{
+    id?: string | null;
+    value?: string | null;
+  }> | null;
 }
 
 export interface GraphAttachment {
@@ -165,14 +178,24 @@ export function mapGraphMessageSummary(
   return {
     id: message.id || '',
     folderId,
+    folderLabel: undefined,
+    folderWellKnownName: undefined,
     sender: mapAddress(message.from, 'Unknown sender'),
     recipients: (message.toRecipients ?? []).map(formatRecipient),
+    ccRecipients: (message.ccRecipients ?? []).map(formatRecipient),
+    replyTo: (message.replyTo ?? []).map((recipient) =>
+      mapAddress(recipient, 'Unknown recipient'),
+    ),
     subject: message.subject || '(No subject)',
     preview: message.bodyPreview || '',
     receivedDateTime: message.receivedDateTime || '',
     isRead: message.isRead ?? true,
     hasAttachments: message.hasAttachments ?? false,
     importance: mapImportance(message.importance),
+    isFlagged: message.flag?.flagStatus === 'flagged',
+    isImportant: mapImportance(message.importance) === 'high',
+    internetMessageId: message.internetMessageId || undefined,
+    conversationId: message.conversationId || undefined,
   };
 }
 

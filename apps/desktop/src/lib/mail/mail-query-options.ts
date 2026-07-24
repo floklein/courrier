@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
-import type { PagedMessages } from '@/lib/mail-types';
+import type { MailSearchScope, PagedMessages } from '@/lib/mail-types';
 
 export const mailPreloadStaleTimeMs = 30_000;
 
@@ -24,16 +24,29 @@ export function mailMessagesQueryOptions(
   accountId: string,
   folderId: string,
   searchQuery = '',
+  searchScope: MailSearchScope = 'folder',
 ) {
+  const normalizedSearch = searchQuery.trim();
+
   return infiniteQueryOptions({
-    queryKey: ['mail', accountId, 'messages', folderId, searchQuery] as const,
+    queryKey: [
+      'mail',
+      accountId,
+      'messages',
+      folderId,
+      searchScope,
+      normalizedSearch,
+    ] as const,
     queryFn: ({ pageParam }) =>
-      api.mail.listMessages(
-        accountId,
-        folderId,
-        pageParam,
-        searchQuery || undefined,
-      ),
+      normalizedSearch
+        ? api.mail.searchMessages(accountId, {
+            query: normalizedSearch,
+            scope: searchScope,
+            folderId,
+            includeSpamTrash: searchScope === 'all' ? true : undefined,
+            nextPageToken: pageParam,
+          })
+        : api.mail.listMessages(accountId, folderId, pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage: PagedMessages) => lastPage.nextPageToken,
     staleTime: mailPreloadStaleTimeMs,
@@ -48,6 +61,25 @@ export function mailMessageQueryOptions(
   return queryOptions({
     queryKey: ['mail', accountId, 'message', folderId, messageId] as const,
     queryFn: () => api.mail.getMessage(accountId, folderId, messageId ?? ''),
+    staleTime: mailPreloadStaleTimeMs,
+  });
+}
+
+export function mailDraftsQueryOptions(accountId: string) {
+  return queryOptions({
+    queryKey: ['mail', accountId, 'drafts'] as const,
+    queryFn: () => api.drafts.list(accountId),
+    staleTime: mailPreloadStaleTimeMs,
+  });
+}
+
+export function mailDraftQueryOptions(
+  accountId: string,
+  providerDraftId: string,
+) {
+  return queryOptions({
+    queryKey: ['mail', accountId, 'draft', providerDraftId] as const,
+    queryFn: () => api.drafts.get(accountId, providerDraftId),
     staleTime: mailPreloadStaleTimeMs,
   });
 }

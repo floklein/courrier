@@ -1,7 +1,9 @@
 import type {
   MailAccount,
+  MailActionCapability,
   MailFolder,
   MailMessageDetail,
+  MailMessageSummary,
   MailPersonSuggestion,
   MailDraftDetail,
   MailDraftSaveInput,
@@ -9,8 +11,10 @@ import type {
   PagedMessages,
   ProviderId,
   ReplyToMessageInput,
+  SearchMessagesInput,
   SendMailInput,
 } from '@/lib/mail-types';
+import type { MailRemoteChangeEvent } from '@courrier/mail-contracts';
 
 export interface MailAuthProvider {
   readonly id: ProviderId;
@@ -54,6 +58,15 @@ export interface DownloadedMailAttachment {
   content: Buffer;
 }
 
+export interface MailNotificationState {
+  gmailLastHistoryId?: string;
+}
+
+export interface MailNotificationResolution {
+  messages: MailMessageSummary[];
+  state?: MailNotificationState;
+}
+
 export interface MailSubscriptionProvider {
   createMailSubscription(input: CreateMailSubscriptionInput): Promise<MailSubscription>;
   renewSubscription(input: RenewSubscriptionInput): Promise<MailSubscription>;
@@ -78,10 +91,12 @@ export interface MailSubscription {
   id: string;
   expirationDateTime: string;
   resource?: string;
+  notificationState?: MailNotificationState;
 }
 
 export interface MailProvider extends MailSubscriptionProvider {
   readonly id: ProviderId;
+  getCapabilities(accountId: string): Promise<MailActionCapability[]>;
   listFolders(accountId: string): Promise<MailFolder[]>;
   listMessages(
     accountId: string,
@@ -89,11 +104,17 @@ export interface MailProvider extends MailSubscriptionProvider {
     nextPageToken?: string,
     searchQuery?: string,
   ): Promise<PagedMessages>;
+  searchMessages(accountId: string, input: SearchMessagesInput): Promise<PagedMessages>;
   getMessage(
     accountId: string,
     folderId: string,
     messageId: string,
   ): Promise<MailMessageDetail>;
+  getNotificationMessages?(
+    accountId: string,
+    event: MailRemoteChangeEvent,
+    state?: MailNotificationState,
+  ): Promise<MailNotificationResolution>;
   markMessageReadState(
     accountId: string,
     messageId: string,
@@ -104,6 +125,31 @@ export interface MailProvider extends MailSubscriptionProvider {
     accountId: string,
     messageId: string,
   ): Promise<MailMessageDetail | undefined>;
+  archiveMessage(
+    accountId: string,
+    messageId: string,
+    sourceFolderId: string,
+  ): Promise<MailMessageDetail | undefined>;
+  markMessageJunkState(
+    accountId: string,
+    messageId: string,
+    isJunk: boolean,
+  ): Promise<MailMessageDetail | undefined>;
+  setMessageStarState(
+    accountId: string,
+    messageId: string,
+    isStarred: boolean,
+  ): Promise<void>;
+  setMessageFlagState(
+    accountId: string,
+    messageId: string,
+    isFlagged: boolean,
+  ): Promise<void>;
+  setMessageImportantState(
+    accountId: string,
+    messageId: string,
+    isImportant: boolean,
+  ): Promise<void>;
   listPeople(accountId: string, query?: string): Promise<MailPersonSuggestion[]>;
   listDrafts(accountId: string): Promise<MailDraftSummary[]>;
   getDraft(accountId: string, providerDraftId: string): Promise<MailDraftDetail>;

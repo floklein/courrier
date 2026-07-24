@@ -26,6 +26,8 @@ export const emptyComposeWindowDraft: ComposeWindowDraft = {
   accountId: '',
   kind: 'new',
   toValue: '',
+  ccValue: '',
+  bccValue: '',
   subject: '',
   editorValue: {
     html: '',

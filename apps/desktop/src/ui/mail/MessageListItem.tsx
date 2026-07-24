@@ -1,14 +1,19 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { disableNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/disable-native-drag-preview';
 import { Link } from '@tanstack/react-router';
-import { Paperclip } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { BadgeAlert, Flag, Paperclip, Star } from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { mailMessageDragType } from '@/lib/mail/mail-drag';
 import { formatMailDate } from '@/lib/mail/mail-utils';
 import type { MailMessageSummary } from '@/lib/mail-types';
 import { encodeRouteId } from '@/lib/route-ids';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { MailDragPreview } from '@/ui/mail/MailDragPreview';
 import { MailAvatar } from '@/ui/mail/MailAvatar';
 
@@ -29,6 +34,7 @@ export function MessageListItem({
   const isActionPendingRef = useRef(isActionPending);
   const folderIdRef = useRef(folderId);
   const messageRef = useRef(message);
+  const effectiveFolderId = message.folderId || folderId;
   const [isDragging, setIsDragging] = useState(false);
   const [dragPreview, setDragPreview] = useState<DragPreviewState>();
 
@@ -43,9 +49,9 @@ export function MessageListItem({
   }, [isActionPending]);
 
   useEffect(() => {
-    folderIdRef.current = folderId;
+    folderIdRef.current = effectiveFolderId;
     messageRef.current = message;
-  }, [folderId, message]);
+  }, [effectiveFolderId, message]);
 
   useEffect(() => {
     return clearDragState;
@@ -115,7 +121,7 @@ export function MessageListItem({
         draggable={false}
         to="/mail/$folderId/$messageId"
         params={{
-          folderId: encodeRouteId(folderId),
+          folderId: encodeRouteId(effectiveFolderId),
           messageId: encodeRouteId(message.id),
         }}
         className={cn(
@@ -140,7 +146,24 @@ export function MessageListItem({
                 {message.sender.name}
               </p>
               {message.hasAttachments && (
-                <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                <MessageStatusIconTooltip label="Has attachments">
+                  <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                </MessageStatusIconTooltip>
+              )}
+              {message.isStarred && (
+                <MessageStatusIconTooltip label="Starred">
+                  <Star className="size-3.5 shrink-0 text-amber-500" />
+                </MessageStatusIconTooltip>
+              )}
+              {message.isFlagged && (
+                <MessageStatusIconTooltip label="Flagged">
+                  <Flag className="size-3.5 shrink-0 fill-rose-500 text-rose-500" />
+                </MessageStatusIconTooltip>
+              )}
+              {message.isImportant && (
+                <MessageStatusIconTooltip label="Important">
+                  <BadgeAlert className="size-3.5 shrink-0 text-orange-500" />
+                </MessageStatusIconTooltip>
               )}
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                 {formatMailDate(message.receivedDateTime, 'short')}
@@ -157,6 +180,11 @@ export function MessageListItem({
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
               {message.preview}
             </p>
+            {message.folderLabel && (
+              <p className="mt-2 w-fit max-w-full truncate rounded-sm bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {message.folderLabel}
+              </p>
+            )}
           </div>
         </div>
       </Link>
@@ -175,6 +203,27 @@ export function MessageListItem({
           document.body,
         )}
     </div>
+  );
+}
+
+function MessageStatusIconTooltip({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span aria-label={label} className="inline-flex shrink-0">
+            {children}
+          </span>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

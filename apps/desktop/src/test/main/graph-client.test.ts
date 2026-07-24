@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GraphClient, getValidatedMessagePageUrl } from '@/main/graph-client';
+import {
+  GraphClient,
+  getValidatedGlobalMessagePageUrl,
+  getValidatedMessagePageUrl,
+} from '@/main/graph-client';
 import type { MailAccount } from '@/lib/mail-types';
 import {
   GraphRequestError,
@@ -10,6 +14,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 const graphBaseUrl = 'https://graph.microsoft.com/v1.0';
+const graphDraftStatePropertyId =
+  'String {5f640a5e-821a-4d62-9a14-a242f04c62d2} Name CourrierDraftState';
 const account: MailAccount = {
   id: 'microsoft:account-1',
   providerId: 'microsoft',
@@ -45,6 +51,18 @@ describe('Graph message pagination URL validation', () => {
       getValidatedMessagePageUrl(
         'inbox',
         'https://graph.microsoft.com/v1.0/me/mailFolders/archive/messages?$top=25',
+      ),
+    ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
+  });
+
+  it('accepts only the global messages collection for global search pages', () => {
+    const nextLink =
+      'https://graph.microsoft.com/v1.0/me/messages?$top=25&$skiptoken=next';
+
+    expect(getValidatedGlobalMessagePageUrl(nextLink)).toBe(nextLink);
+    expect(() =>
+      getValidatedGlobalMessagePageUrl(
+        'https://graph.microsoft.com/v1.0/me/messages/message-1/attachments',
       ),
     ).toThrow(/^Refusing to fetch an unexpected Microsoft Graph page URL/);
   });
@@ -169,6 +187,37 @@ describe('GraphClient write requests', () => {
     });
   });
 
+  it('includes Cc and Bcc recipients in Microsoft Graph send payloads', async () => {
+    const fetchMock = mockFetch(new Response('', { status: 202 }));
+    const client = createGraphClient();
+
+    await client.sendMessage(account.id, {
+      subject: 'Hello',
+      bodyHtml: '<p>Hi</p>',
+      toRecipients: [{ email: 'ada@example.com' }],
+      ccRecipients: [{ email: 'grace@example.com' }],
+      bccRecipients: [{ email: 'hidden@example.com' }],
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
+    expect(body.message.ccRecipients).toEqual([
+      {
+        emailAddress: {
+          name: 'grace@example.com',
+          address: 'grace@example.com',
+        },
+      },
+    ]);
+    expect(body.message.bccRecipients).toEqual([
+      {
+        emailAddress: {
+          name: 'hidden@example.com',
+          address: 'hidden@example.com',
+        },
+      },
+    ]);
+  });
+
   it('uploads large attachments with Graph upload-session byte ranges', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'courrier-test-'));
     const filePath = path.join(tempDir, 'large.bin');
@@ -291,6 +340,58 @@ describe('GraphClient write requests', () => {
     expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'POST' });
   });
 
+  it('uses Graph reply-all and forward draft actions', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'reply-all-draft' }),
+      new Response(null, { status: 204 }),
+      new Response('', { status: 202 }),
+      jsonResponse({
+        id: 'forward-draft',
+        body: {
+          contentType: 'html',
+          content: '<div>Forwarded header</div><p>Original body</p>',
+        },
+      }),
+      new Response(null, { status: 204 }),
+      new Response('', { status: 202 }),
+    );
+    const client = createGraphClient();
+
+    await client.replyToMessage(account.id, {
+      kind: 'replyAll',
+      messageId: 'message-1',
+      bodyHtml: '<p>Reply</p>',
+    });
+    await client.replyToMessage(account.id, {
+      kind: 'forward',
+      messageId: 'message-1',
+      bodyHtml: '<p>Forward</p>',
+      toRecipients: [{ email: 'ada@example.com' }],
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/createReplyAll`,
+    );
+    expect(fetchMock.mock.calls[3][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/createForward`,
+    );
+    expect(JSON.parse(fetchMock.mock.calls[4][1]?.body as string)).toMatchObject({
+      toRecipients: [
+        {
+          emailAddress: {
+            name: 'ada@example.com',
+            address: 'ada@example.com',
+          },
+        },
+      ],
+      body: {
+        contentType: 'HTML',
+        content:
+          '<p>Forward</p><br><br><div>Forwarded header</div><p>Original body</p>',
+      },
+    });
+  });
+
   it('does not update or send a reply draft when Graph omits the draft id', async () => {
     const fetchMock = mockFetch(jsonResponse({}));
     const client = createGraphClient();
@@ -334,6 +435,77 @@ describe('GraphClient write requests', () => {
     );
   });
 
+  it('archives and marks messages as junk through Microsoft Graph moves', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({ id: 'message-1' }),
+      jsonResponse({ id: 'message-1' }),
+    );
+    const client = createGraphClient();
+
+    await client.archiveMessage(account.id, 'message-1', 'inbox');
+    await client.markMessageJunkState(account.id, 'message-1', true);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/move`,
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      destinationId: 'archive',
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      destinationId: 'junkemail',
+    });
+  });
+
+  it('patches Graph flag and importance state', async () => {
+    const fetchMock = mockFetch(
+      new Response(null, { status: 204 }),
+      new Response(null, { status: 204 }),
+    );
+    const client = createGraphClient();
+
+    await client.setMessageFlagState(account.id, 'message-1', true);
+    await client.setMessageImportantState(account.id, 'message-1', false);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      flag: { flagStatus: 'flagged' },
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      importance: 'normal',
+    });
+  });
+
+  it('searches all Microsoft Graph messages without a folder path', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse({
+        value: [
+          {
+            id: 'message-1',
+            parentFolderId: 'archive-id',
+            subject: 'Hello',
+            from: { emailAddress: { name: 'Ada', address: 'ada@example.com' } },
+          },
+        ],
+      }),
+      jsonResponse({ value: [] }),
+      ...Array.from({ length: 6 }, () => jsonResponse({}, 404)),
+    );
+    const client = createGraphClient();
+
+    const result = await client.searchMessages(account.id, {
+      query: 'hello',
+      scope: 'all',
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toContain(`${graphBaseUrl}/me/messages?`);
+    expect(fetchMock.mock.calls[0][0]).toContain('%22hello%22');
+    expect(fetchMock.mock.calls[0][0]).toContain('parentFolderId');
+    expect(result.messages[0]).toMatchObject({
+      id: 'message-1',
+      folderId: 'archive-id',
+      sender: { name: 'Ada', email: 'ada@example.com' },
+    });
+  });
+
   it('throws structured Graph errors with Microsoft error codes', async () => {
     mockFetch(
       jsonResponse({
@@ -357,98 +529,369 @@ describe('GraphClient write requests', () => {
     expect(isGraphItemNotFoundError(error)).toBe(true);
   });
 
-  it('creates, updates, and sends Microsoft Graph provider drafts', async () => {
+  it('resolves unread inbox creations for native notifications', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/me/messages/message-1?')) {
+        return jsonResponse({
+          id: 'message-1',
+          parentFolderId: 'inbox-folder',
+          subject: 'Hello',
+          bodyPreview: 'Preview',
+          receivedDateTime: '2026-05-16T10:00:00.000Z',
+          isRead: false,
+          hasAttachments: false,
+          importance: 'normal',
+          from: {
+            emailAddress: {
+              name: 'Ada Lovelace',
+              address: 'ada@example.com',
+            },
+          },
+          toRecipients: [],
+        });
+      }
+
+      if (url.includes('/me/mailFolders?$top=100')) {
+        return jsonResponse({
+          value: [
+            {
+              id: 'inbox-folder',
+              displayName: 'Inbox',
+              unreadItemCount: 1,
+              totalItemCount: 1,
+            },
+          ],
+        });
+      }
+
+      if (url.includes('/me/mailFolders/inbox?')) {
+        return jsonResponse({
+          id: 'inbox-folder',
+          displayName: 'Inbox',
+          wellKnownName: 'inbox',
+        });
+      }
+
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createGraphClient();
+
+    const resolution = await client.getNotificationMessages(account.id, {
+      id: 'event-1',
+      clientId: 'client-1',
+      accountId: account.id,
+      providerId: 'microsoft',
+      subscriptionId: 'subscription-1',
+      kind: 'message-change',
+      changeType: 'created',
+      messageId: 'message-1',
+      receivedAt: '2026-05-16T10:00:00.000Z',
+    });
+
+    expect(resolution.messages).toMatchObject([
+      {
+        id: 'message-1',
+        folderId: 'inbox-folder',
+        sender: { name: 'Ada Lovelace', email: 'ada@example.com' },
+        subject: 'Hello',
+        isRead: false,
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        url.includes('/me/mailFolders?$top=100'),
+      ),
+    ).toBe(false);
+  });
+
+  it('does not notify for Graph changes outside inbox or already read messages', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/me/messages/message-1?')) {
+        return jsonResponse({
+          id: 'message-1',
+          parentFolderId: 'archive-folder',
+          subject: 'Hello',
+          isRead: false,
+        });
+      }
+
+      if (url.includes('/me/mailFolders?$top=100')) {
+        return jsonResponse({
+          value: [
+            { id: 'archive-folder', displayName: 'Archive' },
+            { id: 'inbox-folder', displayName: 'Inbox' },
+          ],
+        });
+      }
+
+      if (url.includes('/me/mailFolders/inbox?')) {
+        return jsonResponse({
+          id: 'inbox-folder',
+          displayName: 'Inbox',
+          wellKnownName: 'inbox',
+        });
+      }
+
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createGraphClient();
+
+    await expect(
+      client.getNotificationMessages(account.id, {
+        id: 'event-1',
+        clientId: 'client-1',
+        accountId: account.id,
+        providerId: 'microsoft',
+        subscriptionId: 'subscription-1',
+        kind: 'message-change',
+        changeType: 'created',
+        messageId: 'message-1',
+        receivedAt: '2026-05-16T10:00:00.000Z',
+      }),
+    ).resolves.toEqual({ messages: [] });
+  });
+
+  it('does not notify for a read message in the Graph inbox', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/me/messages/message-1?')) {
+        return jsonResponse({
+          id: 'message-1',
+          parentFolderId: 'inbox-folder',
+          subject: 'Already read',
+          isRead: true,
+        });
+      }
+
+      if (url.includes('/me/mailFolders/inbox?')) {
+        return jsonResponse({ id: 'inbox-folder' });
+      }
+
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createGraphClient();
+
+    await expect(
+      client.getNotificationMessages(account.id, {
+        id: 'event-2',
+        clientId: 'client-1',
+        accountId: account.id,
+        providerId: 'microsoft',
+        subscriptionId: 'subscription-1',
+        kind: 'message-change',
+        changeType: 'created',
+        messageId: 'message-1',
+        receivedAt: '2026-05-16T10:01:00.000Z',
+      }),
+    ).resolves.toEqual({ messages: [] });
+  });
+
+  it('creates a forward draft with recipients and patches only Courrier metadata', async () => {
+    const draftState = {
+      kind: 'forward' as const,
+      relatedMessageId: 'message-1',
+      toValue: 'Ada <ada@example.com>',
+      ccValue: 'Grace <grace@example.com>',
+      bccValue: 'Hidden <hidden@example.com>',
+    };
+    const encodedDraftState = encodeProviderDraftState(draftState);
     const fetchMock = mockFetch(
-      jsonResponse({ id: 'draft-1' }),
+      jsonResponse({
+        id: 'draft-1',
+        body: {
+          contentType: 'html',
+          content: '<p>Note</p><hr><p>Original message</p>',
+        },
+      }, 201),
       new Response(null, { status: 204 }),
       jsonResponse({
         id: 'draft-1',
-        subject: 'Hello',
-        bodyPreview: 'Hello',
-        body: { contentType: 'html', content: '<p>Hello</p>' },
+        subject: 'Fwd: Project',
+        bodyPreview: 'Note Original message',
+        body: {
+          contentType: 'html',
+          content: '<p>Note</p><hr><p>Original message</p>',
+        },
         toRecipients: [
-          { emailAddress: { address: 'ada@example.com' } },
+          { emailAddress: { name: 'Ada', address: 'ada@example.com' } },
         ],
-        createdDateTime: '2026-05-16T10:00:00.000Z',
-        lastModifiedDateTime: '2026-05-16T10:00:01.000Z',
+        ccRecipients: [
+          { emailAddress: { name: 'Grace', address: 'grace@example.com' } },
+        ],
+        bccRecipients: [
+          { emailAddress: { name: 'Hidden', address: 'hidden@example.com' } },
+        ],
+        singleValueExtendedProperties: [
+          {
+            id: graphDraftStatePropertyId,
+            value: encodedDraftState,
+          },
+        ],
       }),
-      new Response(null, { status: 202 }),
     );
     const client = createGraphClient();
 
     const draft = await client.createDraft(account.id, {
-      kind: 'new',
-      toRecipients: [{ email: 'ada@example.com' }],
-      toValue: 'ada@example.com',
-      subject: 'Hello',
-      bodyHtml: '<p>Hello</p>',
-      editorValue: { html: '<p>Hello</p>', text: 'Hello', isEmpty: false },
+      ...draftState,
+      toRecipients: [{ name: 'Ada', email: 'ada@example.com' }],
+      ccRecipients: [{ name: 'Grace', email: 'grace@example.com' }],
+      bccRecipients: [{ name: 'Hidden', email: 'hidden@example.com' }],
+      subject: 'Fwd: Project',
+      bodyHtml: '<p>Note</p>',
+      editorValue: {
+        html: '<p>Note</p>',
+        text: 'Note',
+        isEmpty: false,
+      },
       attachments: [],
     });
-    await client.sendDraft(account.id, draft.providerDraftId);
 
-    expect(fetchMock.mock.calls[0][0]).toBe(`${graphBaseUrl}/me/messages`);
-    expect(fetchMock.mock.calls[1][0]).toBe(`${graphBaseUrl}/me/messages/draft-1`);
-    expect(fetchMock.mock.calls[3][0]).toBe(`${graphBaseUrl}/me/messages/draft-1/send`);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${graphBaseUrl}/me/messages/message-1/createForward`,
+    );
+    const createBody = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
+    expect(createBody.message).toEqual({
+      subject: 'Fwd: Project',
+      body: {
+        contentType: 'HTML',
+        content: '<p>Note</p>',
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            name: 'Ada',
+            address: 'ada@example.com',
+          },
+        },
+      ],
+      ccRecipients: [
+        {
+          emailAddress: {
+            name: 'Grace',
+            address: 'grace@example.com',
+          },
+        },
+      ],
+      bccRecipients: [
+        {
+          emailAddress: {
+            name: 'Hidden',
+            address: 'hidden@example.com',
+          },
+        },
+      ],
+    });
+    const metadataPatch = JSON.parse(
+      fetchMock.mock.calls[1][1]?.body as string,
+    );
+    expect(metadataPatch).toEqual({
+      singleValueExtendedProperties: [
+        {
+          id: graphDraftStatePropertyId,
+          value: encodedDraftState,
+        },
+      ],
+    });
+    expect(metadataPatch).not.toHaveProperty('body');
     expect(draft).toMatchObject({
       providerDraftId: 'draft-1',
-      toValue: 'ada@example.com',
-      subject: 'Hello',
+      kind: 'forward',
+      relatedMessageId: 'message-1',
+      toValue: draftState.toValue,
+      ccValue: draftState.ccValue,
+      bccValue: draftState.bccValue,
+      editorValue: {
+        html: '<p>Note</p><hr><p>Original message</p>',
+      },
     });
   });
 
-  it('removes deleted provider attachments when updating Graph drafts', async () => {
-    const fetchMock = mockFetch(
+  it('restores plaintext Graph drafts as escaped editor HTML', async () => {
+    mockFetch(
       jsonResponse({
-        id: 'draft-1',
-        subject: 'Hello',
-        bodyPreview: 'Hello',
-        body: { contentType: 'html', content: '<p>Hello</p>' },
+        id: 'draft-text',
+        subject: 'Plain notes',
+        body: {
+          contentType: 'text',
+          content: 'Hello <Ada>\nSecond line',
+        },
         toRecipients: [
-          { emailAddress: { address: 'ada@example.com' } },
-        ],
-        attachments: [
           {
-            '@odata.type': '#microsoft.graph.fileAttachment',
-            id: 'attachment-1',
-            name: 'old.pdf',
-            contentType: 'application/pdf',
-            size: 1234,
-            isInline: false,
+            emailAddress: {
+              name: 'Ada Lovelace',
+              address: 'ada@example.com',
+            },
           },
         ],
-      }),
-      new Response(null, { status: 204 }),
-      new Response(null, { status: 204 }),
-      jsonResponse({
-        id: 'draft-1',
-        subject: 'Hello',
-        bodyPreview: 'Hello',
-        body: { contentType: 'html', content: '<p>Hello</p>' },
-        toRecipients: [
-          { emailAddress: { address: 'ada@example.com' } },
+        ccRecipients: [
+          {
+            emailAddress: {
+              address: 'grace@example.com',
+            },
+          },
         ],
-        attachments: [],
+        bccRecipients: [],
       }),
     );
     const client = createGraphClient();
 
-    await client.updateDraft(account.id, 'draft-1', {
-      kind: 'new',
-      toRecipients: [{ email: 'ada@example.com' }],
-      toValue: 'ada@example.com',
-      subject: 'Hello',
-      bodyHtml: '<p>Hello</p>',
-      editorValue: { html: '<p>Hello</p>', text: 'Hello', isEmpty: false },
-      attachments: [],
-    });
+    const draft = await client.getDraft(account.id, 'draft-text');
 
-    expect(fetchMock.mock.calls[0][0]).toContain('/me/messages/draft-1?');
-    expect(fetchMock.mock.calls[1][0]).toBe(`${graphBaseUrl}/me/messages/draft-1`);
-    expect(fetchMock.mock.calls[2][0]).toBe(
-      `${graphBaseUrl}/me/messages/draft-1/attachments/attachment-1`,
+    expect(draft).toMatchObject({
+      providerDraftId: 'draft-text',
+      kind: 'new',
+      toValue: 'Ada Lovelace <ada@example.com>',
+      ccValue: 'grace@example.com',
+      bccValue: '',
+      editorValue: {
+        html: 'Hello &lt;Ada&gt;<br>Second line',
+        text: 'Hello <Ada>\nSecond line',
+        isEmpty: false,
+      },
+    });
+  });
+
+  it('loads every Microsoft Graph draft page', async () => {
+    const nextPageUrl =
+      `${graphBaseUrl}/me/mailFolders/drafts/messages?` +
+      '$top=100&$skiptoken=page-2';
+    const fetchMock = mockFetch(
+      jsonResponse({
+        value: [
+          {
+            id: 'draft-1',
+            subject: 'First',
+            body: { contentType: 'html', content: '<p>First</p>' },
+          },
+        ],
+        '@odata.nextLink': nextPageUrl,
+      }),
+      jsonResponse({
+        value: [
+          {
+            id: 'draft-2',
+            subject: 'Second',
+            body: { contentType: 'html', content: '<p>Second</p>' },
+          },
+        ],
+      }),
     );
-    expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'DELETE' });
+    const client = createGraphClient();
+
+    const drafts = await client.listDrafts(account.id);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      new URL(String(fetchMock.mock.calls[0][0])).searchParams.get('$expand'),
+    ).not.toContain('@odata.type');
+    expect(fetchMock.mock.calls[1][0]).toBe(nextPageUrl);
+    expect(drafts.map((draft) => draft.providerDraftId)).toEqual([
+      'draft-1',
+      'draft-2',
+    ]);
   });
 });
 
@@ -477,4 +920,8 @@ function mockFetch(...responses: Response[]) {
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status });
+}
+
+function encodeProviderDraftState(state: Record<string, unknown>) {
+  return Buffer.from(JSON.stringify(state), 'utf8').toString('base64url');
 }

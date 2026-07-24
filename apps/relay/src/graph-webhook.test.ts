@@ -186,6 +186,7 @@ describe('Graph webhook routes', () => {
         accountId: 'google:account-1',
         providerId: 'google',
         subscriptionId: 'pubsub-message-1',
+        historyId: '123',
         changeType: 'updated',
       },
     ]);

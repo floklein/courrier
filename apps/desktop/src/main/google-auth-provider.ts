@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
 import fs from 'node:fs/promises';

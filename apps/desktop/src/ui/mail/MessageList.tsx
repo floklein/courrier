@@ -7,13 +7,19 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import type { MailFolder, MailMessageSummary } from '@/lib/mail-types';
+import type {
+  MailActionCapability,
+  MailFolder,
+  MailMessageSummary,
+  MailSearchScope,
+} from '@/lib/mail-types';
 import { cn } from '@/lib/utils';
 import { PanelStatus } from '@/ui/app/StatusViews';
 import { EmptyFolder } from '@/ui/mail/EmptyFolder';
@@ -28,6 +34,7 @@ export function MessageList({
   folderId,
   folderLabel,
   folders,
+  actionCapabilities,
   messages,
   selectedMessageId,
   isLoading,
@@ -37,17 +44,27 @@ export function MessageList({
   isActionPending,
   onLoadMore,
   onDeleteMessage,
+  onArchiveMessage,
   onDragActiveChange,
+  onMarkMessageJunkState,
   onMarkMessageReadState,
   onMoveMessage,
+  onForwardMessage,
   onReplyToMessage,
+  onReplyAllToMessage,
+  onToggleMessageFlag,
+  onToggleMessageImportant,
+  onToggleMessageStar,
   onSearch,
+  onSearchScopeChange,
   searchQuery,
+  searchScope,
   className,
 }: {
   folderId: string;
   folderLabel: string;
   folders: MailFolder[];
+  actionCapabilities: MailActionCapability[];
   messages: MailMessageSummary[];
   selectedMessageId: string | undefined;
   isLoading: boolean;
@@ -57,7 +74,12 @@ export function MessageList({
   isActionPending: boolean;
   onLoadMore: () => void;
   onDeleteMessage: (message: MailMessageSummary) => void;
+  onArchiveMessage: (message: MailMessageSummary) => void;
   onDragActiveChange: (isActive: boolean) => void;
+  onMarkMessageJunkState: (
+    message: MailMessageSummary,
+    isJunk: boolean,
+  ) => void;
   onMarkMessageReadState: (
     message: MailMessageSummary,
     isRead: boolean,
@@ -66,9 +88,25 @@ export function MessageList({
     message: MailMessageSummary,
     destinationFolderId: string,
   ) => void;
+  onForwardMessage: (message: MailMessageSummary) => void;
   onReplyToMessage: (message: MailMessageSummary) => void;
+  onReplyAllToMessage: (message: MailMessageSummary) => void;
+  onToggleMessageFlag: (
+    message: MailMessageSummary,
+    isFlagged: boolean,
+  ) => void;
+  onToggleMessageImportant: (
+    message: MailMessageSummary,
+    isImportant: boolean,
+  ) => void;
+  onToggleMessageStar: (
+    message: MailMessageSummary,
+    isStarred: boolean,
+  ) => void;
   onSearch: (query: string) => void;
+  onSearchScopeChange: (scope: MailSearchScope) => void;
   searchQuery: string;
+  searchScope: MailSearchScope;
   className?: string;
 }) {
   const [isSearching, setIsSearching] = useState(Boolean(searchQuery));
@@ -79,6 +117,7 @@ export function MessageList({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollParentRef = useRef<HTMLDivElement>(null);
   const loadMoreRequestLengthRef = useRef<number | null>(null);
+  const previousFolderIdRef = useRef(folderId);
   const rowVirtualizer = useVirtualizer({
     count: hasNextPage ? messages.length + 1 : messages.length,
     getScrollElement: () => scrollParentRef.current,
@@ -98,9 +137,20 @@ export function MessageList({
   }, [searchQuery]);
 
   useEffect(() => {
+    const didChangeFolder = previousFolderIdRef.current !== folderId;
+    previousFolderIdRef.current = folderId;
+
+    if (!didChangeFolder) {
+      return;
+    }
+
+    if (searchScope === 'all') {
+      return;
+    }
+
     setDraftSearch('');
     setIsSearching(false);
-  }, [folderId]);
+  }, [folderId, searchScope]);
 
   useEffect(() => {
     if (!isSearching) {
@@ -126,7 +176,7 @@ export function MessageList({
 
   useEffect(() => {
     loadMoreRequestLengthRef.current = null;
-  }, [folderId, messages.length, searchQuery]);
+  }, [folderId, messages.length, searchQuery, searchScope]);
 
   useEffect(() => {
     if (
@@ -165,6 +215,7 @@ export function MessageList({
     setDraftSearch('');
     setIsSearching(false);
     onSearch('');
+    onSearchScopeChange('folder');
   }
 
   function handleContextMenu(event: MouseEvent<HTMLDivElement>) {
@@ -196,35 +247,63 @@ export function MessageList({
         className,
       )}
     >
-      <header className="app-window-header app-window-controls-end-mobile flex h-16 shrink-0 items-center justify-between gap-3 border-b px-5">
+      <header
+        className={cn(
+          'app-window-header app-window-controls-end-mobile flex shrink-0 items-center justify-between gap-3 border-b px-5',
+          isSearching ? 'min-h-24 py-2' : 'h-16',
+        )}
+      >
         {isSearching ? (
-          <div
-            className="flex min-w-0 flex-1 items-center gap-2"
-          >
-            <Input
-              ref={searchInputRef}
-              value={draftSearch}
-              onChange={(event) => setDraftSearch(event.target.value)}
-              placeholder={`Search ${folderLabel}`}
-              aria-label={`Search ${folderLabel}`}
-              className="h-8"
-            />
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Clear search"
-                    onClick={clearSearch}
-                  >
-                    <X data-icon="inline-start" />
-                  </Button>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <Input
+                ref={searchInputRef}
+                value={draftSearch}
+                onChange={(event) => setDraftSearch(event.target.value)}
+                placeholder={
+                  searchScope === 'all'
+                    ? 'Search all mail'
+                    : `Search ${folderLabel}`
                 }
+                aria-label={
+                  searchScope === 'all'
+                    ? 'Search all mail'
+                    : `Search ${folderLabel}`
+                }
+                className="h-8"
               />
-              <TooltipContent>Clear search</TooltipContent>
-            </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Clear search"
+                      onClick={clearSearch}
+                    >
+                      <X data-icon="inline-start" />
+                    </Button>
+                  }
+                />
+                <TooltipContent>Clear search</TooltipContent>
+              </Tooltip>
+            </div>
+            <Tabs
+              value={searchScope}
+              onValueChange={(value) =>
+                onSearchScopeChange(value as MailSearchScope)
+              }
+            >
+              <TabsList className="h-7 w-full">
+                <TabsTrigger value="all" className="h-6 text-xs">
+                  All mail
+                </TabsTrigger>
+                <TabsTrigger value="folder" className="h-6 text-xs">
+                  This folder
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         ) : (
           <>
@@ -318,14 +397,22 @@ export function MessageList({
           />
           {contextMessage && (
             <MailActionContextContent
-              currentFolderId={folderId}
+              currentFolderId={contextMessage.folderId || folderId}
+              actionCapabilities={actionCapabilities}
               folders={folders}
               isBusy={isActionPending}
               message={contextMessage}
+              onArchive={onArchiveMessage}
               onDelete={onDeleteMessage}
+              onMarkJunk={onMarkMessageJunkState}
               onMarkReadState={onMarkMessageReadState}
               onMove={onMoveMessage}
+              onForward={onForwardMessage}
               onReply={onReplyToMessage}
+              onReplyAll={onReplyAllToMessage}
+              onToggleFlag={onToggleMessageFlag}
+              onToggleImportant={onToggleMessageImportant}
+              onToggleStar={onToggleMessageStar}
             />
           )}
         </ContextMenu>
