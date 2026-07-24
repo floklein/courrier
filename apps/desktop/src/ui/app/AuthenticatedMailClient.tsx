@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useComposeStore } from '@/hooks/compose-store';
+import { useActiveMailAccountChange } from '@/hooks/useActiveMailAccountChange';
 import { useMailActions } from '@/hooks/useMailActions';
 import { useMailClientState } from '@/hooks/useMailClientState';
 import { api } from '@/lib/api-client';
@@ -48,6 +49,10 @@ export function AuthenticatedMailClient({
   const manuallyMarkedUnreadMessageId = useRef<string | undefined>(undefined);
   const previousFolderId = useRef<string | undefined>(undefined);
   const {
+    applyActiveMailAccountSession,
+    prepareActiveMailAccountChange,
+  } = useActiveMailAccountChange();
+  const {
     currentFolder,
     folders,
     foldersQuery,
@@ -89,6 +94,33 @@ export function AuthenticatedMailClient({
   });
 
   useEffect(() => cleanupLiveRegion, []);
+
+  useEffect(() => {
+    return api.mail.onOpenMessage(({ accountId, folderId, messageId }) => {
+      const openMessage = async () => {
+        if (accountId !== activeAccount.id) {
+          await prepareActiveMailAccountChange();
+          const nextSession = await api.auth.switchAccount(accountId);
+          await applyActiveMailAccountSession(nextSession);
+        }
+
+        await navigate({
+          to: '/mail/$folderId/$messageId',
+          params: {
+            folderId: encodeRouteId(folderId),
+            messageId: encodeRouteId(messageId),
+          },
+        });
+      };
+
+      void openMessage();
+    });
+  }, [
+    activeAccount.id,
+    applyActiveMailAccountSession,
+    navigate,
+    prepareActiveMailAccountChange,
+  ]);
 
   useEffect(() => {
     for (const account of session.accounts) {

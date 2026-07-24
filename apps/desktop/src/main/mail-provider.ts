@@ -3,6 +3,7 @@ import type {
   MailActionCapability,
   MailFolder,
   MailMessageDetail,
+  MailMessageSummary,
   MailPersonSuggestion,
   PagedMessages,
   ProviderId,
@@ -10,6 +11,7 @@ import type {
   SearchMessagesInput,
   SendMailInput,
 } from '@/lib/mail-types';
+import type { MailRemoteChangeEvent } from '@courrier/mail-contracts';
 
 export interface MailAuthProvider {
   readonly id: ProviderId;
@@ -49,6 +51,15 @@ export interface DownloadedMailAttachment {
   content: Buffer;
 }
 
+export interface MailNotificationState {
+  gmailLastHistoryId?: string;
+}
+
+export interface MailNotificationResolution {
+  messages: MailMessageSummary[];
+  state?: MailNotificationState;
+}
+
 export interface MailSubscriptionProvider {
   createMailSubscription(input: CreateMailSubscriptionInput): Promise<MailSubscription>;
   renewSubscription(input: RenewSubscriptionInput): Promise<MailSubscription>;
@@ -73,6 +84,7 @@ export interface MailSubscription {
   id: string;
   expirationDateTime: string;
   resource?: string;
+  notificationState?: MailNotificationState;
 }
 
 export interface MailProvider extends MailSubscriptionProvider {
@@ -91,6 +103,11 @@ export interface MailProvider extends MailSubscriptionProvider {
     folderId: string,
     messageId: string,
   ): Promise<MailMessageDetail>;
+  getNotificationMessages?(
+    accountId: string,
+    event: MailRemoteChangeEvent,
+    state?: MailNotificationState,
+  ): Promise<MailNotificationResolution>;
   markMessageReadState(
     accountId: string,
     messageId: string,

@@ -18,11 +18,12 @@ import {
   getRenewalDelayMs,
   MailSubscriptionManager,
 } from '@/main/mail-subscription-manager';
+import type { MailAccount } from '@/lib/mail-types';
 
 const originalWebSocket = globalThis.WebSocket;
 let statePath: string;
 let managers: MailSubscriptionManager[] = [];
-const account = {
+const account: MailAccount = {
   id: 'microsoft:account-1',
   providerId: 'microsoft' as const,
   providerAccountId: 'account-1',
@@ -83,9 +84,16 @@ describe('mail subscription manager helpers', () => {
 describe('MailSubscriptionManager', () => {
   it('creates a subscription, registers with the relay, receives mail changes, and acknowledges them', async () => {
     const graphClient = createGraphClient();
-    const manager = createManager(graphClient);
+    const mailNotificationService = {
+      handleRemoteChange: vi.fn().mockResolvedValue(undefined),
+      setAccountSubscriptionActive: vi.fn(),
+    };
+    const manager = createManager(graphClient, mailNotificationService);
 
     await manager.start();
+    expect(
+      mailNotificationService.setAccountSubscriptionActive,
+    ).toHaveBeenCalledWith('microsoft:account-1', true);
     MockWebSocket.instances[0].open();
     MockWebSocket.instances[0].receive({
       type: 'mail-change',
@@ -116,6 +124,12 @@ describe('MailSubscriptionManager', () => {
       'mail:remote-change',
       expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
     );
+    await waitFor(
+      () => mailNotificationService.handleRemoteChange.mock.calls.length === 1,
+    );
+    expect(mailNotificationService.handleRemoteChange).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
+    );
     await waitFor(() =>
       MockWebSocket.instances[0].sent.some(
         (message) =>
@@ -128,6 +142,120 @@ describe('MailSubscriptionManager', () => {
       type: 'ack',
       eventId: 'event-1',
     });
+
+    await manager.stop();
+    expect(
+      mailNotificationService.setAccountSubscriptionActive,
+    ).toHaveBeenLastCalledWith('microsoft:account-1', false);
+  });
+
+  it('still delivers and acknowledges mail changes when native notification handling fails', async () => {
+    const graphClient = createGraphClient();
+    const mailNotificationService = {
+      handleRemoteChange: vi.fn().mockRejectedValue(new Error('notification failed')),
+    };
+    const manager = createManager(graphClient, mailNotificationService);
+
+    await manager.start();
+    MockWebSocket.instances[0].open();
+    MockWebSocket.instances[0].receive({
+      type: 'mail-change',
+      event: {
+        id: 'event-1',
+        clientId: 'client-1',
+        subscriptionId: 'subscription-1',
+        kind: 'message-change',
+        changeType: 'created',
+        messageId: 'message-1',
+        receivedAt: '2026-04-29T10:00:00.000Z',
+      },
+    });
+
+    await waitFor(() => rendererSend.mock.calls.length === 1);
+
+    expect(rendererSend).toHaveBeenCalledWith(
+      'mail:remote-change',
+      expect.objectContaining({ id: 'event-1', messageId: 'message-1' }),
+    );
+    await waitFor(() =>
+      MockWebSocket.instances[0].sent.some(
+        (message) =>
+          isRecord(message) &&
+          message.type === 'ack' &&
+          message.eventId === 'event-1',
+      ),
+    );
+  });
+
+  it('seeds provider notification state from subscription metadata', async () => {
+    const googleAccount = {
+      ...account,
+      id: 'google:account-1',
+      providerId: 'google' as const,
+      providerAccountId: 'account-1',
+      email: 'ada@example.com',
+    };
+    const googleClient = createGraphClient();
+    googleClient.createMailSubscription.mockResolvedValue({
+      id: 'history-100',
+      expirationDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      notificationState: { gmailLastHistoryId: 'history-100' },
+    });
+    const mailNotificationService = {
+      handleRemoteChange: vi.fn().mockResolvedValue(undefined),
+      mergeProviderState: vi.fn().mockResolvedValue(undefined),
+    };
+    const manager = createManager(
+      googleClient,
+      mailNotificationService,
+      googleAccount,
+    );
+
+    await manager.start();
+
+    expect(mailNotificationService.mergeProviderState).toHaveBeenCalledWith(
+      'google:account-1',
+      { gmailLastHistoryId: 'history-100' },
+    );
+  });
+
+  it('preserves the live Gmail history cursor during in-process renewal', async () => {
+    const googleAccount = {
+      ...account,
+      id: 'google:account-1',
+      providerId: 'google' as const,
+      providerAccountId: 'account-1',
+      email: 'ada@example.com',
+    };
+    const googleClient = createGraphClient();
+    googleClient.createMailSubscription.mockResolvedValue({
+      id: 'history-100',
+      expirationDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      notificationState: { gmailLastHistoryId: 'history-100' },
+    });
+    googleClient.renewSubscription.mockResolvedValue({
+      id: 'history-200',
+      expirationDateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      notificationState: { gmailLastHistoryId: 'history-200' },
+    });
+    const mailNotificationService = {
+      handleRemoteChange: vi.fn().mockResolvedValue(undefined),
+      mergeProviderState: vi.fn().mockResolvedValue(undefined),
+    };
+    const manager = createManager(
+      googleClient,
+      mailNotificationService,
+      googleAccount,
+    );
+
+    await manager.start();
+    await manager.start();
+
+    expect(mailNotificationService.mergeProviderState).toHaveBeenCalledTimes(1);
+    expect(mailNotificationService.mergeProviderState).toHaveBeenCalledWith(
+      'google:account-1',
+      { gmailLastHistoryId: 'history-100' },
+    );
   });
 
   it('closes the previous WebSocket when start runs again for renewal', async () => {
@@ -237,11 +365,19 @@ describe('MailSubscriptionManager', () => {
   });
 });
 
-function createManager(graphClient = createGraphClient()) {
+function createManager(
+  graphClient = createGraphClient(),
+  mailNotificationService?: {
+    handleRemoteChange: ReturnType<typeof vi.fn>;
+    mergeProviderState?: ReturnType<typeof vi.fn>;
+    setAccountSubscriptionActive?: ReturnType<typeof vi.fn>;
+  },
+  currentAccount = account,
+) {
   const manager = new MailSubscriptionManager({
     authService: {
-      getAccounts: vi.fn().mockResolvedValue([account]),
-      getActiveAccountId: vi.fn(() => account.id),
+      getAccounts: vi.fn().mockResolvedValue([currentAccount]),
+      getActiveAccountId: vi.fn(() => currentAccount.id),
     } as never,
     mailService: {
       getProvider: vi.fn(() => graphClient),
@@ -250,6 +386,7 @@ function createManager(graphClient = createGraphClient()) {
     relayPublicUrl: 'https://relay.example.com',
     reconnectDelayMs: 1,
     statePath,
+    mailNotificationService: mailNotificationService as never,
   });
   managers.push(manager);
   return manager;

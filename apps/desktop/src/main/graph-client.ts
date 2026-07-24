@@ -1,4 +1,7 @@
 import {
+  type MailRemoteChangeEvent,
+} from '@courrier/mail-contracts';
+import {
   mapGraphFolder,
   mapGraphMessageDetail,
   mapGraphMessageSummary,
@@ -24,6 +27,7 @@ import type {
   CreateMailSubscriptionInput,
   DownloadedMailAttachment,
   MailAuthProvider,
+  MailNotificationResolution,
   MailProvider,
   MailSubscription,
   MoveMessageInput,
@@ -161,6 +165,46 @@ export class GraphClient implements MailProvider {
     );
 
     return mapGraphMessageDetail(folderId, data);
+  }
+
+  async getNotificationMessages(
+    accountId: string,
+    event: MailRemoteChangeEvent,
+  ): Promise<MailNotificationResolution> {
+    if (
+      event.kind !== 'message-change' ||
+      event.providerId === 'google' ||
+      event.changeType !== 'created' ||
+      !event.messageId
+    ) {
+      return { messages: [] };
+    }
+
+    const [message, inboxFolder] = await Promise.all([
+      this.fetchGraph<GraphMessageDetail>(
+        accountId,
+        `${graphBaseUrl}/me/messages/${encodeURIComponent(
+          event.messageId,
+        )}?$select=id,parentFolderId,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,importance,from,toRecipients`,
+      ),
+      this.fetchGraph<GraphMailFolder>(
+        accountId,
+        `${graphBaseUrl}/me/mailFolders/inbox?$select=id`,
+      ),
+    ]);
+
+    if (
+      !message.id ||
+      message.isRead ||
+      !message.parentFolderId ||
+      message.parentFolderId !== inboxFolder?.id
+    ) {
+      return { messages: [] };
+    }
+
+    return {
+      messages: [mapGraphMessageSummary(message.parentFolderId, message)],
+    };
   }
 
   async markMessageReadState(
