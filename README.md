@@ -1,194 +1,203 @@
 # Courrier
 
-Courrier is a desktop mail client for Microsoft Outlook and Gmail accounts. It is a
-pnpm/Turborepo monorepo with an Electron desktop app and a Fastify relay for
-provider update notifications.
+Courrier is a native desktop mail client for Microsoft Outlook and Gmail. It
+ships as two purpose-built applications:
 
-The app signs in with Microsoft or Google OAuth, reads folders and messages
-through provider APIs, and provides a focused three-pane mail interface with
-separate compose windows for browsing, searching, and triaging messages.
+- a Swift and SwiftUI application for macOS
+- a C# and WinUI 3 application for Windows
+
+The clients share provider behavior and the optional live-update relay
+protocol, but not a web renderer. Navigation, commands, compose windows,
+credential storage, notifications, file handling, and accessibility use the
+native facilities of each platform.
 
 ## Features
 
-- Microsoft sign-in with MSAL and Google sign-in with installed-app OAuth
-- Multi-account session handling for Outlook and Gmail accounts
-- Outlook folder navigation and Gmail label navigation, including nested folders
-- Message list pagination and provider search
-- HTML and plain-text message rendering with sanitized HTML content
-- Read/unread, move, drag-to-folder, compose, reply, and move-to-trash actions
-- Rich-text compose with recipient autocomplete and local file attachments
-- Attachment download/open support for provider-hosted attachments
-- Optional live mailbox invalidation through Microsoft Graph webhooks and Gmail
-  Pub/Sub push notifications
-- Hardened Electron bridge with context isolation and trusted IPC checks
-- Responsive layout for narrower desktop windows
+- Microsoft and Google OAuth in the system browser
+- Multiple signed-in accounts with add, switch, and individual sign-out
+- Outlook folders and Gmail labels with unread and total counts
+- Paginated message lists and folder or all-mail provider search
+- HTML and plain-text reading with hardened native web views
+- Native attachment open and save flows
+- Read and unread, move, trash, archive, junk, star, flag, and importance
+  actions according to provider capability
+- Native multiple selection and bulk read, move, archive, and trash actions
+- New message, reply, reply all, and forward
+- To, Cc, and Bcc recipients with contact suggestions and validation
+- Rich-text composition, multiple attachments, and file drag and drop
+- Provider-backed drafts with 750 ms autosave and recovery
+- Native appearance and notification preferences
+- Optional Microsoft Graph and Gmail live updates through the relay
+- Notification click routing to the matching account and message
 
-## Tech Stack
+Courrier deliberately exposes provider differences. Gmail supports stars but
+not Outlook flags. Outlook supports flags but not Gmail stars. Delete moves a
+message to the provider trash folder and does not permanently erase it.
 
-- **Desktop shell:** Electron Forge
-- **Build tooling:** Vite and TypeScript
-- **UI:** React, Tailwind CSS, shadcn/Base UI primitives, lucide-react icons
-- **Editor:** Tiptap
-- **Data:** TanStack Query and TanStack Router
-- **Auth and mail:** MSAL Node, MSAL Node Extensions, Microsoft Graph, Gmail API
-- **Relay:** Fastify, WebSocket, and Zod
-- **Testing:** Vitest and Testing Library
+## Native clients
 
-## Prerequisites
+### macOS
 
-- Node.js and pnpm 11
-- A Microsoft account with Outlook mail access or a Google account with Gmail
-- A Microsoft Entra app registration or Google OAuth desktop client
+The macOS app uses SwiftUI `NavigationSplitView`, standard menus and keyboard
+commands, AppKit rich text and file integration, Keychain, WebKit, and
+UserNotifications. Compose and draft browsing use separate native windows.
 
-## Getting Started
+Requirements:
 
-Install dependencies:
+- macOS 14 or later
+- Xcode with Swift 5.10 or later
 
-```powershell
-pnpm install
+Configure it:
+
+```bash
+cp apps/macos/.env.example apps/macos/.env
 ```
 
-Create a local environment file:
+Set at least one provider client ID in `apps/macos/.env`, then run:
 
-```powershell
-Copy-Item apps/desktop/.env.example apps/desktop/.env
+```bash
+pnpm start
 ```
 
-Edit `apps/desktop/.env` and set at least one provider client ID:
+You can also work directly with Swift:
 
-```dotenv
-MICROSOFT_CLIENT_ID=<Application client ID>
-GOOGLE_CLIENT_ID=<Google OAuth desktop client ID>
-GOOGLE_CLIENT_SECRET=<optional Google OAuth desktop client secret>
-GOOGLE_PUBSUB_TOPIC=projects/<project>/topics/<topic>
+```bash
+swift run --package-path apps/macos Courrier
+swift test --package-path apps/macos
 ```
 
-The relay variables are optional for basic local desktop use. Add them only when
-you are running live update relay integration.
+See [the macOS client guide](apps/macos/README.md) for native behavior and
+configuration details.
 
-Start the app in development mode:
+### Windows
+
+The Windows app uses WinUI 3 and Windows App SDK controls, native command bars
+and keyboard accelerators, MSAL encrypted persistence, Windows Credential
+Manager, WebView2, file pickers, and Windows app notifications.
+
+Requirements:
+
+- Windows 10 version 1809 or later, or Windows 11
+- .NET 8 SDK
+- Visual Studio with the Windows application development workload
+
+Copy `apps/windows/appsettings.example.json` to
+`%LOCALAPPDATA%\Courrier\appsettings.json`, set at least one provider client ID,
+then run:
 
 ```powershell
 pnpm start
 ```
 
-Electron Forge starts the Electron main process, preload script, and Vite
-renderer. In development, Chromium DevTools open automatically.
+You can also work directly with .NET:
 
-## OAuth Setup
-
-Courrier is a public desktop client, so it uses Microsoft OAuth without a client
-secret. Create a Microsoft Entra app registration with a native redirect URI of:
-
-```text
-http://localhost
+```powershell
+dotnet run --project apps/windows/src/Courrier.Windows/Courrier.Windows.csproj
+dotnet test apps/windows/Courrier.Windows.sln
 ```
 
-The app uses delegated Microsoft Graph access for the signed-in user. Mail
-actions such as marking messages read, moving messages, and moving messages to
-trash require mailbox write permission. Sending new messages and replies
-requires mail send permission.
+See [the Windows client guide](apps/windows/README.md) for native behavior,
+tooling, and configuration details.
 
-For the full Microsoft setup flow, see [docs/oauth.md](docs/oauth.md). For the
-Google setup flow, see [docs/google-oauth.md](docs/google-oauth.md).
+## OAuth setup
 
-For Gmail, create a Google OAuth desktop client and enable the Gmail API and
-People API. Gmail live updates use Gmail `watch` with a Cloud Pub/Sub topic.
-Configure the Pub/Sub push subscription to deliver to:
+Courrier is a public desktop client. Do not put a Microsoft client secret in
+the application.
 
-```text
-https://your-relay.example.com/google/pubsub
+- [Microsoft OAuth setup](docs/oauth.md)
+- [Google OAuth and Gmail setup](docs/google-oauth.md)
+
+The native clients recognize these configuration values:
+
+```dotenv
+MICROSOFT_CLIENT_ID=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_PUBSUB_TOPIC=
+RELAY_PUBLIC_URL=
+RELAY_ADMIN_TOKEN=
 ```
 
-If you set `GOOGLE_PUBSUB_VERIFICATION_TOKEN` on the relay, include it as a
-`token` query parameter in the push endpoint URL.
+The Google client secret is optional for installed-app clients. Local
+configuration files and credentials must not be committed.
 
-## Scripts
-
-| Command | Description |
-| --- | --- |
-| `pnpm start` | Run Courrier desktop in development mode. |
-| `pnpm dev` | Run workspace development tasks. |
-| `pnpm build` | Build workspace packages and apps. |
-| `pnpm package` | Package the Electron app locally. |
-| `pnpm make` | Create distributable installers/packages. |
-| `pnpm test` | Run workspace Vitest suites. |
-| `pnpm test:coverage` | Run the desktop Vitest suite with coverage. |
-| `pnpm typecheck` | Run workspace TypeScript checks. |
-| `pnpm lint` | Run workspace ESLint checks. |
-
-## Project Structure
+## Repository structure
 
 ```text
 apps/
-  desktop/      Electron desktop app
-  relay/        Fastify provider webhook and WebSocket relay
+  macos/          Native SwiftUI and AppKit client
+  windows/        Native WinUI 3 client
+  relay/          Optional Fastify webhook and WebSocket relay
 packages/
-  mail-contracts/ Zod schemas and shared relay/desktop event types
-  tsconfig/     Shared TypeScript base config
+  mail-contracts/ Validated relay wire protocol
+  tsconfig/       Shared TypeScript configuration for services
 docs/
-  oauth.md        Microsoft OAuth registration and troubleshooting guide
-  google-oauth.md Google OAuth, Gmail API, and Pub/Sub setup guide
+  native-architecture.md
+  oauth.md
+  google-oauth.md
+scripts/
+  native.mjs      Selects the current platform for root commands
 ```
 
-## Live Update Relay
+The Node workspace supports the relay and shared wire contract. Neither native
+client uses Electron or a web-rendered application shell.
 
-Microsoft Graph change notifications and Gmail Pub/Sub push notifications require
-a public HTTPS webhook endpoint. The desktop app keeps provider tokens locally
-and creates provider subscriptions, while `apps/relay` receives webhook POSTs and
-pushes compact invalidation events to the desktop app over WebSocket.
+## Commands
 
-The relay exposes:
+| Command | Description |
+| --- | --- |
+| `pnpm start` | Run the native client for the current platform. |
+| `pnpm dev:relay` | Run the optional relay in watch mode. |
+| `pnpm build` | Build services and the current platform client. |
+| `pnpm package` | Create a release build for the current platform. |
+| `pnpm test` | Test services and the current platform client. |
+| `pnpm build:macos` | Build the macOS client. |
+| `pnpm test:macos` | Test the macOS core. |
+| `pnpm build:windows` | Build the Windows solution. |
+| `pnpm test:windows` | Test the Windows solution. |
+| `pnpm lint` | Lint the TypeScript services and contracts. |
+| `pnpm typecheck` | Type-check the TypeScript services and contracts. |
 
-- `GET /health` for health checks
-- `POST /graph/notifications` for Microsoft Graph subscription validation and
-  notifications
-- `POST /google/pubsub` for Gmail Pub/Sub push notifications
-- a WebSocket endpoint used by the desktop app for registration and event
-  delivery
+## Live update relay
 
-The current relay is intended for a self-hosted, single-user deployment. It uses
-an in-memory store with bounded event retention, so registrations and pending
-events are lost on process restart and are not shared across multiple relay
-instances. Add a durable `RelayStore` before running it as a production
-multi-instance service.
+The native apps work without the relay and can refresh in the foreground. The
+relay adds Microsoft Graph webhook and Gmail Pub/Sub delivery, WebSocket
+replay, event acknowledgement, and timely native notifications.
+
+It exposes:
+
+- `GET /health`
+- authenticated `POST /relay/subscriptions`
+- `POST /graph/notifications`
+- `POST /google/pubsub`
+- authenticated `/ws`
 
 Relay environment variables:
 
 ```dotenv
 RELAY_PUBLIC_URL=https://your-relay.example.com
-RELAY_ADMIN_TOKEN=<shared relay admin token, at least 24 chars>
-GOOGLE_PUBSUB_VERIFICATION_TOKEN=<optional shared push endpoint token>
+RELAY_ADMIN_TOKEN=<shared relay admin token, at least 24 characters>
+GOOGLE_PUBSUB_VERIFICATION_TOKEN=<optional push endpoint token>
 PORT=3001
 HOST=0.0.0.0
 ```
 
-`apps/relay` reads these values from the host process environment.
-`apps/relay/.env.example` is a template unless your deployment runner loads it.
+The current relay is intended for a self-hosted, single-user deployment. Its
+bounded event store is in memory, so registrations and pending events do not
+survive a restart and are not shared across instances. Do not distribute a
+shared relay admin token in a public multi-user client.
 
-Desktop relay environment variables:
+## Security boundaries
 
-```dotenv
-RELAY_PUBLIC_URL=https://your-relay.example.com
-RELAY_ADMIN_TOKEN=<same shared relay admin token>
-```
+- macOS credentials are stored in Keychain.
+- Windows Microsoft credentials use encrypted MSAL persistence, and Google
+  credentials use Windows Credential Manager.
+- OAuth opens in the system browser and returns through a loopback redirect.
+- HTML mail is sanitized and displayed with scripts, forms, plugins, popups,
+  and arbitrary navigation disabled.
+- External links open in the system browser.
+- Provider capability checks prevent unsupported actions from appearing.
+- Local configuration and tokens remain outside source control.
 
-Because Courrier is a public desktop client, do not use the shared relay admin
-token for a public multi-user relay. Treat it as a self-hosted deployment secret.
-
-## Security Notes
-
-Courrier keeps Electron renderer privileges narrow:
-
-- `contextIsolation` is enabled and `nodeIntegration` is disabled.
-- The preload script exposes only the typed `window.courrier` API.
-- Main-process IPC handlers reject messages from untrusted pages.
-- Renderer windows trust only the packaged app file or the configured Vite
-  development origin, not arbitrary localhost pages.
-- External navigation opens in the system browser instead of inside the app.
-- Remote resources in HTML mail are stripped by default before iframe rendering.
-- Microsoft tokens are cached with MSAL Node Extensions where platform support
-  is available.
-- Plaintext token cache fallback is disabled by default. Set
-  `COURRIER_ALLOW_PLAINTEXT_TOKEN_CACHE=true` only if you accept storing tokens
-  without OS encryption on the current machine.
+See [native architecture](docs/native-architecture.md) for the service
+boundaries and platform ownership model.
