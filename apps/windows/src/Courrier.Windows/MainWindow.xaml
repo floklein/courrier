@@ -135,7 +135,7 @@
                             <DataTemplate x:DataType="models:MailFolder">
                                 <Grid
                                     MinHeight="38"
-                                    Margin="{x:Bind Depth, Converter={StaticResource FolderDepthToMarginConverter}}"
+                                    Margin="{Binding Depth, Converter={StaticResource FolderDepthToMarginConverter}}"
                                     Padding="4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -157,7 +157,7 @@
                                         VerticalAlignment="Center"
                                         FontWeight="SemiBold"
                                         Text="{x:Bind UnreadCount}"
-                                        Visibility="{x:Bind UnreadCount, Converter={StaticResource CountToVisibilityConverter}}" />
+                                        Visibility="{Binding UnreadCount, Converter={StaticResource CountToVisibilityConverter}}" />
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
@@ -261,10 +261,10 @@
                                     Margin="0,7,0,0"
                                     VerticalAlignment="Top"
                                     Fill="{ThemeResource AccentFillColorDefaultBrush}"
-                                    Visibility="{x:Bind IsRead, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=True}" />
+                                    Visibility="{Binding IsRead, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=True}" />
                                 <StackPanel Grid.Column="1" Margin="10,0,8,0" Spacing="2">
                                     <TextBlock
-                                        FontWeight="{x:Bind IsRead, Converter={StaticResource ReadStateToWeightConverter}}"
+                                        FontWeight="{Binding IsRead, Converter={StaticResource ReadStateToWeightConverter}}"
                                         Text="{x:Bind SenderDisplay}"
                                         TextTrimming="CharacterEllipsis" />
                                     <TextBlock
@@ -290,7 +290,7 @@
                                         HorizontalAlignment="Right"
                                         FontSize="13"
                                         Glyph="&#xE723;"
-                                        Visibility="{x:Bind HasAttachments, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        Visibility="{Binding HasAttachments, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                 </StackPanel>
                             </Grid>
                         </DataTemplate>

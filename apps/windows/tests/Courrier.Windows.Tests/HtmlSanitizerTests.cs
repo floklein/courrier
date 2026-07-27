@@ -14,9 +14,9 @@ public sealed class HtmlSanitizerTests
         var result = sanitizer.SanitizeIncoming(
             "<script>alert(1)</script><img src=\"https://tracker.example/pixel\" onerror=\"alert(2)\" alt=\"image\"><p style=\"background:url(https://tracker.example)\">Hello</p>");
 
-        StringAssert.DoesNotContain(result, "script");
-        StringAssert.DoesNotContain(result, "onerror");
-        StringAssert.DoesNotContain(result, "tracker.example");
+        Assert.IsFalse(result.Contains("script", StringComparison.Ordinal));
+        Assert.IsFalse(result.Contains("onerror", StringComparison.Ordinal));
+        Assert.IsFalse(result.Contains("tracker.example", StringComparison.Ordinal));
         StringAssert.Contains(result, "Hello");
         StringAssert.Contains(result, "alt=\"image\"");
     }
@@ -30,9 +30,9 @@ public sealed class HtmlSanitizerTests
             "<div><strong>Hello</strong><iframe src=\"https://example.com\"></iframe><a href=\"javascript:alert(1)\">bad</a></div>");
 
         StringAssert.Contains(result, "<strong>Hello</strong>");
-        StringAssert.DoesNotContain(result, "<div");
-        StringAssert.DoesNotContain(result, "iframe");
-        StringAssert.DoesNotContain(result, "javascript:");
+        Assert.IsFalse(result.Contains("<div", StringComparison.Ordinal));
+        Assert.IsFalse(result.Contains("iframe", StringComparison.Ordinal));
+        Assert.IsFalse(result.Contains("javascript:", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -50,7 +50,7 @@ public sealed class HtmlSanitizerTests
             [inline]);
 
         StringAssert.Contains(result, "src=\"data:image/png;base64,AQID\"");
-        StringAssert.DoesNotContain(result, "tracker.example");
+        Assert.IsFalse(result.Contains("tracker.example", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -67,7 +67,7 @@ public sealed class HtmlSanitizerTests
             "<img src=\"cid:vector@example\">",
             [inline]);
 
-        StringAssert.DoesNotContain(result, "src=");
-        StringAssert.DoesNotContain(result, "data:");
+        Assert.IsFalse(result.Contains("src=", StringComparison.Ordinal));
+        Assert.IsFalse(result.Contains("data:", StringComparison.Ordinal));
     }
 }

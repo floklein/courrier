@@ -544,18 +544,18 @@ public sealed class GmailMailProvider : IMailProvider
             var part = message.RootElement.TryGetProperty("payload", out var payload)
                 ? FindPart(payload, partId)
                 : null;
-            var data = part is { } value &&
-                       value.TryGetProperty("body", out var body)
+            var partData = part is { } value &&
+                           value.TryGetProperty("body", out var body)
                 ? GetString(body, "data")
                 : null;
-            if (part is null || string.IsNullOrWhiteSpace(data))
+            if (part is null || string.IsNullOrWhiteSpace(partData))
             {
                 throw new InvalidOperationException("Gmail attachment content was not found.");
             }
             return new DownloadedAttachment(
                 GetString(part.Value, "filename") ?? "attachment",
                 GetString(part.Value, "mimeType") ?? "application/octet-stream",
-                GmailMapping.DecodeBytes(data));
+                GmailMapping.DecodeBytes(partData));
         }
         using var document = await _api.GetJsonAsync(
             _auth,

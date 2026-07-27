@@ -121,7 +121,7 @@ public sealed partial class ComposeWindow : Window
         BodyEditor.Document.GetText(TextGetOptions.UseCrlf, out var text);
         ViewModel.UpdateBody(
             text.TrimEnd('\r'),
-            RichTextHtmlConverter.ToHtml(BodyEditor.Document));
+            RichTextHtmlConverter.ToHtml(BodyEditor.TextDocument));
     }
 
     private async void Recipient_TextChanged(
@@ -257,7 +257,7 @@ public sealed partial class ComposeWindow : Window
         BodyEditor.Document.GetText(TextGetOptions.UseCrlf, out var text);
         ViewModel.UpdateBody(
             text.TrimEnd('\r'),
-            RichTextHtmlConverter.ToHtml(BodyEditor.Document));
+            RichTextHtmlConverter.ToHtml(BodyEditor.TextDocument));
     }
 
     private static async Task<IReadOnlyList<LocalAttachment>> ToAttachmentsAsync(

@@ -7,7 +7,7 @@ namespace Courrier.Windows.Services.Mail;
 
 public static class RichTextHtmlConverter
 {
-    public static string ToHtml(ITextDocument document)
+    public static string ToHtml(RichEditTextDocument document)
     {
         document.GetText(TextGetOptions.None, out var text);
         text = text.TrimEnd('\r');
@@ -233,7 +233,7 @@ public static class RichTextHtmlConverter
         }
         var match = Regex.Match(
             value,
-            """HYPERLINK\s+"([^"]+)"""",
+            "HYPERLINK\\s+\"([^\"]+)\"",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         var link = match.Success ? match.Groups[1].Value : value.Trim('"', ' ');
         return IsAllowedLink(link) ? link : null;

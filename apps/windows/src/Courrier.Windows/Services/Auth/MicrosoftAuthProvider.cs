@@ -48,7 +48,7 @@ public sealed class MicrosoftAuthProvider : IAuthProvider
         var client = GetClient();
         await _cacheInitialization;
         var accounts = await client.GetAccountsAsync();
-        return accounts.Select(MapAccount).ToList();
+        return accounts.Select(account => MapAccount(account)).ToList();
     }
 
     public async Task<MailAccount?> SignInAsync(CancellationToken cancellationToken = default)
@@ -138,4 +138,3 @@ public sealed class MicrosoftAuthProvider : IAuthProvider
         helper.RegisterCache(client.UserTokenCache);
     }
 }
-

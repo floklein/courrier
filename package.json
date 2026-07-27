@@ -15,11 +15,11 @@
     "build": "turbo run build && node scripts/native.mjs build",
     "build:services": "turbo run build",
     "build:macos": "swift build --disable-sandbox --package-path apps/macos",
-    "build:windows": "dotnet build apps/windows/Courrier.Windows.sln",
+    "build:windows": "node scripts/native.mjs build win32",
     "test": "turbo run test && node scripts/native.mjs test",
     "test:services": "turbo run test",
     "test:macos": "swift test --disable-sandbox --package-path apps/macos",
-    "test:windows": "dotnet test apps/windows/Courrier.Windows.sln",
+    "test:windows": "node scripts/native.mjs test win32",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint"
   },

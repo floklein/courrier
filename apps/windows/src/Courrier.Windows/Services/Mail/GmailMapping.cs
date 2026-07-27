@@ -329,7 +329,7 @@ public static class GmailMapping
             return true;
         }
 
-        return Array(payload, "parts").Any(HasAttachments);
+        return Array(payload, "parts").Any(part => HasAttachments(part));
     }
 
     public static string? PreferredFolder(IReadOnlyList<string> labels)

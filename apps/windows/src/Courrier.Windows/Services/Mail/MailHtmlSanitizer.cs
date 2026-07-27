@@ -72,7 +72,9 @@ public sealed class MailHtmlSanitizer
 
     public string SanitizeOutgoing(string html)
     {
-        return Create(OutgoingTags, OutgoingAttributes).Sanitize(html);
+        var sanitizer = Create(OutgoingTags, OutgoingAttributes);
+        sanitizer.KeepChildNodes = true;
+        return sanitizer.Sanitize(html);
     }
 
     private static HtmlSanitizer Create(

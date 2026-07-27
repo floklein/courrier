@@ -399,7 +399,7 @@ public sealed partial class MainWindow : Window
         await ViewModel.MoveMessagesAsync(messages, folder);
     }
 
-    private MailFolder? FindFolderAt(Windows.Foundation.Point point)
+    private MailFolder? FindFolderAt(global::Windows.Foundation.Point point)
     {
         return VisualTreeHelper.FindElementsInHostCoordinates(point, FolderList)
             .OfType<FrameworkElement>()
