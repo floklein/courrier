@@ -23,14 +23,6 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": []
-    },
-    "package": {
-      "dependsOn": ["^build"],
-      "outputs": ["out/**"]
-    },
-    "make": {
-      "dependsOn": ["^build"],
-      "outputs": ["out/**"]
     }
   }
 }

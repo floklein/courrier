@@ -35,6 +35,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+.pnpm-store/
 
 # TypeScript v1 declaration files
 typings/
@@ -90,5 +91,19 @@ typings/
 .turbo/
 dist/
 
-# Electron-Forge
+# Native macOS
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Native Windows
+**/bin/
+**/obj/
+*.user
+*.suo
+AppPackages/
+
+# Local packaging output
 out/

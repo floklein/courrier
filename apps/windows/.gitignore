@@ -1,0 +1,8 @@
+bin/
+obj/
+AppPackages/
+BundleArtifacts/
+Generated Files/
+*.user
+appsettings.json
+

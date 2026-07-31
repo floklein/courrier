@@ -43,28 +43,28 @@ the tenant administrator to approve these delegated permissions.
 
 ## 3. Configure Courrier locally
 
-Copy the **Application (client) ID** from the app registration overview and set
-it for the app:
+Copy the **Application (client) ID** from the app registration overview.
 
-```powershell
-$env:MICROSOFT_CLIENT_ID = "<Application client ID>"
+On macOS, copy the native app environment template and edit it:
+
+```bash
+cp apps/macos/.env.example apps/macos/.env
 ```
-
-You can also use the checked-in example file:
-
-```powershell
-Copy-Item apps/desktop/.env.example apps/desktop/.env
-```
-
-Then edit `apps/desktop/.env`:
 
 ```dotenv
 MICROSOFT_CLIENT_ID=<Application client ID>
 ```
 
-`apps/desktop/.env` is ignored by Git and must not be committed. The app loads
-this file in the Electron main process before it creates the Microsoft auth
-service.
+On Windows, either set the value for the launch session:
+
+```powershell
+$env:MICROSOFT_CLIENT_ID = "<Application client ID>"
+```
+
+or copy `apps/windows/appsettings.example.json` to
+`%LOCALAPPDATA%\Courrier\appsettings.json` and set `MicrosoftClientId`.
+
+Local configuration files are ignored by Git and must not be committed.
 
 ## 4. Verify the flow
 
@@ -76,7 +76,8 @@ service.
 5. After a successful login, Courrier should show real Outlook folders.
 6. Select a folder and message to verify that real message content loads.
 7. Quit and relaunch Courrier. The app should skip onboarding while the cached
-   token is still valid.
+   token is still valid. macOS stores credentials in Keychain, and Windows uses
+   encrypted MSAL persistence.
 8. Sign out. Courrier should return to the blocking onboarding screen.
 
 ## Common setup failures

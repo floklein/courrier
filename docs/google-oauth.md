@@ -1,8 +1,8 @@
 # Google OAuth and Gmail Setup
 
-Courrier can connect Gmail accounts with Google's installed-app OAuth flow. The
-desktop app keeps Google tokens locally and uses Gmail API, People API, and
-Gmail watch notifications.
+Courrier can connect Gmail accounts with Google's installed-app OAuth flow.
+Each native app keeps Google tokens in platform-protected local storage and
+uses Gmail API, People API, and Gmail watch notifications.
 
 ## 1. Create the OAuth client
 
@@ -17,12 +17,17 @@ Courrier uses a loopback redirect URI on `127.0.0.1` with a random local port.
 
 ## 2. Configure Courrier
 
-Set these values in `apps/desktop/.env`:
+On macOS, copy `apps/macos/.env.example` to `apps/macos/.env` and set:
 
 ```dotenv
 GOOGLE_CLIENT_ID=<Google OAuth desktop client ID>
 GOOGLE_CLIENT_SECRET=<optional Google OAuth desktop client secret>
 ```
+
+On Windows, copy `apps/windows/appsettings.example.json` to
+`%LOCALAPPDATA%\Courrier\appsettings.json` and set `GoogleClientId` and the
+optional `GoogleClientSecret`. You can also set `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` in the launch environment.
 
 The secret is optional for installed-app OAuth clients. If your Google client
 requires one, set it locally only and do not commit it.
@@ -35,7 +40,7 @@ Gmail push notifications require Cloud Pub/Sub:
    `projects/<project>/topics/courrier-gmail`.
 2. Grant Gmail publish permission to the topic as described by Google Gmail
    push notification docs.
-3. Set the desktop environment variable:
+3. Set the native client configuration:
 
    ```dotenv
    GOOGLE_PUBSUB_TOPIC=projects/<project>/topics/courrier-gmail

@@ -1,0 +1,17 @@
+<Application
+    x:Class="Courrier.Windows.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:Courrier.Windows.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
+            <converters:ReadStateToWeightConverter x:Key="ReadStateToWeightConverter" />
+            <converters:FolderDepthToMarginConverter x:Key="FolderDepthToMarginConverter" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
